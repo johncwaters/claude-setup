@@ -1,0 +1,39 @@
+# Ignore everything by default; whitelist only portable config.
+*
+!*/
+
+# Whitelisted config
+!.gitignore
+!README.md
+!CLAUDE.md
+!settings.json
+!commands/**
+!hooks/**
+!hud/**
+!skills/**
+
+# Never sync these even if a rule above matches
+.credentials.json
+settings.local.json
+*.bak*
+*.backup*
+*.tmp.*
+
+# Runtime/state dirs (blocked by * already, listed for clarity)
+projects/
+plugins/
+sessions/
+tasks/
+teams/
+cache/
+backups/
+file-history/
+shell-snapshots/
+session-env/
+paste-cache/
+debug/
+downloads/
+ide/
+daemon/
+plans/
+.omc/

@@ -1,0 +1,79 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "OMC_SKIP_HOOKS": "keyword-detector"
+  },
+  "permissions": {
+    "allow": [
+      "mcp__plugin_oh-my-claudecode_t__ast_grep_search",
+      "Bash(node:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:unpkg.com)"
+    ]
+  },
+  "model": "claude-fable-5[1m]",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/johnw/.claude/hooks/validate-file.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/johnw/.claude/hooks/omc-spawn-contract-warn.mjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/johnw/.claude/hooks/omc-ledger-stop-gate.mjs"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node C:/Users/johnw/.claude/hud/omc-hud.mjs"
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "oh-my-claudecode@omc": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "posthog@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "omc": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
+      },
+      "autoUpdate": true
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    }
+  },
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
+  "awaySummaryEnabled": false,
+  "autoUpdatesChannel": "latest",
+  "tui": "fullscreen",
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "auto"
+}
