@@ -21,24 +21,25 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
 
 Everything else in `~/.claude` (credentials, history, sessions, caches, plugins) is ignored. Plugins reinstall automatically on first launch from `enabledPlugins` and `extraKnownMarketplaces` in `settings.json`.
 
-## Setup on a new machine
+## Setup on a new machine: one command
 
-`~/.claude` already exists once Claude Code has run, so clone into it in place:
+Paste into PowerShell (only prereq is winget, which ships with Windows 11). A browser window opens once for GitHub sign-in when git first touches the private repo:
 
-```sh
-cd ~/.claude
-git init
-git remote add origin https://github.com/johncwaters/claude-setup.git
-git fetch origin
-git checkout -f master
+```powershell
+winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements; $env:Path=[Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')+';'+$env:Path; $d="$env:USERPROFILE\.claude"; New-Item -ItemType Directory -Force $d | Out-Null; git -C $d init -b master; git -C $d remote add origin https://github.com/johncwaters/claude-setup.git; git -C $d fetch origin; git -C $d checkout -f master; powershell -ExecutionPolicy Bypass -File "$d\setup\install.ps1"
 ```
 
-Then:
+That bootstraps git, clones this repo into `~/.claude`, and runs `setup/install.ps1`, which pulls latest and hands off to `setup/apply.ps1`: config copies, then installs anything missing (git, gh, node, Claude Code, VSCodium, CommitMono fonts, npm globals, VSCodium extensions). Everything is idempotent; rerun any time.
 
-1. `pwsh ~/.claude/setup/apply.ps1`: copies VSCodium/glissa/git/terminal config into place, then installs anything missing: git, gh, node (winget), Claude Code (native installer), CommitMono fonts, npm globals, VSCodium (winget) and its extensions. Use `-SkipInstalls` to only copy config files.
-2. Launch Claude Code and run `setup omc` (or `/oh-my-claudecode:omc-setup`) to finish OMC wiring.
+Afterwards launch Claude Code and run `setup omc` (or `/oh-my-claudecode:omc-setup`) to finish OMC wiring.
 
-Only prereq: winget (ships with Windows 11).
+## Re-sync an existing machine
+
+```powershell
+powershell -File $env:USERPROFILE\.claude\setup\install.ps1
+```
+
+Pulls latest and applies. `-SkipInstalls` copies config only.
 
 ## Auth checklist (manual, once per machine)
 
@@ -49,8 +50,6 @@ Nothing secret syncs through this repo, so log in fresh:
 - [ ] VSCodium: re-auth MCP servers (PostHog) on first use
 - [ ] Anything project-specific (.env files) stays per-repo, not here
 
-## Syncing
+## Publishing changes from a machine
 
-- Pull latest: `git -C ~/.claude pull`, then `pwsh ~/.claude/setup/apply.ps1` to push it into the live apps.
-- Publish changes: `pwsh ~/.claude/setup/collect.ps1` (grabs live VSCodium/glissa/git/terminal config into the repo), then add/commit/push from `~/.claude`.
-- Claude Code files (CLAUDE.md, skills, etc.) live in the repo directly; no collect/apply step needed for them.
+`powershell -File ~\.claude\setup\collect.ps1` grabs live VSCodium/glissa/git/terminal config into the repo, then add/commit/push from `~/.claude`. Claude Code files (CLAUDE.md, skills, etc.) live in the repo directly; no collect step needed for them.
