@@ -40,10 +40,20 @@ if (Test-Path $npmGlobals) {
     }
 }
 
+# VSCodium (winget install if missing)
+$codium = Get-Command codium -ErrorAction SilentlyContinue
+if (-not $codium) {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) { Write-Warning "codium and winget both missing; install VSCodium manually then rerun"; return }
+    Write-Host "installing VSCodium via winget"
+    winget install --id VSCodium.VSCodium -e --accept-source-agreements --accept-package-agreements
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    $codium = Get-Command codium -ErrorAction SilentlyContinue
+}
+if (-not $codium) { Write-Warning "codium still not on PATH; open a new shell and rerun for extensions"; return }
+
 # VSCodium extensions
 $extFile = Join-Path $setupDir "vscodium\extensions.txt"
-$codium = Get-Command codium -ErrorAction SilentlyContinue
-if (-not $codium) { Write-Warning "codium not on PATH; install VSCodium then rerun for extensions"; return }
 if (Test-Path $extFile) {
     $have = codium --list-extensions
     foreach ($ext in (Get-Content $extFile | Where-Object { $_ })) {

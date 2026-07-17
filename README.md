@@ -37,7 +37,7 @@ Then:
 1. `pwsh ~/.claude/setup/apply.ps1`: copies VSCodium/glissa/git/terminal config into place, installs missing npm globals and VSCodium extensions. Use `-SkipInstalls` to only copy config files.
 2. Launch Claude Code and run `setup omc` (or `/oh-my-claudecode:omc-setup`) to finish OMC wiring.
 
-Prereqs the script expects on PATH: node/npm, and VSCodium (`codium`) if you want extensions installed.
+Prereqs the script expects on PATH: node/npm and winget. VSCodium itself is installed automatically via winget if `codium` is missing.
 
 ## Syncing
 
