@@ -1,0 +1,8 @@
+﻿@ast-grep/napi
+@biomejs/biome
+@earendil-works/pi-coding-agent
+glissa
+oh-my-claude-sisyphus
+postiz
+typescript
+typescript-language-server

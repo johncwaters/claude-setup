@@ -11,6 +11,7 @@
 !hooks/**
 !hud/**
 !skills/**
+!setup/**
 
 # Never sync these even if a rule above matches
 .credentials.json

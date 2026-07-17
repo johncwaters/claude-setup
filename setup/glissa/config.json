@@ -1,0 +1,129 @@
+{
+  "port": 3000,
+  "attentionTimeoutSeconds": 60,
+  "waitingEscalationSeconds": 300,
+  "startingWatchdogSeconds": 30,
+  "autoRecoverSeconds": 3,
+  "inputGraceSeconds": 5,
+  "promptDetectionMs": 1500,
+  "notifyDebounceMs": 3000,
+  "repoRoots": [
+    "C:\\Users\\johnw\\Projects"
+  ],
+  "projects": [
+    {
+      "id": "bb78afb5-e527-48da-9632-580c00153a1b",
+      "name": "milepost",
+      "path": "C:\\Users\\johnw\\Projects\\milepost",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "eef81d37-c6c9-4a95-ba3a-14934e9ba589",
+      "name": "milepost (2)",
+      "path": "C:\\Users\\johnw\\Projects\\milepost",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "fb16aba7-1a59-46ae-bc2d-23838d760254",
+      "name": "glissa",
+      "path": "C:\\Users\\johnw\\Projects\\glissa",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "d89631a1-679a-4276-955e-54f82ed6dd52",
+      "name": "admin",
+      "path": "C:\\Users\\johnw\\Projects",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "11c25638-e2d4-4fb3-a1db-8fefdcd4044f",
+      "name": "glissa (2)",
+      "path": "C:\\Users\\johnw\\Projects\\glissa",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "9bc6aa0e-9148-4f67-94b5-9ac02d73848e",
+      "name": "glissa (3)",
+      "path": "C:\\Users\\johnw\\Projects\\glissa",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "47057cd6-337d-4212-a1ff-ae387185992e",
+      "name": "milepost (3)",
+      "path": "C:\\Users\\johnw\\Projects\\milepost",
+      "dangerouslySkipPermissions": true
+    },
+    {
+      "id": "251436a2-854b-4931-a9b0-aef5f26e58b2",
+      "name": "keeplings",
+      "path": "C:\\Users\\johnw\\Projects\\keeplings"
+    },
+    {
+      "id": "21c47fd4-30c1-41c8-9d28-2066d3a8a7d1",
+      "name": "keeplings (2)",
+      "path": "C:\\Users\\johnw\\Projects\\keeplings"
+    },
+    {
+      "id": "44e7f44e-111b-4d1f-9433-ce9c62d2eee9",
+      "name": "keeplings (3)",
+      "path": "C:\\Users\\johnw\\Projects\\keeplings"
+    },
+    {
+      "id": "cdf6fa9a-a173-4405-8d9c-84c4f0c4f2eb",
+      "name": "keeplings (4)",
+      "path": "C:\\Users\\johnw\\Projects\\keeplings"
+    },
+    {
+      "id": "5cc5fae0-be72-4214-8386-7c036622e923",
+      "name": "card-harbor",
+      "path": "C:\\Users\\johnw\\Projects\\card-harbor"
+    },
+    {
+      "id": "e00c7fe0-443b-4b58-9a6c-7b5c758b3434",
+      "name": "card-harbor (2)",
+      "path": "C:\\Users\\johnw\\Projects\\card-harbor"
+    },
+    {
+      "id": "f97c34c0-900c-4a07-8b2a-7611c0cbf390",
+      "name": "card-harbor (3)",
+      "path": "C:\\Users\\johnw\\Projects\\card-harbor"
+    },
+    {
+      "id": "d8257407-b2a8-4b9f-b288-4e157b52d45f",
+      "name": "card-harbor (4)",
+      "path": "C:\\Users\\johnw\\Projects\\card-harbor"
+    }
+  ],
+  "replayBufferKB": 512,
+  "scrollback": 50000,
+  "feedDebounceMs": 50,
+  "noFlicker": true,
+  "cursorBlink": false,
+  "debugMode": true,
+  "teams": [
+    {
+      "teamId": "marketing",
+      "projectId": "bb78afb5-e527-48da-9632-580c00153a1b",
+      "enabled": false
+    },
+    {
+      "teamId": "release-notes",
+      "projectId": "fb16aba7-1a59-46ae-bc2d-23838d760254",
+      "enabled": false
+    },
+    {
+      "teamId": "changelog",
+      "projectId": "fb16aba7-1a59-46ae-bc2d-23838d760254",
+      "enabled": false
+    },
+    {
+      "teamId": "qa-walk",
+      "projectId": "bb78afb5-e527-48da-9632-580c00153a1b",
+      "enabled": false
+    }
+  ],
+  "editorCommand": "",
+  "headroomEasyStart": false,
+  "proxyBaseUrl": "http://127.0.0.1:8787",
+  "headroomPort": 8787
+}
