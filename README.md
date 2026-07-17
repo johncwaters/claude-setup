@@ -16,6 +16,7 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
   - `git/`: .gitconfig
   - `terminal/`: Windows Terminal settings
   - `npm-globals.txt`: global npm tools (glissa, oh-my-claude-sisyphus, postiz, biome, typescript, ...)
+  - `fonts/`: CommitMono (referenced by VSCodium settings)
   - `collect.ps1` / `apply.ps1`: sync scripts (see below)
 
 Everything else in `~/.claude` (credentials, history, sessions, caches, plugins) is ignored. Plugins reinstall automatically on first launch from `enabledPlugins` and `extraKnownMarketplaces` in `settings.json`.
@@ -34,10 +35,19 @@ git checkout -f master
 
 Then:
 
-1. `pwsh ~/.claude/setup/apply.ps1`: copies VSCodium/glissa/git/terminal config into place, installs missing npm globals and VSCodium extensions. Use `-SkipInstalls` to only copy config files.
+1. `pwsh ~/.claude/setup/apply.ps1`: copies VSCodium/glissa/git/terminal config into place, then installs anything missing: git, gh, node (winget), Claude Code (native installer), CommitMono fonts, npm globals, VSCodium (winget) and its extensions. Use `-SkipInstalls` to only copy config files.
 2. Launch Claude Code and run `setup omc` (or `/oh-my-claudecode:omc-setup`) to finish OMC wiring.
 
-Prereqs the script expects on PATH: node/npm and winget. VSCodium itself is installed automatically via winget if `codium` is missing.
+Only prereq: winget (ships with Windows 11).
+
+## Auth checklist (manual, once per machine)
+
+Nothing secret syncs through this repo, so log in fresh:
+
+- [ ] `claude` (first launch prompts for Anthropic login)
+- [ ] `gh auth login` (GitHub CLI; git pushes ride on this via https)
+- [ ] VSCodium: re-auth MCP servers (PostHog) on first use
+- [ ] Anything project-specific (.env files) stays per-repo, not here
 
 ## Syncing
 

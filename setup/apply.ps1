@@ -28,6 +28,44 @@ if (Test-Path $wtDir) { Copy-IfExists (Join-Path $setupDir "terminal\settings.js
 
 if ($SkipInstalls) { Write-Host "done (installs skipped)."; return }
 
+# Base tools via winget
+$winget = Get-Command winget -ErrorAction SilentlyContinue
+if (-not $winget) { Write-Warning "winget missing; skipping all tool installs"; return }
+$tools = @(
+    @{ cmd = "git";  id = "Git.Git" },
+    @{ cmd = "gh";   id = "GitHub.cli" },
+    @{ cmd = "node"; id = "OpenJS.NodeJS" }
+)
+$installedAny = $false
+foreach ($t in $tools) {
+    if (Get-Command $t.cmd -ErrorAction SilentlyContinue) { continue }
+    Write-Host "installing $($t.id) via winget"
+    winget install --id $t.id -e --accept-source-agreements --accept-package-agreements
+    $installedAny = $true
+}
+if ($installedAny) {
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+# Claude Code (native installer)
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    Write-Host "installing Claude Code"
+    Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + $env:Path
+}
+
+# Fonts (per-user install)
+$fontDir = Join-Path $env:LOCALAPPDATA "Microsoft\Windows\Fonts"
+$fontReg = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts"
+New-Item -ItemType Directory -Force $fontDir | Out-Null
+foreach ($font in (Get-ChildItem (Join-Path $setupDir "fonts") -File -ErrorAction SilentlyContinue)) {
+    $target = Join-Path $fontDir $font.Name
+    if (Test-Path $target) { continue }
+    Copy-Item $font.FullName $target
+    New-ItemProperty -Path $fontReg -Name "$($font.BaseName) (OpenType)" -Value $target -PropertyType String -Force | Out-Null
+    Write-Host "installed font: $($font.Name)"
+}
+
 # npm globals
 $npmGlobals = Join-Path $setupDir "npm-globals.txt"
 if (Test-Path $npmGlobals) {
