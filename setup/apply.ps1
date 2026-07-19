@@ -114,12 +114,19 @@ if ((Test-Path $extFile) -and (Get-Command codium -ErrorAction SilentlyContinue)
     $wanted = Get-Content $extFile | Where-Object { $_ }
     $have = codium --list-extensions
     $missing = @($wanted | Where-Object { $have -notcontains $_ })
-    if ($missing.Count -eq 0) { Note-Present "extensions" "all $($wanted.Count) present" }
+    $extra = @($have | Where-Object { $wanted -notcontains $_ })
+    if ($missing.Count -eq 0 -and $extra.Count -eq 0) { Note-Present "extensions" "all $($wanted.Count) in sync" }
     foreach ($ext in $missing) {
         Write-Line " .. " Yellow $ext "installing"
         codium --install-extension $ext | Out-Null
         if ($LASTEXITCODE -eq 0) { Note-Installed $ext "installed"; continue }
         Note-Warned $ext "install failed"
+    }
+    foreach ($ext in $extra) {
+        Write-Line " .. " Yellow $ext "uninstalling (not in extensions.txt)"
+        codium --uninstall-extension $ext | Out-Null
+        if ($LASTEXITCODE -eq 0) { Note-Applied $ext "removed"; continue }
+        Note-Warned $ext "uninstall failed"
     }
 }
 
