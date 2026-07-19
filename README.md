@@ -16,6 +16,7 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
   - `git/`: .gitconfig
   - `terminal/`: Windows Terminal settings
   - `npm-globals.txt`: global npm tools (glissa, oh-my-claude-sisyphus, postiz, biome, typescript, ...)
+  - `repos.txt`: project repos referenced by glissa sessions; apply clones missing ones and fast-forwards existing ones
   - `fonts/`: CommitMono (referenced by VSCodium settings)
   - `collect.ps1` / `apply.ps1`: sync scripts (see below)
 

@@ -89,6 +89,28 @@ foreach ($font in (Get-ChildItem (Join-Path $setupDir "fonts") -File -ErrorActio
     Note-Installed $font.BaseName "installed"
 }
 
+Write-Section "Repos"
+$repoFile = Join-Path $setupDir "repos.txt"
+if (-not (Test-Path $repoFile)) { Note-Warned "repos" "repos.txt not in repo" }
+if ((Test-Path $repoFile) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+    foreach ($line in (Get-Content $repoFile | Where-Object { $_ -match "=" })) {
+        $rel, $url = $line -split "=", 2
+        $dest = Join-Path $env:USERPROFILE $rel.Trim()
+        $label = Split-Path $dest -Leaf
+        if (-not (Test-Path $dest)) {
+            Write-Line " .. " Yellow $label "cloning"
+            git clone -q $url.Trim() $dest
+            if ($LASTEXITCODE -eq 0) { Note-Installed $label "cloned"; continue }
+            Note-Warned $label "clone failed"
+            continue
+        }
+        if (-not (Test-Path (Join-Path $dest ".git"))) { Note-Warned $label "exists but is not a git repo"; continue }
+        git -C $dest pull --ff-only -q
+        if ($LASTEXITCODE -eq 0) { Note-Present $label "synced"; continue }
+        Note-Warned $label "pull failed (dirty or diverged), resolve manually"
+    }
+}
+
 Write-Section "npm globals"
 $npmGlobals = Join-Path $setupDir "npm-globals.txt"
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { Note-Warned "npm" "not on PATH, skipping packages" }

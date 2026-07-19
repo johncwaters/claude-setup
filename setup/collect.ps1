@@ -23,6 +23,21 @@ if ($codium) {
 # Glissa
 Copy-IfExists (Join-Path $env:USERPROFILE ".glissa\config.json") (Join-Path $setupDir "glissa\config.json")
 
+# Repos referenced by glissa projects (folder relative to USERPROFILE = origin url)
+$glissaCfg = Join-Path $env:USERPROFILE ".glissa\config.json"
+if (Test-Path $glissaCfg) {
+    $paths = (Get-Content $glissaCfg -Raw | ConvertFrom-Json).projects.path | Sort-Object -Unique
+    $entries = foreach ($p in $paths) {
+        if (-not (Test-Path (Join-Path $p ".git"))) { continue }
+        $url = git -C $p config --get remote.origin.url
+        if (-not $url) { Write-Warning "no origin remote, skipping: $p"; continue }
+        $rel = $p -replace [regex]::Escape($env:USERPROFILE + "\"), ""
+        "$rel=$url"
+    }
+    $entries | Sort-Object | Set-Content -Encoding utf8 (Join-Path $setupDir "repos.txt")
+    Write-Host "collected: glissa repos"
+}
+
 # Git
 Copy-IfExists (Join-Path $env:USERPROFILE ".gitconfig") (Join-Path $setupDir "git\.gitconfig")
 

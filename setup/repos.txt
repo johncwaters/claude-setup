@@ -1,0 +1,4 @@
+Projects\card-harbor=https://github.com/johncwaters/card-harbor
+Projects\glissa=https://github.com/johncwaters/glissa
+Projects\keeplings=https://github.com/johncwaters/keeplings
+Projects\milepost=https://github.com/johncwaters/milepost
