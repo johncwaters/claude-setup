@@ -118,6 +118,41 @@ function Sync-DevelopBranch([string]$label, [string]$dest) {
     if ($LASTEXITCODE -ne 0) { Note-Warned "$label develop" "diverged from origin, resolve manually" }
 }
 
+# repos fail at runtime without this: missing node_modules after clone, missing new
+# deps after pull ("Cannot find module 'sharp'"), and a missing electron binary
+# ("Electron uninstall") when electron's postinstall was skipped or interrupted
+function Install-RepoDeps([string]$label, [string]$dest) {
+    if (-not (Test-Path (Join-Path $dest "package.json"))) { return }
+    $mgr = "npm"
+    if (Test-Path (Join-Path $dest "pnpm-lock.yaml")) { $mgr = "pnpm" }
+    if (Test-Path (Join-Path $dest "yarn.lock")) { $mgr = "yarn" }
+    # invoke the .cmd shim: npm.ps1 rebuilds args from the raw invocation line, which
+    # mangles variable command names and splatted args
+    $mgrCmd = Get-Command "$mgr.cmd" -ErrorAction SilentlyContinue
+    if (-not $mgrCmd) { $mgrCmd = Get-Command $mgr -ErrorAction SilentlyContinue }
+    if (-not $mgrCmd) { Note-Warned "$label deps" "$mgr not on PATH"; return }
+    $installArgs = @{
+        npm  = @("install", "--no-audit", "--no-fund", "--loglevel=error")
+        pnpm = @("install", "--reporter=silent")
+        yarn = @("install", "--silent")
+    }[$mgr]
+    Write-Line " .. " Yellow "$label deps" "$mgr install"
+    Push-Location $dest
+    & $mgrCmd.Source @installArgs | Out-Null
+    $installOk = $LASTEXITCODE -eq 0
+    Pop-Location
+    if (-not $installOk) { Note-Warned "$label deps" "$mgr install failed"; return }
+    Note-Present "$label deps" "installed"
+
+    $electronDir = Join-Path $dest "node_modules\electron"
+    if (-not (Test-Path $electronDir)) { return }
+    if (Test-Path (Join-Path $electronDir "dist\electron.exe")) { return }
+    Write-Line " .. " Yellow "$label electron" "downloading binary"
+    node (Join-Path $electronDir "install.js") | Out-Null
+    if (Test-Path (Join-Path $electronDir "dist\electron.exe")) { Note-Installed "$label electron" "binary installed"; return }
+    Note-Warned "$label electron" "binary download failed, run: node node_modules/electron/install.js"
+}
+
 Write-Section "Repos"
 $repoFile = Join-Path $setupDir "repos.txt"
 if (-not (Test-Path $repoFile)) { Note-Warned "repos" "repos.txt not in repo" }
@@ -132,6 +167,7 @@ if ((Test-Path $repoFile) -and (Get-Command git -ErrorAction SilentlyContinue)) 
             if ($LASTEXITCODE -ne 0) { Note-Warned $label "clone failed"; continue }
             Note-Installed $label "cloned"
             Sync-DevelopBranch $label $dest
+            Install-RepoDeps $label $dest
             continue
         }
         if (-not (Test-Path (Join-Path $dest ".git"))) { Note-Warned $label "exists but is not a git repo"; continue }
@@ -139,6 +175,7 @@ if ((Test-Path $repoFile) -and (Get-Command git -ErrorAction SilentlyContinue)) 
         if ($LASTEXITCODE -ne 0) { Note-Warned $label "pull failed (dirty or diverged), resolve manually"; continue }
         Note-Present $label "synced"
         Sync-DevelopBranch $label $dest
+        Install-RepoDeps $label $dest
     }
 }
 
