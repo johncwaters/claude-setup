@@ -74,6 +74,7 @@
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
+  "spinnerTipsEnabled": false,
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto"
 }
