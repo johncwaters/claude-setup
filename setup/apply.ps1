@@ -89,6 +89,35 @@ foreach ($font in (Get-ChildItem (Join-Path $setupDir "fonts") -File -ErrorActio
     Note-Installed $font.BaseName "installed"
 }
 
+# glissa requires a develop branch in every project repo
+function Sync-DevelopBranch([string]$label, [string]$dest) {
+    git -C $dest rev-parse --verify -q refs/heads/develop | Out-Null
+    $hasLocal = $LASTEXITCODE -eq 0
+    git -C $dest rev-parse --verify -q refs/remotes/origin/develop | Out-Null
+    $hasRemote = $LASTEXITCODE -eq 0
+    if (-not $hasLocal -and $hasRemote) {
+        git -C $dest branch -q --track develop origin/develop
+        Note-Installed "$label develop" "tracking origin/develop"
+        return
+    }
+    if (-not $hasLocal) {
+        git -C $dest branch -q develop
+        git -C $dest push -q -u origin develop
+        if ($LASTEXITCODE -ne 0) { Note-Warned "$label develop" "created locally, push failed"; return }
+        Note-Installed "$label develop" "created and pushed"
+        return
+    }
+    if (-not $hasRemote) {
+        git -C $dest push -q -u origin develop
+        if ($LASTEXITCODE -ne 0) { Note-Warned "$label develop" "local only, push failed"; return }
+        Note-Applied "$label develop" "pushed to origin"
+        return
+    }
+    if ((git -C $dest symbolic-ref --short -q HEAD) -eq "develop") { return }
+    git -C $dest fetch -q origin develop:develop
+    if ($LASTEXITCODE -ne 0) { Note-Warned "$label develop" "diverged from origin, resolve manually" }
+}
+
 Write-Section "Repos"
 $repoFile = Join-Path $setupDir "repos.txt"
 if (-not (Test-Path $repoFile)) { Note-Warned "repos" "repos.txt not in repo" }
@@ -100,14 +129,16 @@ if ((Test-Path $repoFile) -and (Get-Command git -ErrorAction SilentlyContinue)) 
         if (-not (Test-Path $dest)) {
             Write-Line " .. " Yellow $label "cloning"
             git clone -q $url.Trim() $dest
-            if ($LASTEXITCODE -eq 0) { Note-Installed $label "cloned"; continue }
-            Note-Warned $label "clone failed"
+            if ($LASTEXITCODE -ne 0) { Note-Warned $label "clone failed"; continue }
+            Note-Installed $label "cloned"
+            Sync-DevelopBranch $label $dest
             continue
         }
         if (-not (Test-Path (Join-Path $dest ".git"))) { Note-Warned $label "exists but is not a git repo"; continue }
         git -C $dest pull --ff-only -q
-        if ($LASTEXITCODE -eq 0) { Note-Present $label "synced"; continue }
-        Note-Warned $label "pull failed (dirty or diverged), resolve manually"
+        if ($LASTEXITCODE -ne 0) { Note-Warned $label "pull failed (dirty or diverged), resolve manually"; continue }
+        Note-Present $label "synced"
+        Sync-DevelopBranch $label $dest
     }
 }
 
