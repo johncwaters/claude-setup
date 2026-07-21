@@ -15,7 +15,7 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
   - `glissa/`: glissa dashboard config
   - `git/`: .gitconfig
   - `terminal/`: Windows Terminal settings
-  - `npm-globals.txt`: global npm tools (glissa, oh-my-claude-sisyphus, postiz, biome, typescript, ...)
+  - `npm-globals.txt`: global npm tools (glissa, oh-my-claude-sisyphus, postiz, codex, biome, typescript, ...); `@openai/codex` is the Codex CLI that CLAUDE.md routing calls via `omc ask codex`
   - `repos.txt`: project repos referenced by glissa sessions (milepost, glissa, keeplings, card-harbor); apply clones missing ones into `~/Projects`, fast-forwards existing ones, then installs each repo's node deps (npm/pnpm/yarn by lockfile) and heals a missing electron binary
   - `fonts/`: CommitMono (referenced by VSCodium settings)
   - `collect.ps1` / `apply.ps1`: sync scripts (see below)
@@ -48,6 +48,7 @@ Nothing secret syncs through this repo, so log in fresh:
 
 - [ ] `claude` (first launch prompts for Anthropic login)
 - [ ] `gh auth login` (GitHub CLI; git pushes ride on this via https)
+- [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for `omc ask codex` routing)
 - [ ] VSCodium: re-auth MCP servers (PostHog) on first use
 - [ ] Anything project-specific (.env files) stays per-repo, not here
 

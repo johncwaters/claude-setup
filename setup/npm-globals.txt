@@ -1,6 +1,7 @@
 ﻿@ast-grep/napi
 @biomejs/biome
 @earendil-works/pi-coding-agent
+@openai/codex
 glissa
 oh-my-claude-sisyphus
 postiz
