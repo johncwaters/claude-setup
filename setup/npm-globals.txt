@@ -2,6 +2,7 @@
 @biomejs/biome
 @earendil-works/pi-coding-agent
 @openai/codex
+@xai-official/grok
 glissa
 oh-my-claude-sisyphus
 postiz
