@@ -7,7 +7,7 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
 - `CLAUDE.md`: global instructions (routing, delegation, style rules)
 - `settings.json`: model, permissions, hooks, enabled plugins
 - `skills/`: custom skills (impeccable, postiz, ai-slop-cleaner, code-review)
-- `agents/`: custom subagents (code-reviewer)
+- `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer)
 - `commands/`: custom slash commands (commit, seo-audit)
 - `hooks/`: file-format guard hook (validate-file)
 - `setup/`: everything beyond Claude Code

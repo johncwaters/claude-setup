@@ -31,20 +31,31 @@ If no commit message is provided, generate one from the diff.
 
 Pull the latest `develop` into the current worktree/branch **before** cleanup and review, so the review runs against up-to-date code and merge conflicts surface here (small, local, fixable) instead of later at PR time.
 
-**Preflight:** confirm a git repo with `git rev-parse --is-inside-work-tree`. If not, stop (the Step 1 preflight also covers this). Determine the current branch:
+**Preflight:** confirm a git repo with `git rev-parse --is-inside-work-tree`. If not, stop (the Step 1 preflight also covers this). Then check git state before any sync:
 
 ```
 git rev-parse --abbrev-ref HEAD
+git rev-parse -q --verify MERGE_HEAD; git rev-parse -q --verify REBASE_HEAD; git rev-parse -q --verify CHERRY_PICK_HEAD
 ```
 
-If the current branch **is** `develop`, skip this step (nothing to pull into itself) and note it in the output.
+- If the branch command prints the literal `HEAD`, the repo is in **detached HEAD**: stop and report. A commit made here is unreferenced and easily lost; do not sync, do not commit.
+- If any of the in-progress refs resolve (merge, rebase, or cherry-pick underway): stop and report. Let the user conclude or abort the operation first.
 
-Otherwise sync the integration branch into the current branch. Update the **local** `develop` from the remote first, then merge the local branch in, so both the local and remote states are in sync before review:
+Resolve the integration branch (`develop`, falling back per the notes below). Then pick the sync form by comparing it to the current branch:
+
+- Current branch **equals** the integration branch (e.g. `master` on `master`): do NOT run the `fetch <branch>:<branch>` ref-update, git refuses to fetch into the checked-out branch. Instead:
 
 ```
-git fetch origin develop
-git fetch origin develop:develop   # fast-forward local develop to origin/develop without checking it out
-git merge --no-edit develop
+git fetch origin <branch>
+git merge --no-edit origin/<branch>
+```
+
+- Current branch is a feature branch: update the **local** integration branch from the remote first, then merge it in, so both local and remote states are in sync before review (`<branch>` is the resolved integration branch, usually `develop`):
+
+```
+git fetch origin <branch>
+git fetch origin <branch>:<branch>   # fast-forward the local ref to origin without checking it out
+git merge --no-edit <branch>
 ```
 
 Notes and root-cause rules:
@@ -65,7 +76,7 @@ git diff --name-only HEAD
 git diff --cached --name-only
 ```
 
-Pass that file list as the cleaner's `args`. The cleaner must fully run, including applying its fixes, before Step 2 begins. Follow the cleaner's full workflow: behavior lock, cleanup plan, smell-focused passes (dead code, duplication, naming/error-handling, test reinforcement), and quality gates.
+**If both lists are empty, stop with "nothing to commit"** — do not invoke the cleaner with an empty scope, do not proceed to review or commit. Otherwise hand the file list to the cleaner in the invocation arguments. The cleaner must fully run, including applying its fixes, before Step 2 begins. Follow the cleaner's full workflow: behavior lock, cleanup plan, smell-focused passes (dead code, duplication, naming/error-handling, test reinforcement), and quality gates.
 
 **Preflight (run before the cleaner):** verify the working directory is a git repository with `git rev-parse --is-inside-work-tree`. If it is not, stop and tell the user the directory is not a git repo — do not invoke the cleaner, do not stage, do not commit.
 
@@ -77,7 +88,7 @@ Requirements:
 
 ### Step 2 — Code Review
 
-Invoke the local `code-review` skill (Skill tool, `skill: "code-review"`) on the **post-cleanup** staged/unstaged changes. It spawns the local `code-reviewer` agent (one scoped sonnet pass; token-bounded by design) on:
+Invoke the local `code-review` skill (Skill tool, `skill: "code-review"`) on the **post-cleanup** staged/unstaged changes. The skill selects and runs the applicable review lanes (its lane table is the single source of truth for which agents run and what they cost) against:
 
 ```
 git diff HEAD
@@ -85,7 +96,7 @@ git diff --cached
 git status
 ```
 
-If the reviewer returns **blocking issues** (severity: critical or high), stop and report them to the user. Do not proceed to commit until the user resolves the issues or explicitly overrides with `/commit --skip-review`.
+If the reviewer agent errors, returns empty output, or produces no parseable verdict, **treat that as blocking**: stop and report; never fall through to commit on a dead review. If the reviewer returns **blocking issues** (severity: critical or high), stop and report them to the user. Do not proceed to commit until the user resolves the issues or explicitly overrides with `/commit --skip-review`.
 
 For contested critical/high findings, security-sensitive changes, or on user request, use the code-review skill's ChatGPT second-opinion lane (`codex exec -s read-only`, prompt via stdin) and reconcile the two verdicts before deciding.
 
@@ -111,7 +122,8 @@ Not-tested: ...
 ```
 
 - Use `git diff --cached` (staged) or `git diff HEAD` (all changes) to infer type and description if no message was supplied.
-- Stage all modified/new tracked files with `git add -u` if nothing is staged yet.
+- Stage modified tracked files with `git add -u` if nothing is staged yet, and stage intended **new untracked files explicitly by path** (`git add <path>`) — `git add -u` never picks them up, and a new-files-only change would otherwise commit nothing. Check `git status --short` for `??` entries that belong to this change before committing; never blanket `git add -A` (it can grab unrelated work).
+- If the staged set is empty after staging, stop with "nothing to commit" instead of running `git commit`.
 - Include git trailers when the change is non-trivial (skip for typos, formatting, dependency bumps).
 - Pass the commit message via HEREDOC to preserve formatting.
 - **Never** commit with `--no-verify` or other hook-bypass flags unless the user explicitly requests it. If a pre-commit hook fails, fix the underlying issue upstream — do not bypass.
@@ -142,5 +154,5 @@ Running code review...
   ⚠ 2 suggestions (non-blocking)
 
 Committing...
-  [master a1b2c3d] feat: add user authentication
+  [feature/auth a1b2c3d] feat: add user authentication
 ```
