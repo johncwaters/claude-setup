@@ -4,18 +4,19 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
 
 ## What is tracked
 
-- `CLAUDE.md`: global instructions (OMC orchestration, routing, style rules)
-- `settings.json`: model, permissions, hooks, statusline, enabled plugins
-- `skills/`: custom skills (impeccable, postiz, pr-review-pipeline, omc-learned, omc-reference)
+- `CLAUDE.md`: global instructions (routing, delegation, style rules)
+- `settings.json`: model, permissions, hooks, enabled plugins
+- `skills/`: custom skills (impeccable, postiz, ai-slop-cleaner, code-review)
+- `agents/`: custom subagents (code-reviewer)
 - `commands/`: custom slash commands (commit, seo-audit)
-- `hooks/`: OMC guard hooks (validate-file, spawn-contract-warn, ledger-stop-gate)
-- `hud/`: OMC statusline script
+- `hooks/`: file-format guard hook (validate-file)
 - `setup/`: everything beyond Claude Code
   - `vscodium/`: settings, keybindings, mcp.json, extensions.txt
   - `glissa/`: glissa dashboard config
   - `git/`: .gitconfig
   - `terminal/`: Windows Terminal settings
-  - `npm-globals.txt`: global npm tools (glissa, oh-my-claude-sisyphus, postiz, codex, biome, typescript, ...); `@openai/codex` is the Codex CLI that CLAUDE.md routing calls via `omc ask codex`
+  - `npm-globals.txt`: global npm tools (glissa, postiz, codex, grok, biome, typescript, ...); `@openai/codex` (Codex CLI) and `@xai-official/grok` (Grok Build CLI) are the external advisors CLAUDE.md routing dispatches directly
+  - `npm-globals-remove.txt`: retired global npm tools; apply uninstalls any of these still present so machines converge (currently oh-my-claude-sisyphus and the community grok CLI)
   - `repos.txt`: project repos referenced by glissa sessions (milepost, glissa, keeplings, card-harbor); apply clones missing ones into `~/Projects`, fast-forwards existing ones, then installs each repo's node deps (npm/pnpm/yarn by lockfile) and heals a missing electron binary
   - `fonts/`: CommitMono (referenced by VSCodium settings)
   - `collect.ps1` / `apply.ps1`: sync scripts (see below)
@@ -32,8 +33,6 @@ winget install -e --id Git.Git --accept-source-agreements --accept-package-agree
 
 That bootstraps git, clones this repo into `~/.claude`, and runs `setup/install.ps1`, which pulls latest and hands off to `setup/apply.ps1`: config copies, then installs anything missing (git, gh, node, Claude Code, VSCodium, CommitMono fonts, project repos from `repos.txt`, npm globals, VSCodium extensions). Extensions sync exactly to `extensions.txt`; project repos clone into `~/Projects`, fast-forward on reruns, and get their node deps installed. Everything is idempotent; rerun any time.
 
-Afterwards launch Claude Code and run `setup omc` (or `/oh-my-claudecode:omc-setup`) to finish OMC wiring.
-
 ## Re-sync an existing machine
 
 ```powershell
@@ -48,7 +47,8 @@ Nothing secret syncs through this repo, so log in fresh:
 
 - [ ] `claude` (first launch prompts for Anthropic login)
 - [ ] `gh auth login` (GitHub CLI; git pushes ride on this via https)
-- [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for `omc ask codex` routing)
+- [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for Codex routing)
+- [ ] `grok login` (Grok Build CLI; grok.com sign-in, or set `XAI_API_KEY`, needed for Grok research routing)
 - [ ] VSCodium: re-auth MCP servers (PostHog) on first use
 - [ ] Anything project-specific (.env files) stays per-repo, not here
 

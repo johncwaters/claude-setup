@@ -4,7 +4,6 @@
 @openai/codex
 @xai-official/grok
 glissa
-oh-my-claude-sisyphus
 postiz
 typescript
 typescript-language-server

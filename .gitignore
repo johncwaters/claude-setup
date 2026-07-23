@@ -8,9 +8,9 @@
 !README.md
 !CLAUDE.md
 !settings.json
+!agents/**
 !commands/**
 !hooks/**
-!hud/**
 !skills/**
 !setup/**
 

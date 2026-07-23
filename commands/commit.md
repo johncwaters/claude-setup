@@ -1,6 +1,6 @@
 # Commit
 
-Run a mandatory ai-slop-cleaner pass, then review staged changes with the OMC code-reviewer agent and create a commit following project conventions.
+Run a mandatory ai-slop-cleaner pass, then review staged changes via the code-review skill (local code-reviewer agent) and create a commit following project conventions.
 
 ## Core Principle — No Bandaid Fixes, Fix Upstream
 
@@ -58,9 +58,7 @@ Notes and root-cause rules:
 
 ### Step 1 — AI Slop Cleanup (mandatory, runs before review)
 
-`ai-slop-cleaner` is a **skill**, not an agent. Invoke it via the `Skill` tool with `skill: "oh-my-claudecode:ai-slop-cleaner"` (slash form: `/oh-my-claudecode:ai-slop-cleaner`). Do **not** call the `Agent` tool with `subagent_type: "oh-my-claudecode:ai-slop-cleaner"` — that subagent does not exist and will error.
-
-Run it in **writer mode** (not `--review`) scoped to the changed files in this commit:
+Invoke the local `ai-slop-cleaner` skill (Skill tool, `skill: "ai-slop-cleaner"`) in **writer mode** (not `--review`) scoped to the changed files in this commit:
 
 ```
 git diff --name-only HEAD
@@ -79,7 +77,7 @@ Requirements:
 
 ### Step 2 — Code Review
 
-Spawn the `oh-my-claudecode:code-reviewer` agent on the **post-cleanup** staged/unstaged changes:
+Invoke the local `code-review` skill (Skill tool, `skill: "code-review"`) on the **post-cleanup** staged/unstaged changes. It spawns the local `code-reviewer` agent (one scoped sonnet pass; token-bounded by design) on:
 
 ```
 git diff HEAD
@@ -87,7 +85,9 @@ git diff --cached
 git status
 ```
 
-Pass the full post-cleanup diff to the code-reviewer. If the reviewer returns **blocking issues** (severity: critical or high), stop and report them to the user. Do not proceed to commit until the user resolves the issues or explicitly overrides with `/commit --skip-review`.
+If the reviewer returns **blocking issues** (severity: critical or high), stop and report them to the user. Do not proceed to commit until the user resolves the issues or explicitly overrides with `/commit --skip-review`.
+
+For contested critical/high findings, security-sensitive changes, or on user request, use the code-review skill's ChatGPT second-opinion lane (`codex exec -s read-only`, prompt via stdin) and reconcile the two verdicts before deciding.
 
 When resolving reviewer findings, **fix upstream, not at the symptom**. If the bug is in a shared helper, fix the helper rather than patching every caller. If the type is wrong, fix the type rather than casting around it. Do not add ignore comments, disable lint rules, or wrap failing code in swallowed `try/catch` to clear a review flag.
 
@@ -121,7 +121,7 @@ Not-tested: ...
 
 - `--no-sync` — skip the Step 0 pull of `develop` into the current branch (default is to sync)
 - `--skip-deslop` — skip the mandatory ai-slop-cleaner pass (escape hatch; default is to run it)
-- `--skip-review` — skip the code-reviewer step and go straight to commit
+- `--skip-review` — skip the code-review step and go straight to commit
 - `--push` — commit and then push to the current tracking branch (or set upstream if none)
 
 ## Example Output

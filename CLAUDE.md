@@ -1,69 +1,3 @@
-<!-- OMC:START -->
-<!-- OMC:VERSION:4.14.6 -->
-
-# oh-my-claudecode - Intelligent Multi-Agent Orchestration
-
-You are running with oh-my-claudecode (OMC), a multi-agent orchestration layer for Claude Code.
-Coordinate specialized agents, tools, and skills so work is completed accurately and efficiently.
-
-<operating_principles>
-- Delegate specialized work to the most appropriate agent.
-- Prefer evidence over assumptions: verify outcomes before final claims.
-- Choose the lightest-weight path that preserves quality.
-- Consult official docs before implementing with SDKs/frameworks/APIs.
-</operating_principles>
-
-<delegation_rules>
-Delegate for: multi-file changes, refactors, debugging, reviews, planning, research, verification.
-Work directly for: trivial ops, small clarifications, single commands.
-Route code to `executor` (use `model=opus` for complex work). Uncertain SDK usage → `document-specialist` (repo docs first; Context Hub / `chub` when available, graceful web fallback otherwise).
-</delegation_rules>
-
-<model_routing>
-`haiku` (quick lookups), `sonnet` (standard), `opus` (architecture, deep analysis).
-Direct writes OK for: `~/.claude/**`, `.omc/**`, `.claude/**`, `CLAUDE.md`, `AGENTS.md`.
-</model_routing>
-
-<skills>
-Invoke via `/oh-my-claudecode:<name>`. Trigger patterns auto-detect keywords.
-Tier-0 workflows include `autopilot`, `ultrawork`, `ralph`, `team`, and `ralplan`.
-Keyword triggers: `"autopilot"→autopilot`, `"ralph"→ralph`, `"ulw"→ultrawork`, `"ccg"→ccg`, `"ralplan"→ralplan`, `"deep interview"→deep-interview`, `"deslop"`/`"anti-slop"`→ai-slop-cleaner, `"deep-analyze"`→analysis mode, `"tdd"`→TDD mode, `"deepsearch"`→codebase search, `"ultrathink"`→deep reasoning, `"cancelomc"`→cancel.
-Team orchestration is explicit via `/team`.
-Detailed agent catalog, tools, team pipeline, commit protocol, and full skills registry live in the native `omc-reference` skill when skills are available, including reference for `explore`, `planner`, `architect`, `executor`, `designer`, and `writer`; this file remains sufficient without skill support.
-</skills>
-
-<verification>
-Verify before claiming completion. Size appropriately: small→haiku, standard→sonnet, large/security→opus.
-If verification fails, keep iterating.
-</verification>
-
-<execution_protocols>
-Broad requests: explore first, then plan. 2+ independent tasks in parallel. `run_in_background` for builds/tests.
-Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane.
-Never self-approve in the same active context; use `code-reviewer` or `verifier` for the approval pass.
-Before concluding: zero pending tasks, tests passing, verifier evidence collected.
-</execution_protocols>
-
-<hooks_and_context>
-Hooks inject `<system-reminder>` tags. Key patterns: `hook success: Success` (proceed), `[MAGIC KEYWORD: ...]` (invoke skill), `The boulder never stops` (ralph/ultrawork active).
-Persistence: `<remember>` (7 days), `<remember priority>` (permanent).
-Kill switches: `DISABLE_OMC`, `OMC_SKIP_HOOKS` (comma-separated).
-</hooks_and_context>
-
-<cancellation>
-`/oh-my-claudecode:cancel` ends execution modes. Cancel when done+verified or blocked. Don't cancel if work incomplete.
-</cancellation>
-
-<worktree_paths>
-State: `.omc/state/`, `.omc/state/sessions/{sessionId}/`, `.omc/notepad.md`, `.omc/project-memory.json`, `.omc/plans/`, `.omc/research/`, `.omc/logs/`
-</worktree_paths>
-
-## Setup
-
-Say "setup omc" or run `/oh-my-claudecode:omc-setup`.
-
-<!-- OMC:END -->
-
 <output_style>
 Never use em dashes (`—`) or en dashes (`–`) in any output: prose, code, comments, commit messages, docs, or PR descriptions. Rephrase, or use a comma, colon, or parentheses instead.
 Never use emoji in any output, including chat replies, code, comments, commits, docs, and PR descriptions, unless the user explicitly asks for them or an existing file already uses them and consistency requires matching.
@@ -105,14 +39,14 @@ Models available, rated 1 (low) to 5 (high) on intelligence and speed, and 1 (ch
 | `opus` (claude-opus-4-8) | 5 | 2 | 5 | Agent `model=opus` | Architecture, security review, gnarly debugging, judgment calls that gate a completion claim |
 | `sonnet` (claude-sonnet-5) | 4 | 3 | 3 | Agent `model=sonnet` (default) | Standard implementation, refactors, test writing, routine review |
 | `fable` (claude-fable-5) | 4 | 4 | 2 | Agent `model=fable` | Latency-lean orchestration when it is the active session model |
-| `GPT-5.6` (Codex CLI, `@openai/codex`) | 4 | 3 | 1 | `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6` (direct, prompt on stdin; NOT `omc ask codex`, see step 0/1) | PC control (see step 0 below), mechanical/cheap work, independent second opinions, self-contained parallel slices needing no Claude tools |
-| Grok (`grok-4.5`, default via grok.com login; run `grok models` for options) | 4 | 4 | 2 | `grok --prompt-file <file> --always-approve` (direct; NOT `omc ask grok`, which mis-quotes on Windows, see step 1b) | Default for research and current-information lookups; independent external opinion from a non-OpenAI, non-Anthropic model (family diversity for tie-breaks and consensus); real-time or X/Twitter knowledge; fast self-contained code slices needing no Claude tools. Requires `XAI_API_KEY` (or one-time `grok login`) |
+| `GPT-5.6` (Codex CLI, `@openai/codex`) | 4 | 3 | 1 | `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6` (direct, prompt on stdin) | PC control (see step 0 below), mechanical/cheap work, independent second opinions, self-contained parallel slices needing no Claude tools |
+| Grok (`grok-4.5`, default via grok.com login; run `grok models` for options) | 4 | 4 | 2 | `grok --prompt-file <file> --always-approve` (direct, prompt via file) | Default for research and current-information lookups; independent external opinion from a non-OpenAI, non-Anthropic model (family diversity for tie-breaks and consensus); real-time or X/Twitter knowledge; fast self-contained code slices needing no Claude tools. Requires `XAI_API_KEY` (or one-time `grok login`) |
 | `haiku` | - | - | - | Banned | Never use, no exceptions, overrides every other rule in this file |
 
 Decision order for any delegated task:
-0. Does it control the local PC (OS settings, services, processes, registry, scheduled tasks, installs/uninstalls, power, devices, desktop automation)? If yes, route it to Codex on GPT-5.6. Call the CLI directly (not `omc ask codex`): write the task to a temp file and run `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6 < <file>`, then read the final assistant message from codex's stdout. If GPT-5.6 is unavailable or errors, retry once with `-m gpt-5.5`, and say which model handled it. Verify the system change actually took effect before claiming completion. Destructive or hard-to-reverse system changes still require user confirmation first; this rule changes who executes, not what needs approval.
-1. Does it need Claude-side tools, subagents, or file edits? If no, and the task is cheap/mechanical or benefits from an independent perspective, send it to an external advisor. Codex is the default. Call the CLI directly (not `omc ask codex`): write the prompt to a temp file and run `codex exec --dangerously-bypass-approvals-and-sandbox < <file>` (add `-m gpt-5.6` to pin the model), then read the final assistant message from stdout. Codex runs standalone with its own CLI tools, no shared context or memory; always read and judge its output yourself before treating it as a completion claim.
-1b. Research and current-information tasks default to Grok. Dispatch Grok for: any research question or current-events/real-time/X-Twitter lookup; an independent opinion from a non-OpenAI, non-Anthropic model (a tie-breaker in a `ccg`-style consensus, or a third check when Codex and Claude already agree); or a second external executor on independent, self-contained slices. Do NOT use `omc ask grok`: on Windows omc spawns grok through a shell without quoting the prompt, so multi-word prompts word-split and grok's strict parser rejects them (omc guards antigravity against this but not grok). Call the binary directly, passing the prompt as a file to avoid argv quoting entirely: write the full prompt to a temp file, then run `grok --prompt-file <file> --always-approve` (default model `grok-4.5`; add `-m <id>` only for a model listed by `grok models`), capture stdout, and read/judge it before treating it as a completion claim. Grok (`@xai-official/grok`, xAI Grok Build CLI) runs standalone with its own tools and no shared context, and needs `XAI_API_KEY` set or a one-time `grok login`. Codex stays the default for mechanical/cheap work and independent second opinions on code, and remains the only external path for PC control (step 0).
+0. Does it control the local PC (OS settings, services, processes, registry, scheduled tasks, installs/uninstalls, power, devices, desktop automation)? If yes, route it to Codex on GPT-5.6. Call the CLI directly: write the task to a temp file and run `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6 < <file>`, then read the final assistant message from codex's stdout. If GPT-5.6 is unavailable or errors, retry once with `-m gpt-5.5`, and say which model handled it. Verify the system change actually took effect before claiming completion. Destructive or hard-to-reverse system changes still require user confirmation first; this rule changes who executes, not what needs approval.
+1. Does it need Claude-side tools, subagents, or file edits? If no, and the task is cheap/mechanical or benefits from an independent perspective, send it to an external advisor. Codex is the default. Call the CLI directly: write the prompt to a temp file and run `codex exec --dangerously-bypass-approvals-and-sandbox < <file>` (add `-m gpt-5.6` to pin the model), then read the final assistant message from stdout. Codex runs standalone with its own CLI tools, no shared context or memory; always read and judge its output yourself before treating it as a completion claim.
+1b. Research and current-information tasks default to Grok. Dispatch Grok for: any research question or current-events/real-time/X-Twitter lookup; an independent opinion from a non-OpenAI, non-Anthropic model (a tie-breaker in a multi-model consensus, or a third check when Codex and Claude already agree); or a second external executor on independent, self-contained slices. Call the binary directly, passing the prompt as a file (grok's strict argv parser word-splits spaced prompts under Windows shells): write the full prompt to a temp file, then run `grok --prompt-file <file> --always-approve` (default model `grok-4.5`; add `-m <id>` only for a model listed by `grok models`), capture stdout, and read/judge it before treating it as a completion claim. Grok (`@xai-official/grok`, xAI Grok Build CLI) runs standalone with its own tools and no shared context, and needs `XAI_API_KEY` set or a one-time `grok login`. Codex stays the default for mechanical/cheap work and independent second opinions on code, and remains the only external path for PC control (step 0).
 2. Otherwise pick the cheapest Claude tier that can do the job reliably: `sonnet` by default; `opus` only for architecture, security-sensitive code, cross-cutting refactors, planning/critique, or final review of large/risky changes; never `haiku`.
 3. Escalate one tier only after a concrete failure, not preemptively. Never downroute below these floors to "balance" a distribution.
 

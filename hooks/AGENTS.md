@@ -10,18 +10,13 @@ of them as production and follow the shared rule below before editing any hook.
 | Script | Event | Can block? | Docs |
 |--------|-------|-----------|------|
 | `validate-file.mjs` | `PreToolUse` (Write/Edit/MultiEdit) | Yes, denies malformed writes | `README.md`, this file |
-| `omc-ledger-stop-gate.mjs` | `Stop` | Yes, blocks turn end on open ledger items | `omc-orchestration-guards.md` |
-| `omc-spawn-contract-warn.mjs` | `PreToolUse` (Task) | **No** — warn only (issue #26923) | `omc-orchestration-guards.md` |
-| `omc-guards-uninstall.mjs` | (not a hook) | n/a — automated undo for the two guards | `omc-orchestration-guards.md` |
 
 **Shared rule for every hook here: fail open.** Any error, malformed input, or
 unreadable file MUST result in allow (exit 0, no blocking output). A guard bug
 must never be able to wedge a session. Every `try/catch` that falls through to
 allow is load-bearing.
 
-The rest of this file is the deep dive on `validate-file.mjs` (the most
-intricate hook). The orchestration guards are documented at the end and in
-`omc-orchestration-guards.md`.
+The rest of this file is the deep dive on `validate-file.mjs`.
 
 ## What `validate-file.mjs` is
 
@@ -129,50 +124,3 @@ expression`, and a `tsconfig.json` with `//` comments must ALLOW.
 - New control-char-only type: add to `TEXT_EXTS`.
 - Both sets are near the top of the file.
 
-## Orchestration guards (`omc-ledger-stop-gate.mjs`, `omc-spawn-contract-warn.mjs`)
-
-These back the `<opus_orchestration>` / `<subagent_prompt_contract>` guidance in
-`~/.claude/CLAUDE.md` with enforcement. Full spec + kill switches + undo are in
-`omc-orchestration-guards.md`; read it before editing either script.
-
-Facts not to re-derive:
-
-1. **Only the Stop gate can enforce; the spawn guard cannot.** `Stop` hooks can
-   block ("prevents Claude from stopping"). `PreToolUse` on `Task` cannot —
-   [issue #26923](https://github.com/anthropics/claude-code/issues/26923): the
-   subagent launches despite a block. So `omc-spawn-contract-warn.mjs` emits
-   `additionalContext` and always allows. Do NOT "upgrade" it to return a deny
-   expecting it to stop a spawn until #26923 is fixed (that is its written
-   removal trigger).
-2. **The Stop gate is opt-in by existence.** No ledger file -> it does nothing.
-   Never change it to demand a ledger or gate turns with no ledger present; that
-   would block every turn on the machine.
-3. **Respect `stop_hook_active`.** The default path blocks only when it is false
-   (one forced continuation per stop), which is the loop-safety guarantee. Do not
-   remove that check; `OMC_LEDGER_GATE_STRICT` is the opt-in to bypass it.
-4. **Output shapes differ by event.** Stop uses top-level
-   `{ "decision": "block", "reason": ... }`. PreToolUse uses
-   `{ "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": ..., ... } }`.
-   Do not cross them.
-5. **Same fail-open contract as everything here.** Both allow on any error.
-6. **`omc-guards-uninstall.mjs` removes ONLY these two entries** (matched by
-   script basename) and backs up settings first. Keep it basename-scoped so it
-   never touches `validate-file` or other hooks.
-
-Verify before declaring done (ledger gate blocks on open items; spawn guard warns
-on a thin prompt, silent on a rich one):
-
-```sh
-G=C:/Users/johnw/.claude/hooks
-node --check "$G/omc-ledger-stop-gate.mjs" && node --check "$G/omc-spawn-contract-warn.mjs"
-
-# Stop gate: pass a native (C:/...) cwd containing .omc/LEDGER.md with a `- [ ]` line
-#   -> expect {"decision":"block",...}; all `- [x]`/`- [~]` or no file -> no output.
-# Spawn guard:
-echo '{"tool_input":{"prompt":"go fix it","subagent_type":"executor"}}' | node "$G/omc-spawn-contract-warn.mjs"   # -> warn JSON
-node "$G/omc-guards-uninstall.mjs" --dry-run   # -> "would remove 2 guard hook entr(y/ies)"
-```
-
-Note the Stop-gate test needs a **native Windows cwd** (`C:/...`), not a git-bash
-`/c/...` path — Windows Node cannot resolve the latter and the gate will fail
-open (no block) as if no ledger existed.

@@ -197,6 +197,23 @@ if ((Test-Path $npmGlobals) -and (Get-Command npm -ErrorAction SilentlyContinue)
     }
 }
 
+# retired tools (e.g. oh-my-claude-sisyphus) are uninstalled on sync so machines converge
+$npmRemovals = Join-Path $setupDir "npm-globals-remove.txt"
+if ((Test-Path $npmRemovals) -and (Get-Command npm -ErrorAction SilentlyContinue)) {
+    $unwanted = Get-Content $npmRemovals | Where-Object { $_ }
+    $installed = npm ls -g --depth=0 --parseable 2>$null |
+        Where-Object { $_ -match "node_modules" } |
+        ForEach-Object { ($_ -replace ".*node_modules[\\/]", "") -replace "\\", "/" }
+    $present = @($unwanted | Where-Object { $installed -contains $_ })
+    if ($present.Count -eq 0) { Note-Present "npm removals" "none present" }
+    foreach ($pkg in $present) {
+        Write-Line " .. " Yellow $pkg "npm uninstall -g"
+        npm uninstall -g $pkg --loglevel=error | Out-Null
+        if ($LASTEXITCODE -eq 0) { Note-Applied $pkg "removed"; continue }
+        Note-Warned $pkg "npm uninstall failed"
+    }
+}
+
 Write-Section "VSCodium extensions"
 $extFile = Join-Path $setupDir "vscodium\extensions.txt"
 if (-not (Get-Command codium -ErrorAction SilentlyContinue)) { Note-Warned "codium" "not on PATH, skipping extensions" }
