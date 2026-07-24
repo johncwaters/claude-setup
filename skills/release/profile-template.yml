@@ -1,0 +1,49 @@
+# Template for .claude/release-profile.yml — copy into a repo and fill in.
+# Every field the /release skill needs to execute a release without rediscovery.
+# Delete comments you do not need; keep values honest (the linter cross-checks the repo).
+type: npm_cli                       # flutter_play | npm_cli | astro_convex_netlify | electron_nsis | other
+
+versioning:
+  scheme: semver                    # pre-1.0: minor = features, patch = fixes; 1.0 = first public release
+  version_file: package.json        # single source of truth (or pubspec.yaml)
+  tag_format: vX.Y.Z                # annotated tag on the exact release commit
+  # build_number:                   # store types only
+  #   field: +N suffix (versionCode)
+  #   monotonic: true
+  #   never_reuse: true
+
+changelog:
+  path: CHANGELOG.md
+  format: keep_a_changelog          # draft from conventional commits since last tag, then human-polish
+  # status: MISSING                 # set when introducing the changelog at the next release
+  # store_notes:
+  #   path: <per-build store note path>
+  #   max_chars: 500
+
+git:
+  release_from: main                # branch releases ship from
+  integration: develop              # branch work lands on; omit if trunk-based
+  release_commit_pattern: "chore(release): vX.Y.Z"   # the repo's EXACT historical pattern
+  require: [clean_tree, ff_promotion, ci_green_on_sha]
+
+gates:
+  pre_tag: []                       # repo's real commands: test, typecheck, e2e, pack --dry-run
+  post_release: []                  # evidence commands run after publish
+  evidence: [git_tag]               # non-empty: git_tag, ci_run_url, registry_version,
+                                    # play_track_presence, netlify_deploy_id, update_feed_yml, live_site_check
+
+publish:
+  trigger: local_script             # tag_push | workflow_dispatch | local_script | push_to_main
+  detail: {}                        # archetype-specific:
+  #   command: npm run release            (local_script; must exist in package.json scripts)
+  #   release_workflow: .github/workflows/release.yml   (tag_push; file must exist)
+  #   prepare: gh workflow run prepare-release.yml      (workflow_dispatch)
+  #   deploy_branch: master                              (push_to_main)
+
+rollback:
+  steps:                            # exact commands or console actions, forward-fix first
+    - "npm deprecate <pkg>@<bad> 'broken, use <prev>'"
+  never: [unpublish, retag, reuse_version_or_build_number]
+
+approval:
+  human_before: [tag_push, publish] # irreversible steps that wait for a human
