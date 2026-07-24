@@ -3,8 +3,8 @@
 This workflow is compiled. The runner at `$HOME\.claude\compiled-commit\runner.py` owns the
 entire procedure: preflight, develop sync, slop cleanup, code review, message generation,
 staging, and the commit itself, with typed outcomes. Do not reimplement any of those steps,
-do not run your own review, do not stage or commit yourself, and do not edit files to fix
-findings unless the user asks after seeing the result.
+do not run your own review, and do not stage or commit yourself. Findings are yours to fix:
+apply them and re-run the runner as described under Fix findings below.
 
 ## Invoke
 
@@ -24,21 +24,31 @@ Flag mapping from the user's arguments:
 The runner has additional flags for direct use (`--help`), but this command maps only the
 two above. Do not pass skip flags unless the user explicitly names one.
 
-## Relay the result
+## Fix findings, then report
 
-Parse the JSON on stdout. Report to the user, briefly: `outcome`, `commit_hash` and the
-message subject when COMMITTED, `findings` when the outcome is REVIEW_BLOCKED or findings are
-non-empty, and any `warnings`. Do not re-judge, filter, or overrule the runner's verdict.
+Parse the JSON on stdout. When the outcome is `COMMITTED` or `REVIEW_BLOCKED` and
+`findings` is non-empty: fix each finding in the working tree (use its `fix` field when
+present, otherwise the `issue` description), then re-invoke the runner with
+`--context "address review findings: <one line>"`. At most two fix passes per invocation;
+if findings remain after that, stop and report them. Do not re-judge, filter, or overrule
+the runner's verdict; skip a finding only when it is factually wrong about the diff, and
+say so.
+
+Report in as few words as possible: one line with outcome, short hash, and message subject,
+then one short line per finding fixed. No usage stats, no restating fixed findings, no
+next-step suggestions. Expand only on failure outcomes.
 
 Typed outcomes and what to do:
 
-- `COMMITTED`: done; the runner has already pushed (the result's `pushed` field says
-  whether a push happened; it is skipped with a warning when the repo has no origin).
-  Relay, then handle the merge extra below if requested.
+- `COMMITTED`: the runner has already pushed (the result's `pushed` field says whether a
+  push happened; it is skipped with a warning when the repo has no origin). Fix findings
+  per above, then report; handle the merge extra below if requested.
+- `REVIEW_BLOCKED`: no commit happened. Fix the findings per above and re-run; still
+  blocked after two passes, stop and report.
 - `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
   push error. Do not retry the push yourself unless the user asks.
 - `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
-  `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_BLOCKED`, `REVIEW_DEAD`,
+  `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
 - Runner missing or crashes (non-JSON output): report the error verbatim. On the machine
