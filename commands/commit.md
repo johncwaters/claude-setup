@@ -1,158 +1,49 @@
-# Commit
+# Commit (compiled)
 
-Run a mandatory ai-slop-cleaner pass, then review staged changes via the code-review skill (local code-reviewer agent) and create a commit following project conventions.
+This workflow is compiled. The runner at `C:\Users\johnw\Projects\compiled-commit\runner.py`
+owns the entire procedure: preflight, develop sync, slop cleanup, code review, message
+generation, staging, and the commit itself, with typed outcomes. Do not reimplement any of
+those steps, do not run your own review, do not stage or commit yourself, and do not edit
+files to fix findings unless the user asks after seeing the result.
 
-## Core Principle — No Bandaid Fixes, Fix Upstream
+## Invoke
 
-Every step in this workflow obeys the same rule: when something fails or is flagged, fix the root cause. Do not bandaid.
-
-Banned across all steps:
-- `@ts-ignore`, `// @ts-expect-error` with no removal trigger, `eslint-disable`, `# noqa`, `# type: ignore` to silence problems.
-- `--no-verify`, skipping hooks, bypassing signing, or disabling pre-commit checks.
-- Swallowed `try/catch` blocks that hide the failure instead of fixing it.
-- `.skip` / `xfail` / commented-out tests to make a red suite green.
-- Patching a symptom in a caller when the bug is in the source. Fix the source.
-- "Temporary" workarounds without a one-line comment naming the upstream issue and removal trigger.
-
-When a fix is genuinely blocked upstream (external SDK, vendor bug, locked dependency), leave a single-line comment naming the issue and the removal trigger, and surface it in the final report.
-
-## Usage
+Run exactly one command (PowerShell):
 
 ```
-/commit
-/commit "feat: add user authentication"
+python C:\Users\johnw\Projects\compiled-commit\runner.py --repo <current working directory> --json <flags>
 ```
 
-If no commit message is provided, generate one from the diff.
+Flag mapping from the user's arguments:
 
-## Workflow
+- A quoted conventional message, e.g. `/commit "feat: x"`: pass as `--message "feat: x"`.
+- `--no-sync`: pass through.
+- `--skip-deslop`: pass through.
+- `--skip-review`: pass through.
+- Free-text intent that is not a conventional message (e.g. "prototype for later"): pass as
+  `--context "<text>"` so the message call can explain the why. When you have session
+  context about why the change was made, pass one line of it as `--context` too.
 
-### Step 0 — Sync with develop (mandatory, runs first)
+## Relay the result
 
-Pull the latest `develop` into the current worktree/branch **before** cleanup and review, so the review runs against up-to-date code and merge conflicts surface here (small, local, fixable) instead of later at PR time.
+Parse the JSON on stdout. Report to the user, briefly: `outcome`, `commit_hash` and the
+message subject when COMMITTED, `findings` when the outcome is REVIEW_BLOCKED or findings are
+non-empty, and any `warnings`. Do not re-judge, filter, or overrule the runner's verdict.
 
-**Preflight:** confirm a git repo with `git rev-parse --is-inside-work-tree`. If not, stop (the Step 1 preflight also covers this). Then check git state before any sync:
+Typed outcomes and what to do:
 
-```
-git rev-parse --abbrev-ref HEAD
-git rev-parse -q --verify MERGE_HEAD; git rev-parse -q --verify REBASE_HEAD; git rev-parse -q --verify CHERRY_PICK_HEAD
-```
+- `COMMITTED` or `DRY_RUN_OK`: done, relay.
+- `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
+  `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_BLOCKED`, `REVIEW_DEAD`,
+  `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
+  performing the workflow manually.
+- Runner missing or crashes (non-JSON output): report the error verbatim. The original prose
+  workflow is archived at `~/.claude/commands/commit.md.pre-compiled.bak`; suggest the user
+  restore it if they want the old behavior. Do not execute the archived prose yourself.
 
-- If the branch command prints the literal `HEAD`, the repo is in **detached HEAD**: stop and report. A commit made here is unreferenced and easily lost; do not sync, do not commit.
-- If any of the in-progress refs resolve (merge, rebase, or cherry-pick underway): stop and report. Let the user conclude or abort the operation first.
+## Push and merge extras
 
-Resolve the integration branch (`develop`, falling back per the notes below). Then pick the sync form by comparing it to the current branch:
-
-- Current branch **equals** the integration branch (e.g. `master` on `master`): do NOT run the `fetch <branch>:<branch>` ref-update, git refuses to fetch into the checked-out branch. Instead:
-
-```
-git fetch origin <branch>
-git merge --no-edit origin/<branch>
-```
-
-- Current branch is a feature branch: update the **local** integration branch from the remote first, then merge it in, so both local and remote states are in sync before review (`<branch>` is the resolved integration branch, usually `develop`):
-
-```
-git fetch origin <branch>
-git fetch origin <branch>:<branch>   # fast-forward the local ref to origin without checking it out
-git merge --no-edit <branch>
-```
-
-Notes and root-cause rules:
-- Keep local and remote `develop` in agreement. `git fetch origin develop:develop` fast-forwards the local `develop` ref to match `origin/develop` without switching branches. If that ref update is rejected because local `develop` has diverged (non-fast-forward), **stop and report** — do not force-update the local branch; the user needs to reconcile it. You may still proceed to merge `origin/develop` only if the user opts to, but flag the divergence.
-- If `develop` is the branch currently checked out in **another worktree**, the ref-update fetch will refuse. In that case merge `origin/develop` directly and note that local `develop` lives in another worktree.
-- Prefer `develop`. If the repo has no `develop` branch, fall back to its default integration branch (`main`/`master`) and say which one you used. If you cannot determine one, skip the sync and surface why — do not guess and merge the wrong branch.
-- Uncommitted work is expected at commit time. If the merge fails because local changes would be overwritten, or the worktree is otherwise dirty in a way that blocks the merge, **stop and report** — do not stash-and-drop or force the merge in a way that could lose work. Let the user decide.
-- On merge conflicts, **resolve them for real** at the source. Do not `git checkout --theirs/--ours` blindly, do not comment out conflicting code, and do not abort-and-skip to dodge the conflict. If resolution is genuinely blocked, `git merge --abort`, stop, and report the conflicting files so the user can decide.
-- After a successful merge, re-run any relevant quality gates (build/typecheck/tests) before continuing — a clean textual merge can still break the build.
-- This step is **not skippable** unless the user passes `--no-sync`.
-
-### Step 1 — AI Slop Cleanup (mandatory, runs before review)
-
-Invoke the local `ai-slop-cleaner` skill (Skill tool, `skill: "ai-slop-cleaner"`) in **writer mode** (not `--review`) scoped to the changed files in this commit:
-
-```
-git diff --name-only HEAD
-git diff --cached --name-only
-```
-
-**If both lists are empty, stop with "nothing to commit"** — do not invoke the cleaner with an empty scope, do not proceed to review or commit. Otherwise hand the file list to the cleaner in the invocation arguments. The cleaner must fully run, including applying its fixes, before Step 2 begins. Follow the cleaner's full workflow: behavior lock, cleanup plan, smell-focused passes (dead code, duplication, naming/error-handling, test reinforcement), and quality gates.
-
-**Preflight (run before the cleaner):** verify the working directory is a git repository with `git rev-parse --is-inside-work-tree`. If it is not, stop and tell the user the directory is not a git repo — do not invoke the cleaner, do not stage, do not commit.
-
-Requirements:
-- This pass is **not optional** and **not skippable** unless the user passes `--skip-deslop`.
-- If the cleaner makes changes, re-stage them (`git add -u` for tracked files; stage new files explicitly) so the review and commit see the cleaned diff.
-- If the cleaner's quality gates fail (lint, typecheck, tests), **fix the root cause upstream** — do not silence the failure with ignore comments, disabled rules, `.skip`/`xfail`, swallowed `try/catch`, or "temporary" workarounds. Do not proceed to review with a red build.
-- If the cleaner reports unresolved risks, surface them before Step 2 and fix them at the source rather than masking the symptom in a caller.
-
-### Step 2 — Code Review
-
-Invoke the local `code-review` skill (Skill tool, `skill: "code-review"`) on the **post-cleanup** staged/unstaged changes. The skill selects and runs the applicable review lanes (its lane table is the single source of truth for which agents run and what they cost) against:
-
-```
-git diff HEAD
-git diff --cached
-git status
-```
-
-If the reviewer agent errors, returns empty output, or produces no parseable verdict, **treat that as blocking**: stop and report; never fall through to commit on a dead review. If the reviewer returns **blocking issues** (severity: critical or high), stop and report them to the user. Do not proceed to commit until the user resolves the issues or explicitly overrides with `/commit --skip-review`.
-
-For contested critical/high findings, security-sensitive changes, or on user request, use the code-review skill's ChatGPT second-opinion lane (`codex exec -s read-only`, prompt via stdin) and reconcile the two verdicts before deciding.
-
-When resolving reviewer findings, **fix upstream, not at the symptom**. If the bug is in a shared helper, fix the helper rather than patching every caller. If the type is wrong, fix the type rather than casting around it. Do not add ignore comments, disable lint rules, or wrap failing code in swallowed `try/catch` to clear a review flag.
-
-If the reviewer returns only warnings or suggestions, proceed but surface them in the output.
-
-### Step 3 — Commit
-
-Follow the project commit convention from CLAUDE.md:
-
-```
-<type>: <short description>
-
-<body>
-
-Constraint: ...
-Rejected: ...
-Directive: ...
-Confidence: high | medium | low
-Scope-risk: narrow | moderate | broad
-Not-tested: ...
-```
-
-- Use `git diff --cached` (staged) or `git diff HEAD` (all changes) to infer type and description if no message was supplied.
-- Stage modified tracked files with `git add -u` if nothing is staged yet, and stage intended **new untracked files explicitly by path** (`git add <path>`) — `git add -u` never picks them up, and a new-files-only change would otherwise commit nothing. Check `git status --short` for `??` entries that belong to this change before committing; never blanket `git add -A` (it can grab unrelated work).
-- If the staged set is empty after staging, stop with "nothing to commit" instead of running `git commit`.
-- Include git trailers when the change is non-trivial (skip for typos, formatting, dependency bumps).
-- Pass the commit message via HEREDOC to preserve formatting.
-- **Never** commit with `--no-verify` or other hook-bypass flags unless the user explicitly requests it. If a pre-commit hook fails, fix the underlying issue upstream — do not bypass.
-- If the commit includes a deliberate workaround for an upstream issue, name the issue and removal trigger in the body so it does not become permanent.
-
-## Flags
-
-- `--no-sync` — skip the Step 0 pull of `develop` into the current branch (default is to sync)
-- `--skip-deslop` — skip the mandatory ai-slop-cleaner pass (escape hatch; default is to run it)
-- `--skip-review` — skip the code-review step and go straight to commit
-- `--push` — commit and then push to the current tracking branch (or set upstream if none)
-
-## Example Output
-
-```
-Syncing develop into feature/auth...
-  ✓ Fetched origin/develop
-  ✓ Merged origin/develop (no conflicts)
-
-Running ai-slop-cleaner (writer mode)...
-  ✓ Dead code removed: 2 files
-  ✓ Duplicate helpers consolidated: 1
-  ✓ Quality gates green
-  Re-staged cleaned changes.
-
-Running code review...
-  ✓ No critical issues found
-  ⚠ 2 suggestions (non-blocking)
-
-Committing...
-  [feature/auth a1b2c3d] feat: add user authentication
-```
+The runner never pushes. If and only if the user explicitly asked (words like "and push",
+`--push`) and the outcome is COMMITTED, run `git push` on the current branch afterward and
+report the result. Merge requests ("and merge") remain manual follow-ups: surface them back
+to the user after the commit, do not perform them as part of this command.
