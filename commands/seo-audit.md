@@ -21,13 +21,13 @@ Trigger phrases: "audit my site", "SEO check", "AI search readiness", "schema ma
 
 1. **WebFetch is unreliable for `<head>` extraction.** The summarizer model regularly reports `MISSING` for tags that are present (title, description, canonical, OG, Twitter, viewport, charset, lang). Always use curl + the parser below for HTML signals. WebFetch is fine for XML sitemap content and llms.txt.
 2. **Minified HTML defeats Grep.** Single-line bundles trigger `[Omitted long matching line]`. Use the Python parser, not `Grep`/`rg`, for HTML extraction.
-3. **Tmp paths must be Windows-safe.** Use `.omc/seo/tmp/` inside the working dir, never `/tmp/`.
+3. **Tmp paths must be Windows-safe.** Use `.seo-tmp/` inside the working dir, never `/tmp/`.
 4. **`sharp` resolves only from inside the project.** Node walks up for `node_modules`, so the og-image generator (`sharp`) must run with cwd inside the site package (e.g. `cd site && node gen-og.mjs`), not from an arbitrary tmp dir, or you get `ERR_MODULE_NOT_FOUND: sharp`. If the site has no deps installed, run `npm install` in it first.
-5. **The Write tool may gate `.py` files** (it shells out to `ruff`; if ruff is absent the write is *blocked*, not warned). Write parser/generator Python via a Bash heredoc or to a non-`.py` extension (`build.txt`) and run `python build.txt`. Node generator scripts are not gated.
+5. **The Write tool syntax-gates `.py` files via ruff.** Valid Python passes; a parse error blocks with a located message. (The old blocked-when-ruff-missing failure was fixed 2026-07-23: the hook now fails open when the engine is absent, and apply.ps1 bootstraps ruff.) Node generator scripts are not gated.
 6. **Preview must be self-contained.** Embed the og-image and favicon as base64 `data:` URIs in the preview HTML so it renders with no server and survives being moved. Never reference the live URL or a local file path for images in the preview.
 7. **Audit the LIVE site, but check the deploy branch.** A host like Netlify deploys one branch (often `main`); newer SEO work or images may sit on `develop`/a feature branch and not be live yet. If a source file has an asset the live HTML lacks, say so and name the branch gap instead of scoring the source you can see locally.
 8. **The parser truncates at apostrophes.** `content=["\']([^"\']*)["\']` stops at a `'` inside a double-quoted attribute: `content="Keeplings' privacy policy…"` parses as `Keeplings`. Before flagging a suspiciously short title/description, grep the raw HTML for the full tag (`grep -o '<meta name="description"[^>]*>' page.html`) and confirm. Never report a truncation-shaped value as a site bug without that check.
-9. **Bash cwd persists between tool calls.** A `cd .omc/seo/tmp` in one fetch command breaks every later relative path (`.omc/seo/tmp/parse.py: No such file or directory`). Either never `cd`, or re-anchor each multi-step command with an absolute `cd` first.
+9. **Bash cwd persists between tool calls.** A `cd .seo-tmp` in one fetch command breaks every later relative path (`.seo-tmp/parse.py: No such file or directory`). Either never `cd`, or re-anchor each multi-step command with an absolute `cd` first.
 10. **Re-running on the same day overwrites the prior report.** The date-stamped filenames collide; the Write tool forces a Read first. Read the old report, keep its overall score, and lead the new one with the before/after (e.g. "89, up from 53 after `<commit>`") — the delta is the most useful line in the file.
 
 ## Workflow
@@ -35,10 +35,10 @@ Trigger phrases: "audit my site", "SEO check", "AI search readiness", "schema ma
 ### Step 0 — Setup
 
 ```
-mkdir -p .omc/seo/tmp
+mkdir -p .seo-tmp
 ```
 
-Write the parser script (below) to `.omc/seo/tmp/parse.py` **via a Bash heredoc** (`cat > .omc/seo/tmp/parse.py <<'EOF' ... EOF`), not the Write tool — Constraint 5: the Write tool gates `.py` and blocks when ruff is absent.
+Write the parser script (below) to `.seo-tmp/parse.py`.
 
 ### Step 1 — Discover URLs
 
@@ -57,12 +57,12 @@ For every URL in the page list, run in parallel:
 
 ```bash
 curl -sS -L -A "Mozilla/5.0 (compatible; SEOAudit/1.0)" --max-time 30 \
-  -o .omc/seo/tmp/<slug>.html \
+  -o .seo-tmp/<slug>.html \
   -w "<slug> %{http_code} %{size_download}\n" \
   "<url>"
 
 curl -sS -I -L -A "Mozilla/5.0" --max-time 20 "<url>" \
-  > .omc/seo/tmp/<slug>.headers.txt
+  > .seo-tmp/<slug>.headers.txt
 ```
 
 Slug = path with `/` → `-` (`/` → `home`, `/blog/foo` → `blog-foo`).
@@ -72,7 +72,7 @@ Capture headers per URL — edge providers (Netlify, Cloudflare) can vary header
 ### Step 3 — Parse
 
 ```bash
-python .omc/seo/tmp/parse.py
+python .seo-tmp/parse.py
 ```
 
 Outputs JSON of per-page signals. Cross-reference with `.headers.txt` files for security headers.
@@ -125,24 +125,24 @@ This step runs on **every** audit. It produces two things: a graded verdict on t
 
 ### Step 7 — Report
 
-Write to `.omc/seo/`:
+Write to `docs/seo/`:
 
 - `<YYYY-MM-DD>-<domain>-audit.md` — exec summary (score, top 5 critical/high, top 5 quick wins), per-page snapshot table, per-category breakdown, ready-to-paste JSON-LD (use the `@graph` pattern), the **og-image grade** (rubric score + what was regenerated, if anything), synthetic-404 list, caveats.
 - `<YYYY-MM-DD>-<domain>-action-plan.md` — Critical / High (≤2 weeks) / Medium (≤1 month) / Low buckets. Each item: what + why + concrete fix (file path or HTML snippet, drawn from **## Remediation recipes** where applicable) + effort (S/M/L) + impact (low/med/high). End with suggested order.
 
 ### Step 8 — Cleanup + finish
 
-Unless `--keep-tmp`, delete `.omc/seo/tmp/` (keep any regenerated `public/og-image.png` — that is a real asset, not tmp). Reopen the preview page one final time (unless `--no-preview`). Print: score, og-image grade, top 3 issues, both report paths, and the preview page path.
+Unless `--keep-tmp`, delete `.seo-tmp/` (keep any regenerated `public/og-image.png` — that is a real asset, not tmp). Reopen the preview page one final time (unless `--no-preview`). Print: score, og-image grade, top 3 issues, both report paths, and the preview page path.
 
 ## Parser script
 
-Write to `.omc/seo/tmp/parse.py` at the start of every run, via Bash heredoc per Constraint 5 (never the Write tool). Edit only `FILES` to point at the slugs you saved.
+Write to `.seo-tmp/parse.py` at the start of every run. Edit only `FILES` to point at the slugs you saved.
 
 ```python
 import re, json, os
 
 FILES = {
-    # "slug": ".omc/seo/tmp/<slug>.html"
+    # "slug": ".seo-tmp/<slug>.html"
 }
 
 def extract(html):

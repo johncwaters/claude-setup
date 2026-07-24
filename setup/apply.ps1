@@ -214,6 +214,21 @@ if ((Test-Path $npmRemovals) -and (Get-Command npm -ErrorAction SilentlyContinue
     }
 }
 
+# validate-file hook's python gate needs ruff; the release skill's linter needs pyyaml
+Write-Section "Python tools"
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) { Note-Warned "python" "not on PATH, skipping pip tools" }
+if (Get-Command python -ErrorAction SilentlyContinue) {
+    foreach ($mod in @("ruff", "yaml")) {
+        $pkg = @{ ruff = "ruff"; yaml = "pyyaml" }[$mod]
+        python -c "import $mod" 2>$null
+        if ($LASTEXITCODE -eq 0) { Note-Present $pkg "already installed"; continue }
+        Write-Line " .. " Yellow $pkg "pip install"
+        python -m pip install $pkg --quiet 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { Note-Installed $pkg "installed"; continue }
+        Note-Warned $pkg "pip install failed"
+    }
+}
+
 Write-Section "VSCodium extensions"
 $extFile = Join-Path $setupDir "vscodium\extensions.txt"
 if (-not (Get-Command codium -ErrorAction SilentlyContinue)) { Note-Warned "codium" "not on PATH, skipping extensions" }

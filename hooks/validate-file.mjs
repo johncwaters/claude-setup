@@ -264,6 +264,9 @@ function validatePython(content) {
   const r = runStdin("python", ["-m", "ruff", "format", "--stdin-filename", "f.py", "-"], content);
   if (r.error || r.status === 0) return null; // no python/ruff or valid -> allow
   const err = (r.stderr || r.stdout || "").trim();
+  // python present but ruff not installed: engine absent, not a parse failure.
+  // Fail open per the decision-engine contract (a missing engine must never deny).
+  if (/No module named ['"]?ruff/.test(err)) return null;
   const m = /Failed to parse [^\s:]*:(\d+):(\d+):\s*(.*)/.exec(err);
   if (m) {
     return {
