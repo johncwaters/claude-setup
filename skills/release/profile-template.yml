@@ -3,6 +3,14 @@
 # Delete comments you do not need; keep values honest (the linter cross-checks the repo).
 type: npm_cli                       # flutter_play | npm_cli | astro_convex_netlify | electron_nsis | other
 
+# targets:                          # multi-surface repos only: skill diffs paths since last
+#   - name: app                     # release and ships or explicitly flags EVERY touched target
+#     paths: [src/]
+#     trigger: tag_push
+#   - name: site
+#     paths: [site/]
+#     trigger: push_to_main
+
 versioning:
   scheme: semver                    # pre-1.0: minor = features, patch = fixes; 1.0 = first public release
   version_file: package.json        # single source of truth (or pubspec.yaml)
@@ -35,6 +43,9 @@ gates:
 publish:
   trigger: local_script             # tag_push | workflow_dispatch | local_script | push_to_main
   detail: {}                        # archetype-specific:
+  # <thing>_live_check: "<command>"   for any mutable remote state (CI variable, store track,
+  #                                   feature switch): the skill runs this and trusts the LIVE
+  #                                   value, never a cached note
   #   command: npm run release            (local_script; must exist in package.json scripts)
   #   release_workflow: .github/workflows/release.yml   (tag_push; file must exist)
   #   prepare: gh workflow run prepare-release.yml      (workflow_dispatch)

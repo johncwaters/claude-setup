@@ -23,11 +23,16 @@ The linter validates schema (required fields, trigger/type enums), and cross-che
 3. **Present**: beyond the linter, sanity-check judgment fields against reality (does the release-commit pattern match `git log` history, does the trigger archetype match how past releases actually shipped). Contradiction = stop, show the mismatch, ask whether to fix the profile or the repo.
 4. **Absent**: derive it by surveying the repo (branches and their roles, CI workflows and triggers, version source file, changelog file and format, tag format and release-commit pattern from `git log`/`git tag`, deploy/publish mechanism, verification surfaces). Start from `profile-template.yml`, write the profile, run the linter on it, show it to the user for review, and include it in the release commit. Never guess a field you could not evidence; leave it out and say so.
 5. The repo's own CLAUDE.md overrides everything (e.g. "releases run only through CI: dispatch and monitor, never build locally").
+6. **Live state beats cached notes.** Any profile field describing mutable remote state (a CI/CD variable, a store track, a feature switch) must carry the command that reads it live (convention: a `*_live_check` key). Run that command and act on the live value; a stale note about a release-gating switch is a safety bug, not a doc nit.
 
 ### Profile schema
 
 ```yaml
 type: flutter_play | npm_cli | astro_convex_netlify | electron_nsis | other
+targets: optional               # multi-surface repos: [{name, paths, trigger, runbook?}].
+                                # The skill diffs paths since the last release and
+                                # orchestrates or explicitly flags EVERY touched target;
+                                # never silently ship only one surface.
 versioning:
   scheme: semver              # pre-1.0: minor = features, patch = fixes; 1.0 reserved for first public release
   version_file: package.json  # or pubspec.yaml; single source of truth
@@ -64,9 +69,11 @@ Stop on any failure; fix upstream, never bypass.
 0. `python <skill-dir>/lint-profile.py <repo-root> --preflight` — deterministic gate before any judgment steps.
 1. Working tree clean; on a branch the profile allows (integration or release_from; the linter warns rather than blocks here since releases legitimately start from the integration branch).
 2. Integration and release branches synced (fetch both; report divergence, do not force).
-3. CI green on the tip commit (`gh run list --branch <branch> --limit 1`) when the repo has CI.
-4. Version sanity: `version_file` value vs latest tag; the new version must be a valid increment and never reuse a tag or build number.
-5. Changelog `[Unreleased]` has content. Empty: draft it from conventional commits since the last tag, show for polish, never release an empty section.
+3. CI green on the tip commit (`gh run list --branch <branch> --limit 1`) when the repo has CI. This is enforced, not advisory: red = pull the failure (`gh run view <id> --log-failed`), report it, and **block** — tagging into a red pipeline fires the expensive release job into the same failure.
+4. Run the profile's `gates.pre_tag` commands **locally** (lint, typecheck, tests). Listing them in the profile is not running them; local execution catches what a divergent CI environment (line endings, platform deps) would only surface after the push.
+5. Multi-target repos (`targets` in the profile): diff the paths since the last release tag and list which targets this release touches. Every touched target gets shipped or explicitly deferred with the user's sign-off; silence is not an option.
+6. Version sanity: `version_file` value vs latest tag; the new version must be a valid increment and never reuse a tag or build number.
+7. Changelog `[Unreleased]` has content. Empty: draft it from conventional commits since the last tag, show for polish, never release an empty section. `status: MISSING`: backfill a Keep-a-Changelog file from existing tags + `git log` before this release ships, then drop the MISSING marker.
 
 ## Phase 2 — Prepare
 
@@ -78,7 +85,7 @@ Stop on any failure; fix upstream, never bypass.
 
 **Human approval before every irreversible step** (push, tag push, publish, store promotion). Present what will run and wait.
 
-- `tag_push` (CI releases on tag, e.g. Electron/NSIS or store upload): promote integration to release branch ff-only, land the bump commit on the release branch, **verify the target tag does not already exist** (`git tag --list <tag>` must be empty; the preflight tag check ran pre-bump and only covered the previous version), create the **annotated tag on that exact commit**, push branch then tag, then `gh run watch` the release workflow to completion.
+- `tag_push` (CI releases on tag, e.g. Electron/NSIS or store upload): promote integration to release branch ff-only, land the bump commit on the release branch, **verify the target tag does not already exist** (`git tag --list <tag>` must be empty; the preflight tag check ran pre-bump and only covered the previous version), create the **annotated tag on that exact commit**, push branch then tag, then `gh run watch` the release workflow to completion. **Unsigned-build feed stop:** when a live auto-update feed is enabled (live-checked, never assumed) and builds are unsigned, the tag push auto-updates real users to an unsigned build; require explicit human confirmation that names exactly that consequence before pushing the tag.
 - `workflow_dispatch` (repo owns its release workflow): `gh workflow run <workflow>` with the profile's inputs, monitor the produced PR/run, confirm the downstream tag and release workflow complete. Do not replicate the workflow's steps locally.
 - `local_script` (e.g. npm publish script): run the repo's script only after commits are in place; afterwards sync the release branch so it does not drift behind; confirm registry state, never re-run a partially failed publish without checking what landed.
 - `push_to_main` (host deploys on push, tag is metadata): merge the integration branch into the deploy branch first when the release content lives there, land the bump commit on the deploy branch, tag it, push, then watch the host deploy. If the host reports nothing headless (no CI status, no CLI token — Netlify posts nothing to GitHub by default), verify with a **live-site content marker**: a class name or string literal introduced by this release, grepped from the served CSS/JS bundles. After release, sync the integration branch back per the repo's flow.

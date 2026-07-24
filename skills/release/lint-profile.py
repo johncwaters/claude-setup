@@ -163,6 +163,27 @@ def check_repo(root: Path, profile: dict) -> None:
                 f"tag_format has no v prefix but {len(prefixed)} existing tag(s) are v-prefixed: {prefixed[:3]}"
             )
 
+    # Formatter-enforced line endings without .gitattributes burn CI on
+    # cross-platform repos (autocrlf flips what the formatter then rejects).
+    for bio in ("biome.json", "biome.jsonc"):
+        bp = root / bio
+        if (
+            bp.is_file()
+            and '"lineEnding"' in bp.read_text(encoding="utf-8", errors="ignore")
+            and not (root / ".gitattributes").is_file()
+        ):
+            warn(
+                f"{bio} pins lineEnding but repo has no .gitattributes; CI line-ending failures likely (add .gitattributes + one renormalize commit)"
+            )
+
+    targets = profile.get("targets")
+    if targets is not None:
+        if not isinstance(targets, list):
+            err(f"targets must be a list, got {type(targets).__name__}")
+        for i, t in enumerate(targets if isinstance(targets, list) else []):
+            if not isinstance(t, dict) or not t.get("name") or not t.get("trigger"):
+                err(f"targets[{i}] needs at least name and trigger")
+
     detail = section(profile, "publish").get("detail") or {}
     for value in detail.values():
         for m in re.findall(r"\.github/workflows/[\w.-]+\.ya?ml", str(value)):
