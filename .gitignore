@@ -9,6 +9,7 @@
 !CLAUDE.md
 !settings.json
 !agents/**
+!docs/**
 !commands/**
 !hooks/**
 !skills/**
