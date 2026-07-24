@@ -22,7 +22,7 @@ Flag mapping from the user's arguments:
   context about why the change was made, pass one line of it as `--context` too.
 
 The runner has additional flags for direct use (`--help`), but this command maps only the
-two above. Do not pass skip or dry-run flags unless the user explicitly names one.
+two above. Do not pass skip flags unless the user explicitly names one.
 
 ## Relay the result
 
@@ -32,7 +32,11 @@ non-empty, and any `warnings`. Do not re-judge, filter, or overrule the runner's
 
 Typed outcomes and what to do:
 
-- `COMMITTED`: done, relay, then handle push/merge extras below if requested.
+- `COMMITTED`: done; the runner has already pushed (the result's `pushed` field says
+  whether a push happened; it is skipped with a warning when the repo has no origin).
+  Relay, then handle the merge extra below if requested.
+- `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
+  push error. Do not retry the push yourself unless the user asks.
 - `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
   `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_BLOCKED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
@@ -42,16 +46,17 @@ Typed outcomes and what to do:
   `~/.claude/commands/commit.md.pre-compiled.bak` (not versioned in this repo, so it may not
   exist elsewhere). Do not execute the archived prose yourself.
 
-## Push and merge extras
+## Merge extra
 
-The runner itself never pushes or merges. Perform these only when the user explicitly asked
-in this invocation (words like "and push", "and merge"), and only after COMMITTED:
+Pushing the current branch is the runner's job and happens by default. Merging is not:
+perform it only when the user explicitly asked in this invocation (words like "and merge"),
+and only after COMMITTED:
 
-- Push: `git push` on the current branch (set upstream if none). Report the result.
 - Merge: resolve the integration branch (develop, falling back to main/master). Then:
   `git fetch origin <integration>`, `git checkout <integration>`,
   `git pull --ff-only origin <integration>`, `git merge --no-edit <feature-branch>`,
   `git push origin <integration>`, `git checkout <feature-branch>`.
   On any conflict or non-fast-forward pull: abort the merge, return to the feature branch,
   stop and report. Never force-push, never resolve conflicts silently.
-- If the current branch already is the integration branch, merge is meaningless: push only.
+- If the current branch already is the integration branch, merge is meaningless: nothing
+  extra to do, the runner already pushed it.
