@@ -67,3 +67,7 @@ Do not assume. Research. Do not bandaid. Fix upstream.
 - Flaky test: find the race or shared state. Do not retry-loop or skip.
 State the assumption in one line before acting so the user can redirect early.
 </research_not_assume>
+
+<auto_commit>
+When a requested change is complete and every gate passes (tests green, verification evidence collected, zero pending tasks), run the /commit workflow immediately; do not wait for the user to ask. Skip only when: the user said not to commit, the work was assessment or exploration with no code change, or the change is one slice of a larger plan still in flight.
+</auto_commit>
