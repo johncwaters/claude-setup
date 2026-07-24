@@ -31,7 +31,7 @@
   "enabledPlugins": {
     "caveman@caveman": true,
     "typescript-lsp@claude-plugins-official": true,
-    "posthog@claude-plugins-official": true,
+    "posthog@claude-plugins-official": false,
     "github@claude-plugins-official": false,
     "postiz@skills-dir": false
   },
