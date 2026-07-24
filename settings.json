@@ -23,6 +23,10 @@
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "node C:/Users/johnw/.claude/hud/hud.mjs"
+  },
   "enabledPlugins": {
     "caveman@caveman": true,
     "typescript-lsp@claude-plugins-official": true,
