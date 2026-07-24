@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Statusline HUD. Claude Code pipes a JSON payload on stdin; print one line.
-// Payload fields used: model.{id,display_name}, context_window.{used_percentage,
-// total_input_tokens,context_window_size}, rate_limits.{five_hour,seven_day}.
+// Statusline HUD, OMC-style formatting. Claude Code pipes a JSON payload on
+// stdin; print one line. Payload fields used: model.{id,display_name},
+// context_window.{used_percentage,total_input_tokens,context_window_size},
+// rate_limits.{five_hour,seven_day}.{used_percentage,resets_at}.
 // Fail open: any error renders whatever is known, never crashes the statusline.
 
 const RESET = "\x1b[0m";
@@ -11,15 +12,23 @@ const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const RED = "\x1b[31m";
 
-function pctColor(pct) {
-  if (pct >= 85) return RED;
-  if (pct >= 60) return YELLOW;
+// OMC thresholds: rate limits warn at 70, critical at 90;
+// context warns at 70, suggests compaction at 80, critical at 85.
+function limitColor(pct) {
+  if (pct >= 90) return RED;
+  if (pct >= 70) return YELLOW;
   return GREEN;
 }
 
-function fmtPct(pct) {
-  const rounded = Math.round(pct);
-  return `${pctColor(rounded)}${rounded}%${RESET}`;
+function contextStyle(pct) {
+  if (pct >= 85) return { color: RED, suffix: " CRITICAL" };
+  if (pct >= 80) return { color: YELLOW, suffix: " COMPRESS?" };
+  if (pct >= 70) return { color: YELLOW, suffix: "" };
+  return { color: GREEN, suffix: "" };
+}
+
+function clampPct(pct) {
+  return Math.min(100, Math.max(0, Math.round(pct)));
 }
 
 function parseResetsAt(raw) {
@@ -33,31 +42,25 @@ function parseResetsAt(raw) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function fmtCountdown(date) {
-  const ms = date.getTime() - Date.now();
-  if (ms <= 0) return "now";
-  const totalMin = Math.round(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  if (h >= 48) return `${Math.round(h / 24)}d`;
-  if (h > 0) return `${h}h${String(m).padStart(2, "0")}m`;
-  return `${m}m`;
+// OMC duration format: 2d5h above a day, else 3h42m.
+function fmtReset(date) {
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs <= 0) return null;
+  const totalMin = Math.floor(diffMs / 60000);
+  const totalH = Math.floor(totalMin / 60);
+  const days = Math.floor(totalH / 24);
+  if (days > 0) return `${days}d${totalH % 24}h`;
+  return `${totalH}h${totalMin % 60}m`;
 }
 
-function fmtWeekday(date) {
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
-  if (sameDay) return fmtCountdown(date);
-  return `${days[date.getDay()]} ${date.getHours()}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function limitSegment(label, limit, fmtReset) {
+function limitPart(label, limit) {
   if (!limit || typeof limit.used_percentage !== "number") return null;
-  let seg = `${DIM}${label}${RESET} ${fmtPct(limit.used_percentage)}`;
+  const pct = clampPct(limit.used_percentage);
+  let part = `${DIM}${label}:${RESET}${limitColor(pct)}${pct}%${RESET}`;
   const resetDate = parseResetsAt(limit.resets_at);
-  if (resetDate) seg += ` ${DIM}resets ${fmtReset(resetDate)}${RESET}`;
-  return seg;
+  const reset = resetDate ? fmtReset(resetDate) : null;
+  if (reset) part += `${DIM}(${reset})${RESET}`;
+  return part;
 }
 
 function fmtTokens(n) {
@@ -72,24 +75,24 @@ function render(payload) {
 
   const model = payload.model || {};
   const name = model.display_name || model.id;
-  if (name) parts.push(`${CYAN}${name}${RESET}`);
+  if (name) parts.push(`${CYAN}Model: ${name}${RESET}`);
+
+  const rl = payload.rate_limits || {};
+  const limits = [limitPart("5h", rl.five_hour), limitPart("wk", rl.seven_day)].filter(Boolean);
+  if (limits.length > 0) parts.push(limits.join(" "));
 
   const cw = payload.context_window || {};
   if (typeof cw.used_percentage === "number") {
-    let seg = `${DIM}ctx${RESET} ${fmtPct(cw.used_percentage)}`;
+    const pct = clampPct(cw.used_percentage);
+    const { color, suffix } = contextStyle(pct);
+    let seg = `${DIM}ctx:${RESET}${color}${pct}%${suffix}${RESET}`;
     const used = fmtTokens(cw.total_input_tokens);
     const size = fmtTokens(cw.context_window_size);
-    if (used && size) seg += ` ${DIM}${used}/${size}${RESET}`;
+    if (used && size) seg += `${DIM}(${used}/${size})${RESET}`;
     parts.push(seg);
   }
 
-  const rl = payload.rate_limits || {};
-  const fiveH = limitSegment("5h", rl.five_hour, fmtCountdown);
-  if (fiveH) parts.push(fiveH);
-  const week = limitSegment("wk", rl.seven_day, fmtWeekday);
-  if (week) parts.push(week);
-
-  return parts.join(` ${DIM}|${RESET} `);
+  return parts.join(`${DIM} | ${RESET}`);
 }
 
 let input = "";
