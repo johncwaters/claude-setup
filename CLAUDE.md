@@ -68,6 +68,14 @@ Do not assume. Research. Do not bandaid. Fix upstream.
 State the assumption in one line before acting so the user can redirect early.
 </research_not_assume>
 
+<execution>
+Broad or vague requests: explore first, then plan, then implement. Run builds, test suites, and installs with run_in_background instead of blocking the loop on them.
+</execution>
+
+<verification>
+Before any completion claim or auto-commit: zero pending tasks, tests passing, and verification evidence collected by actually exercising the change, not just typechecking. Never self-approve in the same context; route the approval pass through a reviewer or verifier agent (sonnet; opus for large or security-sensitive changes). If verification fails, keep iterating. The /commit runner's review is a second gate, not the first.
+</verification>
+
 <auto_commit>
 When a requested change is complete and every gate passes (tests green, verification evidence collected, zero pending tasks), run the /commit workflow immediately; do not wait for the user to ask. Skip only when: the user said not to commit, the work was assessment or exploration with no code change, or the change is one slice of a larger plan still in flight.
 </auto_commit>
