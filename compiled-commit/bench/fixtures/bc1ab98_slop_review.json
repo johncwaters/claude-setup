@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 43153,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "7d75bdc2-acc3-4c5f-8ed2-c53717550772",
+  "total_cost_usd": 0.1839699,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 19551,
+    "cache_read_input_tokens": 31343,
+    "output_tokens": 3817,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 19551,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3817,
+        "cache_read_input_tokens": 31343,
+        "cache_creation_input_tokens": 19551,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19551
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 3817,
+      "cacheReadInputTokens": 31343,
+      "cacheCreationInputTokens": 19551,
+      "webSearchRequests": 0,
+      "costUSD": 0.1839699,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"src/main/services/storage.service.ts\",\"issue\":\"Count query and data query rebuild the same join chain (physicalCards -> scanRows -> storageDividers -> storageBoxes) and the same `and(...filters)` where clause independently. Two near-identical query blocks instead of one shared filtered-query builder; any future filter or join change now has to be edited in two places.\",\"category\":\"duplicated-helper\"},{\"file\":\"src/renderer/src/SearchTab.tsx\",\"issue\":\"loadMoreButtonRef, paginationCountRef, and focusAfterLoadMore add focus-shifting logic (focus load-more button or focus the count span with tabIndex=-1) that no test covers and wasn't asked for. Speculative a11y polish bolted onto a simple pagination feature.\",\"category\":\"over-abstraction\"}],\"patch\":null}",
+  "ttft_ms": 41017,
+  "ttft_stream_ms": 1977,
+  "time_to_request_ms": 390,
+  "type": "result",
+  "duration_ms": 43548,
+  "uuid": "07ace12c-161a-41d1-a469-f52238a21935"
+}

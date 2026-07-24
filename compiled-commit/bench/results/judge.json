@@ -1,0 +1,208 @@
+{
+  "verdicts": [
+    {
+      "id": "11767a1",
+      "winner": "historical",
+      "reason": "A documents the async ordering constraint (sync teardown vs deferred discard), explicitly states rejected alternatives and why, and clarifies the shutdown/restart-vs-explicit-removal distinction that explains the fix's scope, all directly relevant given the diff touches ordering across destroy/discard/reap. B covers the same root cause accurately and concisely but omits the constraint that justifies the chosen fix shape and the rejected-alternatives reasoning, leaving future readers to rediscover why a simpler fix (e.g. awaiting inline) wasn't used.",
+      "order": "historical_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 6081,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 309,
+          "duration_ms": 8906.048900011228,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "1eb5432",
+      "winner": "historical",
+      "reason": "B ties change to concrete why (clears 9 dependabot alerts, specific CVE class), gives exact version numbers, verifies build actually ran (astro build exit 0) instead of leaving it untested, and assesses real-world exposure of the alerts. A's 'satteri-based markdown pipeline' detail reads speculative/unverified and its build status is explicitly untested, weakening confidence. B's fix(site) type also matches the security-driven intent better than A's generic build(site) bump framing.",
+      "order": "compiled_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 5857,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 595,
+          "duration_ms": 19082.46949999011,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "30e2e32",
+      "winner": "historical",
+      "reason": "B name specific theme, list what change and why (WCAG contrast fix after review), tie to existing semantics and Compleated theme. A vaguer, skip contrast justification, less precise diff mapping despite similar structure.",
+      "order": "compiled_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 5808,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 86,
+          "duration_ms": 8040.415600000415,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "419d1b6",
+      "winner": "compiled",
+      "reason": "B classifies change as refactor, which fits removing/simplifying existing UI more than 'feat'. B explains why SearchTab's highlightPhysicalCardId prop is gone (highlight logic and the list it highlighted no longer exist) instead of just stating it's removed. A pads the message with speculative decision-log fields (Constraint/Rejected) that read like leftover agent scratch notes rather than commit content, and appends a dubious 'Co-Authored-By: Claude Fable 5' trailer that doesn't belong. Both cover the same diff accurately, but B is tighter and avoids the fluff/misclassification issues in A.",
+      "order": "historical_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 6084,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 754,
+          "duration_ms": 17053.905899985693,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "688d467",
+      "winner": "compiled",
+      "reason": "Both explain the why (pins draggable at all times, keyboard flush must survive gating) and match the diffstat's touched files well, but B pads the message with content that isn't actually about this change: a 'Constraint: no else statements, why-only comments...' line that just restates repo-wide style rules rather than anything specific to the drag-lock feature, plus a Co-Authored-By trailer. That's fluff by the task's own standard. A stays tighter, its subject line carries a clear scope (trips), and its body maps cleanly onto the diff (StopCardEditor, IntermediateStopEditor, TripEditor, TripRailContent, StopList, DayBucket, TripMap) without extraneous meta content, while still capturing the key why (accidental drags, escape/blur flush invariant) and appropriate confidence/risk/untested caveats.",
+      "order": "compiled_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 6700,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 1733,
+          "duration_ms": 27598.5323000059,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "b3c88bf",
+      "winner": "historical",
+      "reason": "A more accurate and complete: names specific SEO decisions (self-referencing canonical, JSON-LD schemas, UnitPriceSpecification rationale for Pro pricing, logo-vs-banner choice) with clear why. Explains rejected alternatives (live CSP, @astrojs/sitemap) with reasons, matching diffstat's actual scope. B is vaguer, omits key why-level reasoning (why UnitPriceSpecification, why logo choice), and misdescribes headers file as 'Netlify/Cloudflare' when diff shows only Netlify _headers.",
+      "order": "historical_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 6412,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 209,
+          "duration_ms": 9080.931400007103,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "bc1ab98",
+      "winner": "historical",
+      "reason": "B accurate to real IPC channel name (storage:search) versus A's function-name framing, and give more specific why: notes race guard via request ids, test count (five, boundaries/clamping/offset), rejected alternative (infinite scroll) with reasoning, and precise verification (typecheck, lint, 123/123 tests, two review passes) versus A's vaguer 'verified via unit tests and code review only'. B also explains COUNT query detail and reset-on-filter-change behavior, matching the larger diffstat (renderer +74, css +12+5, test +120) better than A's more generic summary. Both similar length and structure, but B's specificity and precision give it edge.",
+      "order": "compiled_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 6271,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 232,
+          "duration_ms": 9753.359200025443,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "be2bf01",
+      "winner": "compiled",
+      "reason": "B explains why: version bump reason plus lockfile cleanup detail. A just states what, adds unrelated co-author tag, no rationale.",
+      "order": "historical_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 5470,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 61,
+          "duration_ms": 9907.71759999916,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "c468d9f",
+      "winner": "historical",
+      "reason": "Diffstat only touch version fields, no source fix. B call it fix and revert, wrong: diffstat show no revert logic, just number change 1.0.0 to 0.9.0, so chore fit better than fix. A explain why (1.0.0 reserved for public release, feed/tag pipeline start point) - real rationale not just what. B state what happen (bump then rollback) but no reason why 1.0.0 was premature. A more accurate type and stronger why.",
+      "order": "historical_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 5531,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 165,
+          "duration_ms": 8173.471599991899,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "e522223",
+      "winner": "historical",
+      "reason": "Type accurate: change drops/simplifies existing labels, no new feature added, so refactor fits better than feat. A gives concrete why tied to diff (legend already lists keys, tooltips still show them, aria-label covers rotation state) plus records a rejected alternative, useful context B lacks. B's why is generic ('cleaner control bar') and its feat label mischaracterizes the change. A's extra Constraint/Rejected/Directive/Confidence lines add real decision context, not filler, despite small diffstat the design tradeoff justifies it.",
+      "order": "historical_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 5877,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 1623,
+          "duration_ms": 25186.837199988076,
+          "retries": 0
+        }
+      ]
+    },
+    {
+      "id": "edde149",
+      "winner": "historical",
+      "reason": "Both are accurate and detailed, but B better explains the why (the app icon, favicons, and header SVGs had diverged onto two different logos), documents rejected alternatives (separate favicon glyph, vectorizing the raster) which prevents future churn, and gives concrete verification detail (ran both generators, built all 6 pages, inspected head output, eyeballed the mark at each size). A is solid but vaguer on testing and omits the rationale for design choices like square-padding brand-mark.png or keeping favicon.svg as a PNG wrapper.",
+      "order": "compiled_first",
+      "usage": [
+        {
+          "name": "judge",
+          "model": "claude-sonnet-5",
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 7039,
+          "cache_read_input_tokens": 36672,
+          "output_tokens": 431,
+          "duration_ms": 10852.274199976819,
+          "retries": 0
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "historical": 8,
+    "compiled": 3,
+    "tie": 0,
+    "JUDGE_FAILED": 0
+  }
+}

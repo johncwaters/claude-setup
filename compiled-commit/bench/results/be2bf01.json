@@ -1,0 +1,58 @@
+{
+  "id": "be2bf01",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "be2bf01",
+  "outcome": "COMMITTED",
+  "commit_message": "chore: bump version to 0.9.3\n\nUpdate package.json and package-lock.json version fields from 0.9.2 to 0.9.3, and drop a stray extraneous prettier entry from the lockfile.",
+  "wall_time_sec": 33.29213180000079,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 159329,
+  "noncached_tokens": 63848,
+  "output_tokens": 329,
+  "warnings": [],
+  "findings": [],
+  "historical": {
+    "message": "chore: bump version to 0.9.3\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 5035321,
+    "noncached_tokens": 196445,
+    "output_tokens": 16135,
+    "cache_read_tokens": 4838876,
+    "llm_calls": 45,
+    "tool_calls": 23,
+    "duration_sec": 341.827,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 5035321,
+      "new": 159329,
+      "pct_change": -96.8357727342507
+    },
+    "noncached_tokens": {
+      "old": 196445,
+      "new": 63848,
+      "pct_change": -67.49828196187228
+    },
+    "output_tokens": {
+      "old": 16135,
+      "new": 329,
+      "pct_change": -97.96095444685466
+    },
+    "llm_calls": {
+      "old": 45,
+      "new": 3,
+      "pct_change": -93.33333333333333
+    },
+    "tool_calls": {
+      "old": 23,
+      "new": 17,
+      "pct_change": -26.08695652173913
+    },
+    "duration_sec": {
+      "old": 341.827,
+      "new": 33.29213180000079,
+      "pct_change": -90.26053184798135
+    }
+  }
+}

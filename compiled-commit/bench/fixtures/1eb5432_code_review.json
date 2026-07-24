@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 8159,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "c7b7d391-d02f-4403-ba61-3ea54f48c2d0",
+  "total_cost_usd": 0.1861887,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 27968,
+    "cache_read_input_tokens": 33749,
+    "output_tokens": 550,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 27968,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 550,
+        "cache_read_input_tokens": 33749,
+        "cache_creation_input_tokens": 27968,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 27968
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 550,
+      "cacheReadInputTokens": 33749,
+      "cacheCreationInputTokens": 27968,
+      "webSearchRequests": 0,
+      "costUSD": 0.1861887,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"verdict\":\"approve\",\"findings\":[{\"severity\":\"medium\",\"file\":\"site/package.json\",\"line\":12,\"issue\":\"astro major bump ^5.0.0 to ^7.1.0, two major versions. Breaking changes likely (config, markdown/prism internals renamed per lockfile: astro-compiler-binding replaces astro-compiler, markdown-satteri replaces markdown-remark).\",\"fix\":\"Build+preview site locally, check astro migration guide v5 to v7 before merge.\"},{\"severity\":\"medium\",\"file\":\"site/package-lock.json\",\"line\":null,\"issue\":\"Large lockfile churn from major bump, unreviewed transitive dependency tree change (new native binding packages, new install-time deps).\",\"fix\":\"Run npm install / npm ci and confirm site builds clean, check for new postinstall scripts in added packages.\"}]}",
+  "ttft_ms": 7502,
+  "ttft_stream_ms": 3855,
+  "time_to_request_ms": 2362,
+  "type": "result",
+  "duration_ms": 10555,
+  "uuid": "026a4751-40c4-46e5-8c59-c5e0acbdea51"
+}

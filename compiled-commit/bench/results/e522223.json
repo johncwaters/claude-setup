@@ -1,0 +1,71 @@
+{
+  "id": "e522223",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "e522223",
+  "outcome": "COMMITTED",
+  "commit_message": "feat(scan): simplify camera scan button labels and fix width\n\nDrop the rotation-degree suffix and keyboard-shortcut hints from the Rotate view, Rescan, and Recalibrate button labels for a cleaner control bar. Give the buttons a shared min-width with centered text so labels of different lengths don't cause the buttons to resize.\n\nConfidence: high\nScope-risk: narrow",
+  "wall_time_sec": 66.37169989998802,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 162769,
+  "noncached_tokens": 67252,
+  "output_tokens": 2068,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/camera-scan/camera-scan.css",
+      "issue": "min-width: 150px added with no comment/rationale; magic number picked to fit longest label, breaks silently if label text changes later.",
+      "category": "magic-number"
+    },
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/camera-scan/CameraScan.tsx",
+      "issue": "Button text dropped hotkey hints ('(R)', '(K)') and dynamic rotation degrees, but title attributes still say 'R or Space' / 'K' and aria-label still reports rotation degrees - visible label and accessible name now diverge.",
+      "category": "inconsistency"
+    }
+  ],
+  "historical": {
+    "message": "refactor(scan): dedupe hotkey hints and equalize control sizes\n\nStrip the (R)/(K) parentheticals from the Rescan and Recalibrate buttons\nnow that the always-on legend already lists those keys; hover tooltips\nstill name them. Drop the dynamic degree suffix from the Rotate label\n(the is-active state and aria-label already convey rotation). Give the\nshared camera-control spec a uniform min-width so the toolbar controls\nrender the same size.\n\nConstraint: legend remains the single visible keybinding reference; tooltips keep the keys discoverable on hover.\nRejected: removing keys from the legend instead of the buttons (legend was the agreed always-on shortcut surface).\nDirective: no duplicate keybindings, make the controls all the same size.\nConfidence: high\nScope-risk: narrow\nNot-tested: no automated coverage of button labels or control widths (none pre-existed); tsc and biome pass.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 2497735,
+    "noncached_tokens": 150815,
+    "output_tokens": 9656,
+    "cache_read_tokens": 2346920,
+    "llm_calls": 24,
+    "tool_calls": 10,
+    "duration_sec": 117.348,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 2497735,
+      "new": 162769,
+      "pct_change": -93.48333590232751
+    },
+    "noncached_tokens": {
+      "old": 150815,
+      "new": 67252,
+      "pct_change": -55.40761860557637
+    },
+    "output_tokens": {
+      "old": 9656,
+      "new": 2068,
+      "pct_change": -78.58326429163215
+    },
+    "llm_calls": {
+      "old": 24,
+      "new": 3,
+      "pct_change": -87.5
+    },
+    "tool_calls": {
+      "old": 10,
+      "new": 17,
+      "pct_change": 70.0
+    },
+    "duration_sec": {
+      "old": 117.348,
+      "new": 66.37169989998802,
+      "pct_change": -43.44028027747553
+    }
+  }
+}

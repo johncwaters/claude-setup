@@ -1,0 +1,105 @@
+{
+  "id": "153ee28",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "153ee28",
+  "outcome": "REVIEW_BLOCKED",
+  "commit_message": null,
+  "wall_time_sec": 106.56401669999468,
+  "git_op_count": 11,
+  "llm_call_count": 2,
+  "gross_tokens": 129797,
+  "noncached_tokens": 61328,
+  "output_tokens": 8989,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/SearchTab.tsx",
+      "issue": "toggleRow/moveSelection/handleRowKeyDown row-selection keyboard nav copied near-verbatim into StorageTab.tsx (CardManifestTable). Same Enter/Space toggle + ArrowUp/ArrowDown focus-move logic in two place, no shared hook.",
+      "category": "duplication"
+    },
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/StorageTab.tsx",
+      "issue": "Duplicate of SearchTab keyboard nav logic (moveSelection/handleRowKeyDown) inside CardManifestTable. Should extract shared useRowSelection hook instead of two parallel implementation.",
+      "category": "duplication"
+    },
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/SearchTab.css",
+      "issue": ".search-row rule block (cursor, focus-visible outline, is-selected background) identical in structure to .storage-card-row block in StorageTab.css, only class name differ. Copy-paste CSS.",
+      "category": "duplication"
+    },
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/StorageTab.css",
+      "issue": "Same identical CSS pattern (cursor pointer, focus-visible outline, is-selected background) as SearchTab.css .search-row, just renamed selector.",
+      "category": "duplication"
+    },
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/CardDetailPanel.tsx",
+      "issue": "Loading/error/loaded three-way branch repeated separately for price section and copies section with near-same shape (error null-check, then loading skeleton, then content). Could collapse into one render helper.",
+      "category": "over-abstraction"
+    },
+    {
+      "stage": "review",
+      "severity": "high",
+      "file": "src/main/services/storage.service.ts",
+      "line": 491,
+      "issue": "snapshotRow query for pricingSnapshots has no orderBy/limit, unlike the scanRows query just above it which explicitly does .orderBy(desc(scanRows.id)).limit(1). If pricingSnapshots stores a history of captures per tcgSkuId (name implies periodic snapshots, and it has a capturedAt column), .get() returns whatever row SQLite hands back first (typically oldest/lowest rowid), not the latest. Card detail panel would then silently show a stale price snapshot instead of the most recent one.",
+      "fix": "Add .orderBy(desc(pricingSnapshots.capturedAt)).limit(1) to the snapshotRow query, mirroring the pattern used for cardRow."
+    },
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "src/renderer/src/CardDetailPanel.tsx",
+      "line": null,
+      "issue": "New feature (card detail panel, IPC handler, storage.service query) ships with no accompanying tests.",
+      "fix": "Add unit coverage for getCardDetail (especially snapshot selection) and a component test for CardDetailPanel loading/error states."
+    }
+  ],
+  "historical": {
+    "message": "feat(card-detail): add reusable card detail side panel\n\nNew card:detail IPC channel returns card attributes from the newest scan\nrow, market price with scan fallback, the latest TCGplayer pricing\nsnapshot, and all non-removed physical copies for a SKU. CardDetailPanel\nrenders a non-modal 440px right-side panel (identity band, price block\nwith stale marker, copies list with highlighted origin, provenance\nfooter) with instant seed render, skeleton loading, inline retry,\nEsc/arrow-key handling, focus return, and reduced-motion support.\nSearch and Storage rows open it; rows without a resolved SKU stay inert.\n\nConstraint: read-only v1; status history, other printings, and Camera Scan wiring deferred to v2.\nRejected: modal with backdrop and full-screen takeover; glance flow needs the source list to stay visible and interactive.\nConfidence: high\nScope-risk: narrow\nNot-tested: no unit test infra for renderer; verified via typecheck, biome lint, and two reviewer passes.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 9478996,
+    "noncached_tokens": 442026,
+    "output_tokens": 42456,
+    "cache_read_tokens": 9036970,
+    "llm_calls": 120,
+    "tool_calls": 68,
+    "duration_sec": 618.43,
+    "subagents": 2
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 9478996,
+      "new": 129797,
+      "pct_change": -98.63068831340365
+    },
+    "noncached_tokens": {
+      "old": 442026,
+      "new": 61328,
+      "pct_change": -86.12570301294494
+    },
+    "output_tokens": {
+      "old": 42456,
+      "new": 8989,
+      "pct_change": -78.82749199170907
+    },
+    "llm_calls": {
+      "old": 120,
+      "new": 2,
+      "pct_change": -98.33333333333333
+    },
+    "tool_calls": {
+      "old": 68,
+      "new": 11,
+      "pct_change": -83.82352941176471
+    },
+    "duration_sec": {
+      "old": 618.43,
+      "new": 106.56401669999468,
+      "pct_change": -82.76862107271725
+    }
+  }
+}

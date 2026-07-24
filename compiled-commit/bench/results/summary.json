@@ -1,0 +1,50 @@
+{
+ "n": 13,
+ "committed": 11,
+ "blocked": [
+  "153ee28",
+  "9fcda4f"
+ ],
+ "gross_tokens": {
+  "old_total": 78169107,
+  "new_total": 2324443,
+  "old_median": 5035321,
+  "new_median": 172502,
+  "pct_total": -97.0
+ },
+ "noncached_tokens": {
+  "old_total": 4485306,
+  "new_total": 1104553,
+  "old_median": 364095,
+  "new_median": 90615,
+  "pct_total": -75.4
+ },
+ "output_tokens": {
+  "old_total": 383252,
+  "new_total": 53379,
+  "old_median": 21994,
+  "new_median": 4122,
+  "pct_total": -86.1
+ },
+ "llm_calls": {
+  "old_total": 732,
+  "new_total": 43,
+  "old_median": 53,
+  "new_median": 3,
+  "pct_total": -94.1
+ },
+ "tool_calls": {
+  "old_total": 345,
+  "new_total": 223,
+  "old_median": 23,
+  "new_median": 17,
+  "pct_total": -35.4
+ },
+ "duration_sec": {
+  "old_total": 6112.898,
+  "new_total": 1121.571417899977,
+  "old_median": 473.085,
+  "new_median": 89.46103619999485,
+  "pct_total": -81.7
+ }
+}

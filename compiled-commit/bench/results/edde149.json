@@ -1,0 +1,93 @@
+{
+  "id": "edde149",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "edde149",
+  "outcome": "COMMITTED",
+  "commit_message": "feat(site): unify brand assets across app icon, favicons, and og-image\n\nExtend generate-icon.mjs into the single source of truth for every Card Harbor logo raster: it now emits site favicons (ico, 32/16 png, apple-touch-icon), a transparent brand-mark png for in-page headers, and a scalable favicon.svg, all derived from the same brand mark used for the Electron app icon. Add generate-og-image.mjs to build the 1200x630 social card from the same mark instead of a hand-drawn one. Base.astro now links the full favicon set plus site.webmanifest and theme-color, and its schema.org logo points at the new logo.png. Legal.astro and index.astro swap their inline hand-coded brand-mark SVGs for the generated brand-mark.png so every surface renders the same logo.\n\nConstraint: Generated PNG/ICO assets must be regenerated via node scripts/generate-icon.mjs and node scripts/generate-og-image.mjs whenever src/renderer/src/assets/card-harbor-mark.png changes; they are not hand-editable.\nConfidence: medium\nScope-risk: moderate\nNot-tested: Favicon/og-image rendering not verified in an actual browser or social-card unfurler after the asset regeneration.",
+  "wall_time_sec": 115.0010719000129,
+  "git_op_count": 25,
+  "llm_call_count": 4,
+  "gross_tokens": 262772,
+  "noncached_tokens": 133033,
+  "output_tokens": 6453,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "scripts/generate-icon.mjs",
+      "issue": "favicon.svg generation manually rebuilds a rounded rect with BACKGROUND and a hand-computed radius instead of reusing the existing backgroundSvg() helper that already does exactly this composition step, duplicating logic that lives two functions above it",
+      "category": "duplicated-helpers"
+    },
+    {
+      "stage": "slop",
+      "file": "scripts/generate-icon.mjs",
+      "issue": "icoFrom() and pngFrom() are near-identical: both call renderBadge, then fs.writeFileSync + console.log('wrote', ...) with the same message shape; that write+log pair is also repeated inline for favicon.svg and brand-mark.png (4 copies total of the same two lines)",
+      "category": "duplicated-helpers"
+    },
+    {
+      "stage": "slop",
+      "file": "scripts/generate-og-image.mjs",
+      "issue": "header comment is a mini design-doc (drop-shadow rationale, crop survival, run instructions) that mostly restates what the code below already shows; only the drop-shadow alpha hack actually needs a why-comment",
+      "category": "useless-comments"
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "scripts/generate-icon.mjs",
+      "line": 112,
+      "issue": "favicon.svg draws rounded background rect then overlays badge256 image which already bakes in same background+radius (from renderBadge compositing onto backgroundSvg) - redundant double-background, harmless since image fully covers rect.",
+      "fix": "Skip separate rect and just embed badge256 image, or skip background compositing in renderBadge call for badge256 and let SVG rect provide it."
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "scripts/generate-og-image.mjs",
+      "line": 21,
+      "issue": "Deshadow logic re-encodes extractChannel(3) alpha as PNG buffer then joinChannel(alpha) onto rgb buffer; unverified this sharp pipeline produces correct alpha-adjusted image (no test/run evidence in diff).",
+      "fix": "Run script once and visually confirm mark has no dark halo before merging; add inline note if empirically tuned."
+    }
+  ],
+  "historical": {
+    "message": "feat(brand): standardize logo across site and social onto one mark\n\nThe Card Harbor logo had diverged: the app/taskbar icon and og-image used\nthe detailed harbor mark, while the site favicon and the inline header SVGs\nused a different, simplified redraw. Unify everything onto the single brand\nmark (src/renderer/src/assets/card-harbor-mark.png) that the app icon already\nuses.\n\n- generate-icon.mjs: promote from app-icon-only to the single source for\n  every logo raster. In addition to build/icon.{ico,png} it now emits the\n  full site favicon set (favicon.ico, favicon-16x16, favicon-32x32,\n  apple-touch-icon, a favicon.svg badge), a square logo.png for schema.org\n  Organization.logo, and a square, transparent brand-mark.png for in-page\n  headers. brand-mark.png is padded to a square canvas so a fixed square CSS\n  box renders it without distortion.\n- generate-og-image.mjs (new): rebuilds site/public/og-image.png from the\n  same mark, de-shadowing it for the white card. Centered lockup (mark +\n  one-line name + tagline) survives a square center-crop so Slack/Discord/\n  iMessage thumbnails stay readable.\n- Base.astro: wire the full favicon set + web manifest + theme-color, and\n  point Organization.logo at /logo.png (square raster) instead of the SVG.\n- index.astro, Legal.astro: replace the inline simplified brand-mark SVG in\n  the header with <img src=\"/brand-mark.png\"> so headers use the real mark.\n- site.webmanifest (new): PWA manifest referencing the generated icons.\n\nConstraint: keep one brand mark as the single source; the app icon already\n  uses it, so the site and social assets move to it rather than the reverse.\nRejected: keeping a separate simplified favicon/header glyph (the whole point\n  was that it read as a different logo); vectorizing the raster mark (it is a\n  raster brand asset, so favicon.svg wraps it and og/headers use PNGs).\nDirective: standardize the logo, seeing different versions across app, site,\n  and SEO.\nConfidence: high\nScope-risk: narrow\nNot-tested: no automated coverage; verified by running both generators,\n  building the site (6 pages), inspecting the built head for the favicon set /\n  manifest / theme-color / JSON-LD logo, and eyeballing the mark at favicon,\n  header (28px, undistorted), and og-image sizes plus a 240px square crop.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 11890503,
+    "noncached_tokens": 665994,
+    "output_tokens": 48116,
+    "cache_read_tokens": 11224509,
+    "llm_calls": 59,
+    "tool_calls": 24,
+    "duration_sec": 444.727,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 11890503,
+      "new": 262772,
+      "pct_change": -97.7900682586767
+    },
+    "noncached_tokens": {
+      "old": 665994,
+      "new": 133033,
+      "pct_change": -80.02489511917524
+    },
+    "output_tokens": {
+      "old": 48116,
+      "new": 6453,
+      "pct_change": -86.58866073655332
+    },
+    "llm_calls": {
+      "old": 59,
+      "new": 4,
+      "pct_change": -93.22033898305084
+    },
+    "tool_calls": {
+      "old": 24,
+      "new": 25,
+      "pct_change": 4.166666666666666
+    },
+    "duration_sec": {
+      "old": 444.727,
+      "new": 115.0010719000129,
+      "pct_change": -74.14119855551543
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "id": "1eb5432",
+  "repo": "C:\\Users\\johnw\\Projects\\keeplings",
+  "source_commit": "1eb5432",
+  "outcome": "COMMITTED",
+  "commit_message": "build(site): bump Astro from ^5.0.0 to ^7.1.0\n\nUpgrade Astro dependency to the v7 line and regenerate package-lock.json accordingly. Lockfile picks up the new native compiler-binding packages and satteri-based markdown pipeline that replace the old @astrojs/markdown-remark/remark-* toolchain.\n\nConfidence: medium\nScope-risk: moderate\nNot-tested: site build/dev server not run against the new Astro version",
+  "wall_time_sec": 53.53817029998754,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 186032,
+  "noncached_tokens": 90615,
+  "output_tokens": 833,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "site/package.json",
+      "line": 12,
+      "issue": "astro major bump ^5.0.0 to ^7.1.0, two major versions. Breaking changes likely (config, markdown/prism internals renamed per lockfile: astro-compiler-binding replaces astro-compiler, markdown-satteri replaces markdown-remark).",
+      "fix": "Build+preview site locally, check astro migration guide v5 to v7 before merge."
+    },
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "site/package-lock.json",
+      "line": null,
+      "issue": "Large lockfile churn from major bump, unreviewed transitive dependency tree change (new native binding packages, new install-time deps).",
+      "fix": "Run npm install / npm ci and confirm site builds clean, check for new postinstall scripts in added packages."
+    }
+  ],
+  "historical": {
+    "message": "fix(site): upgrade astro 5->7 to clear dependabot alerts\n\nBump astro 5.18.2 -> 7.1.3, clearing all 9 open dependabot alerts on\nthe marketing site (8 astro XSS/SSRF advisories + 1 esbuild dev-server\nfile-read). Astro 7 pulled a vulnerable sharp <0.35.0 (libvips CVEs);\nnpm audit fix bumped it. npm audit now reports 0 vulnerabilities.\n\nPractical exposure of the original alerts was near-nil: static output,\nno SSR adapter, no user input, esbuild dev-only. This is hygiene to\nclose the alerts. Verified: astro build exit 0, all 3 pages generated.\n\nConfidence: high\nScope-risk: narrow\nNot-tested: no visual/browser check; static build output only\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 835812,
+    "noncached_tokens": 26882,
+    "output_tokens": 6559,
+    "cache_read_tokens": 808930,
+    "llm_calls": 12,
+    "tool_calls": 4,
+    "duration_sec": 489.08,
+    "subagents": 0
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 835812,
+      "new": 186032,
+      "pct_change": -77.7423631151503
+    },
+    "noncached_tokens": {
+      "old": 26882,
+      "new": 90615,
+      "pct_change": 237.084294323339
+    },
+    "output_tokens": {
+      "old": 6559,
+      "new": 833,
+      "pct_change": -87.29989327641408
+    },
+    "llm_calls": {
+      "old": 12,
+      "new": 3,
+      "pct_change": -75.0
+    },
+    "tool_calls": {
+      "old": 4,
+      "new": 17,
+      "pct_change": 325.0
+    },
+    "duration_sec": {
+      "old": 489.08,
+      "new": 53.53817029998754,
+      "pct_change": -89.05328978899412
+    }
+  }
+}

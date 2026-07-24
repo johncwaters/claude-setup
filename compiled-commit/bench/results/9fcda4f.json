@@ -1,0 +1,85 @@
+{
+  "id": "9fcda4f",
+  "repo": "C:\\Users\\johnw\\Projects\\keeplings",
+  "source_commit": "9fcda4f",
+  "outcome": "REVIEW_BLOCKED",
+  "commit_message": null,
+  "wall_time_sec": 186.26642090000678,
+  "git_op_count": 11,
+  "llm_call_count": 5,
+  "gross_tokens": 65653,
+  "noncached_tokens": 31767,
+  "output_tokens": 3794,
+  "warnings": [
+    "slop_review call failed: no JSON object found in response"
+  ],
+  "findings": [
+    {
+      "stage": "review",
+      "severity": "high",
+      "file": "netlify.toml",
+      "line": 32,
+      "issue": "Content-Security-Policy sets script-src 'self' with no 'unsafe-inline'/nonce/hash, but same diff adds inline <script type=\"application/ld+json\"> blocks in Layout.astro and index.astro. Browsers apply CSP script-src to all <script> elements regardless of type; strict script-src blocks these inline scripts from parsing, so crawlers/tools never see structured data. Feature added in this diff is broken by config added in same diff.",
+      "fix": "Add a nonce or hash for the JSON-LD scripts, or scope CSP with 'unsafe-inline' only for script-src, or move structured data to a .json fetched with src (still requires allowlisting) - simplest fix: add sha256 hash of each inline script to script-src, or exclude type=application/ld+json handling via nonce set per request (Astro static site: precompute hash and add to CSP)."
+    },
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "site/package-lock.json",
+      "line": null,
+      "issue": "New dependency tree (@astrojs/sitemap and transitive deps: sitemap, zod 4.x, sax, arg, stream-replace-string) added without visible audit; devDependency only so not shipped to prod bundle, but adds build-time supply chain surface.",
+      "fix": "Run npm audit / review new transitive deps before merge; not blocking since devDependency-only."
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "site/src/layouts/Layout.astro",
+      "line": 63,
+      "issue": "Org/site URLs (https://keeplings.watersedgegames.com/...) hardcoded in JSON-LD instead of derived from Astro.site, which is already available and used for canonicalURL/ogImage just above.",
+      "fix": "Build these from Astro.site (e.g. new URL('#org', Astro.site)) to avoid drift if domain changes."
+    }
+  ],
+  "historical": {
+    "message": "feat(site): add SEO metadata, sitemap, and social share tags\n\nSet the Astro site URL and add @astrojs/sitemap so every page emits a\nself-referencing canonical and a matching extensionless sitemap. Add\nOpen Graph and Twitter card tags with a 1200x630 image, sitewide\nOrganization plus WebSite JSON-LD, and SoftwareApplication markup on the\nhomepage. Add robots.txt (with the sitemap pointer), llms.txt, and a\nbranded noindex 404 page. Switch internal links to extensionless and\n301 the .html forms to clean URLs in Netlify, and add a security-header\nblock (CSP, HSTS, X-Frame-Options, X-Content-Type-Options,\nReferrer-Policy, Permissions-Policy).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 8409939,
+    "noncached_tokens": 509776,
+    "output_tokens": 48599,
+    "cache_read_tokens": 7900163,
+    "llm_calls": 85,
+    "tool_calls": 42,
+    "duration_sec": 726.438,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 8409939,
+      "new": 65653,
+      "pct_change": -99.21934035431173
+    },
+    "noncached_tokens": {
+      "old": 509776,
+      "new": 31767,
+      "pct_change": -93.76843947145413
+    },
+    "output_tokens": {
+      "old": 48599,
+      "new": 3794,
+      "pct_change": -92.19325500524702
+    },
+    "llm_calls": {
+      "old": 85,
+      "new": 5,
+      "pct_change": -94.11764705882352
+    },
+    "tool_calls": {
+      "old": 42,
+      "new": 11,
+      "pct_change": -73.80952380952381
+    },
+    "duration_sec": {
+      "old": 726.438,
+      "new": 186.26642090000678,
+      "pct_change": -74.35893759687589
+    }
+  }
+}

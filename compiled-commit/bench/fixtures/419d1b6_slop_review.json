@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 37555,
+  "num_turns": 2,
+  "stop_reason": "end_turn",
+  "session_id": "fd6efd56-c4c0-4099-a482-4072b4999ee5",
+  "total_cost_usd": 0.6659619,
+  "usage": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 101362,
+    "cache_read_input_tokens": 31343,
+    "output_tokens": 3225,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 101362,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2121,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 86383,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 86383
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 4,
+      "outputTokens": 3225,
+      "cacheReadInputTokens": 31343,
+      "cacheCreationInputTokens": 101362,
+      "webSearchRequests": 0,
+      "costUSD": 0.6659619,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"src/renderer/src/CardDetailPanel.tsx\",\"issue\":\"Copy-count chip render uses a nested ternary (detail !== null ? ... : error === null ? ... : null) inline in JSX. Not wrong, but a three-way branch crammed into one ternary chain is harder to scan than a small helper or early-return variable.\",\"category\":\"readability\"}],\"patch\":null}",
+  "ttft_ms": 12717,
+  "ttft_stream_ms": 1722,
+  "time_to_request_ms": 422,
+  "type": "result",
+  "duration_ms": 38030,
+  "uuid": "62f97846-4ee6-401d-bcc0-868581d466da"
+}

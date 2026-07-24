@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 42756,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "e5a83450-c182-4433-a10b-fe877fc1e50c",
+  "total_cost_usd": 0.1734309,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 18233,
+    "cache_read_input_tokens": 37073,
+    "output_tokens": 3527,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18233,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3527,
+        "cache_read_input_tokens": 37073,
+        "cache_creation_input_tokens": 18233,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 18233
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 3527,
+      "cacheReadInputTokens": 37073,
+      "cacheCreationInputTokens": 18233,
+      "webSearchRequests": 0,
+      "costUSD": 0.1734309,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"verdict\":\"approve\",\"findings\":[{\"severity\":\"medium\",\"file\":\"server/backend.js\",\"line\":1005,\"issue\":\"Fix assumes a property named sess._killReap holds the PTY kill/reap promise. If sessions.js actually exposes this under a different name (e.g. a reap promise set inside destroy()), Promise.resolve(sess._killReap) resolves immediately with undefined and discardWorktree runs right after destroy() with no delay, silently reintroducing the exact race (worktree still held by cwd) this diff is meant to fix.\",\"fix\":\"Confirm sess._killReap is set synchronously inside Session.destroy() in session/sessions.js and actually resolves only after the PTY process exit/reap completes.\"},{\"severity\":\"low\",\"file\":\"server/backend.js\",\"line\":1008,\"issue\":\"sessions.delete(id) fires immediately, before the chained discardWorktree completes. A same-named session re-added quickly, before the deferred worktree/branch removal settles, can still hit the 'branch already checked out' failure the comment describes, just in a narrower window.\",\"fix\":\"If this matters in practice, await the discardWorktree chain (or track pending discards) before allowing a same-name re-add, or document the narrowed race as acceptable.\"}]}",
+  "ttft_ms": 39332,
+  "ttft_stream_ms": 3151,
+  "time_to_request_ms": 258,
+  "type": "result",
+  "duration_ms": 43011,
+  "uuid": "fc09bd32-04a1-4bad-ae90-dea8977d8351"
+}

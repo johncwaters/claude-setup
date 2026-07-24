@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 49318,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "e7968dd3-7e45-4b58-a37a-b760b29ff046",
+  "total_cost_usd": 0.2349078,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 27971,
+    "cache_read_input_tokens": 33886,
+    "output_tokens": 3794,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 27971,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3794,
+        "cache_read_input_tokens": 33886,
+        "cache_creation_input_tokens": 27971,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 27971
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 3794,
+      "cacheReadInputTokens": 33886,
+      "cacheCreationInputTokens": 27971,
+      "webSearchRequests": 0,
+      "costUSD": 0.2349078,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"verdict\":\"block\",\"findings\":[{\"severity\":\"high\",\"file\":\"netlify.toml\",\"line\":32,\"issue\":\"Content-Security-Policy sets script-src 'self' with no 'unsafe-inline'/nonce/hash, but same diff adds inline <script type=\\\"application/ld+json\\\"> blocks in Layout.astro and index.astro. Browsers apply CSP script-src to all <script> elements regardless of type; strict script-src blocks these inline scripts from parsing, so crawlers/tools never see structured data. Feature added in this diff is broken by config added in same diff.\",\"fix\":\"Add a nonce or hash for the JSON-LD scripts, or scope CSP with 'unsafe-inline' only for script-src, or move structured data to a .json fetched with src (still requires allowlisting) - simplest fix: add sha256 hash of each inline script to script-src, or exclude type=application/ld+json handling via nonce set per request (Astro static site: precompute hash and add to CSP).\"},{\"severity\":\"medium\",\"file\":\"site/package-lock.json\",\"line\":null,\"issue\":\"New dependency tree (@astrojs/sitemap and transitive deps: sitemap, zod 4.x, sax, arg, stream-replace-string) added without visible audit; devDependency only so not shipped to prod bundle, but adds build-time supply chain surface.\",\"fix\":\"Run npm audit / review new transitive deps before merge; not blocking since devDependency-only.\"},{\"severity\":\"low\",\"file\":\"site/src/layouts/Layout.astro\",\"line\":63,\"issue\":\"Org/site URLs (https://keeplings.watersedgegames.com/...) hardcoded in JSON-LD instead of derived from Astro.site, which is already available and used for canonicalURL/ogImage just above.\",\"fix\":\"Build these from Astro.site (e.g. new URL('#org', Astro.site)) to avoid drift if domain changes.\"}]}",
+  "ttft_ms": 42800,
+  "ttft_stream_ms": 3130,
+  "time_to_request_ms": 1195,
+  "type": "result",
+  "duration_ms": 50510,
+  "uuid": "57c57cb5-8aeb-4f4e-a4c8-8c9b3ba0f602"
+}

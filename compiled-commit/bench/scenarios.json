@@ -1,0 +1,300 @@
+{
+ "token_accounting": {
+  "provider": "anthropic",
+  "source": "Claude Code session jsonl message.usage per assistant event (historical); claude -p --output-format json usage (compiled)",
+  "gross": "input_tokens + cache_creation_input_tokens + cache_read_input_tokens + output_tokens",
+  "noncached": "input_tokens + cache_creation_input_tokens + output_tokens",
+  "reasoning_tokens": "not exposed separately by provider; included in output_tokens",
+  "notes": "cache_read counted in gross only; subagent transcripts attributed by session+time-window overlap"
+ },
+ "primary": [
+  {
+   "id": "1eb5432",
+   "repo": "C:\\Users\\johnw\\Projects\\keeplings",
+   "commit": "1eb5432",
+   "parent": "2ba223ff4bf07b45ae7d0df3af639ffa4c8a2c08",
+   "historical": {
+    "message": "fix(site): upgrade astro 5->7 to clear dependabot alerts\n\nBump astro 5.18.2 -> 7.1.3, clearing all 9 open dependabot alerts on\nthe marketing site (8 astro XSS/SSRF advisories + 1 esbuild dev-server\nfile-read). Astro 7 pulled a vulnerable sharp <0.35.0 (libvips CVEs);\nnpm audit fix bumped it. npm audit now reports 0 vulnerabilities.\n\nPractical exposure of the original alerts was near-nil: static output,\nno SSR adapter, no user input, esbuild dev-only. This is hygiene to\nclose the alerts. Verified: astro build exit 0, all 3 pages generated.\n\nConfidence: high\nScope-risk: narrow\nNot-tested: no visual/browser check; static build output only\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 835812,
+    "noncached_tokens": 26882,
+    "output_tokens": 6559,
+    "cache_read_tokens": 808930,
+    "llm_calls": 12,
+    "tool_calls": 4,
+    "duration_sec": 489.08,
+    "subagents": 0
+   },
+   "provenance": {
+    "session": "828a440d-d912-44bc-8d14-3bc62a2de58a",
+    "start": "2026-07-22T13:05:41.100Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "e522223",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "e522223",
+   "parent": "9b6fed786ff842c326d65dddabd740d15d511544",
+   "historical": {
+    "message": "refactor(scan): dedupe hotkey hints and equalize control sizes\n\nStrip the (R)/(K) parentheticals from the Rescan and Recalibrate buttons\nnow that the always-on legend already lists those keys; hover tooltips\nstill name them. Drop the dynamic degree suffix from the Rotate label\n(the is-active state and aria-label already convey rotation). Give the\nshared camera-control spec a uniform min-width so the toolbar controls\nrender the same size.\n\nConstraint: legend remains the single visible keybinding reference; tooltips keep the keys discoverable on hover.\nRejected: removing keys from the legend instead of the buttons (legend was the agreed always-on shortcut surface).\nDirective: no duplicate keybindings, make the controls all the same size.\nConfidence: high\nScope-risk: narrow\nNot-tested: no automated coverage of button labels or control widths (none pre-existed); tsc and biome pass.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 2497735,
+    "noncached_tokens": 150815,
+    "output_tokens": 9656,
+    "cache_read_tokens": 2346920,
+    "llm_calls": 24,
+    "tool_calls": 10,
+    "duration_sec": 117.348,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "7603457d-ec4b-43d9-b398-d5ab3cb675a4",
+    "start": "2026-07-23T14:11:15.920Z",
+    "args": "and merge"
+   }
+  },
+  {
+   "id": "688d467",
+   "repo": "C:\\Users\\johnw\\Projects\\milepost",
+   "commit": "688d467",
+   "parent": "fcfaba03913d48ac37263f87510d8727c7a4c7e1",
+   "historical": {
+    "message": "feat: gate map pin drag behind explicit adjust mode\n\nStop pins on the trip map were draggable at all times (mouse and keyboard\narrows), so panning the map often nudged a pin by accident. Dragging is now\nlocked behind a deliberate per-stop action: tap a pin to open its editor,\nclick \"Adjust location on map\" to unlock that one pin (with a ring\naffordance), then \"Done adjusting\" / closing the editor / selecting another\nstop re-locks it. Read-only maps (share, print, marketing demo) stay\nnon-draggable, unchanged.\n\nAdjust state lives in useEditingStopLifecycle (adjustingStopId), auto-clears\non any selection change. TripMap creates markers non-draggable and an effect\ntoggles setDraggable + the affordance for the active stop; keyboardDrag gains\nan isEnabled gate that keeps Escape/blur flush reachable so a pending write is\nnever stranded. Persistence path (onMarkerDrag -> autosave -> Convex) is\nunchanged.\n\nConstraint: no else statements, why-only comments, no read-only regression.\nRejected: a global map-wide edit-mode toggle (too coarse; user asked for a\nper-stop action).\nDirective: lock pin drag behind a deliberate action per user request.\nConfidence: high\nScope-risk: moderate\nNot-tested: live browser drag; covered by astro check, biome, keyboardDrag\nunit tests, and StopCardEditor/rail browser tests.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 3010553,
+    "noncached_tokens": 90575,
+    "output_tokens": 12094,
+    "cache_read_tokens": 2919978,
+    "llm_calls": 26,
+    "tool_calls": 9,
+    "duration_sec": 473.085,
+    "subagents": 0
+   },
+   "provenance": {
+    "session": "783d4b5e-4131-4afe-902b-132a0e838bab",
+    "start": "2026-07-22T14:53:13.027Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "30e2e32",
+   "repo": "C:\\Users\\johnw\\Projects\\glissa",
+   "commit": "30e2e32",
+   "parent": "c27bda1aede6a45d1a4585ed410b784c0da708b0",
+   "historical": {
+    "message": "feat(theme): add Rainbow Unicorns pastel light theme\n\nAdd a fifth theme, unicorn (\"Rainbow Unicorns (Pastel)\"), to the THEMES\nmap in public/theme.js: pale lavender-pink surfaces, pink accent, and\nrainbow state colors that keep the established semantics (running green,\nwaiting amber, failed red, starting violet, complete fuchsia). Second\nlight theme after Compleated; terminal palette uses darkened ANSI tones\nfor light-background legibility. Settings dialog picks it up via\ngetThemeList() with no other changes.\n\nAll accent, state, and muted-text colors verified at or above 4.5:1 WCAG\nAA contrast against their backgrounds after review flagged the initial\ndraft values.\n\nConfidence: high\nScope-risk: narrow\nNot-tested: visual appearance in a live browser session\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 3676993,
+    "noncached_tokens": 367920,
+    "output_tokens": 43917,
+    "cache_read_tokens": 3309073,
+    "llm_calls": 44,
+    "tool_calls": 16,
+    "duration_sec": 405.441,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "73ca0bef-60f8-479f-ae85-b95d8d269f85",
+    "start": "2026-07-21T23:32:45.660Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "419d1b6",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "419d1b6",
+   "parent": "11c4a30bd82fa083f5114ed18cbdd886e50aed90",
+   "historical": {
+    "message": "feat(detail): replace copies list with count badge and enlarge card image\n\nThe per-copy list in the card detail panel (location, status, copy number)\nprovided no value in this view; the copy count is now a chip badge next to\nthe condition/printing chips, with a skeleton chip while the detail IPC\ncall loads. The panel widens from 440px to 560px (380px to 480px under the\n1200px breakpoint) and the thumbnail grows from 120px to 200px with a 5/7\naspect-ratio so the no-image placeholder keeps a card-shaped box.\n\nRemoves the now-unused highlightPhysicalCardId prop and its SearchTab call\nsite, the copy sort helper, the copies skeleton, and all associated CSS.\n\nConstraint: CardStatusText and LocationCode components kept; still used by\nStorageTab, PlacementStage, and guided picking.\nRejected: showing the count in the provenance footer; the chips row keeps\nit visible next to the other card attributes.\nConfidence: high\nScope-risk: narrow\nNot-tested: no component tests exist for this panel (logic-only test\nconvention); verified via tsc and biome only.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 4255526,
+    "noncached_tokens": 364095,
+    "output_tokens": 26779,
+    "cache_read_tokens": 3891431,
+    "llm_calls": 58,
+    "tool_calls": 32,
+    "duration_sec": 320.144,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "5f19b660-83ee-4f81-9956-add46520963f",
+    "start": "2026-07-20T14:58:52.458Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "be2bf01",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "be2bf01",
+   "parent": "dccf8b9836113f34ab771d90257f49003db538be",
+   "historical": {
+    "message": "chore: bump version to 0.9.3\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 5035321,
+    "noncached_tokens": 196445,
+    "output_tokens": 16135,
+    "cache_read_tokens": 4838876,
+    "llm_calls": 45,
+    "tool_calls": 23,
+    "duration_sec": 341.827,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "2963bdba-d1b7-4cb3-9620-f10afe9d9f91",
+    "start": "2026-07-22T03:21:08.169Z",
+    "args": "and bump version"
+   }
+  },
+  {
+   "id": "bc1ab98",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "bc1ab98",
+   "parent": "6a0531ad8baa3100263b4b085b233a15b52fc691",
+   "historical": {
+    "message": "feat(search): paginate storage:search with server-side limit\n\nstorage:search now takes optional limit/offset with a server default of\n200 and a hard clamp of 500, so no caller can fetch unbounded results.\nResponse adds totalCount (COUNT sharing the row query's joins and\nfilters) and hasMore; explicit ORDER BY physicalCards.id makes pages\ndeterministic. SearchTab accumulates pages behind a Load more button\nwith a mono \"Showing X of Y\" count line, resets on any filter change,\nguards races via request ids plus a committed-query snapshot, and moves\nfocus to the count line when the last page arrives. Guided Picking's\nname lookup shows an inline notice when results are capped instead of\nsilently truncating. Five db tests cover hasMore boundaries, clamping,\nand offset walks with no overlap.\n\nConstraint: db suite must run via the Electron-hosted vitest invocation; plain node vitest hits the known better-sqlite3 ABI mismatch in this worktree.\nRejected: infinite scroll; explicit Load more keeps keyboard flow and row focus predictable for the card detail panel.\nConfidence: high\nScope-risk: narrow\nNot-tested: renderer pagination UI has no unit tests; verified via typecheck, lint, 123/123 db tests, and two review passes.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 6728066,
+    "noncached_tokens": 281300,
+    "output_tokens": 18902,
+    "cache_read_tokens": 6446766,
+    "llm_calls": 94,
+    "tool_calls": 51,
+    "duration_sec": 522.008,
+    "subagents": 2
+   },
+   "provenance": {
+    "session": "f2988195-9ebc-45ea-93b5-9c74f595437c",
+    "start": "2026-07-20T03:42:34.555Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "9fcda4f",
+   "repo": "C:\\Users\\johnw\\Projects\\keeplings",
+   "commit": "9fcda4f",
+   "parent": "ce4f25b94b9c65f53dd4080831e65bffe13dc92f",
+   "historical": {
+    "message": "feat(site): add SEO metadata, sitemap, and social share tags\n\nSet the Astro site URL and add @astrojs/sitemap so every page emits a\nself-referencing canonical and a matching extensionless sitemap. Add\nOpen Graph and Twitter card tags with a 1200x630 image, sitewide\nOrganization plus WebSite JSON-LD, and SoftwareApplication markup on the\nhomepage. Add robots.txt (with the sitemap pointer), llms.txt, and a\nbranded noindex 404 page. Switch internal links to extensionless and\n301 the .html forms to clean URLs in Netlify, and add a security-header\nblock (CSP, HSTS, X-Frame-Options, X-Content-Type-Options,\nReferrer-Policy, Permissions-Policy).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 8409939,
+    "noncached_tokens": 509776,
+    "output_tokens": 48599,
+    "cache_read_tokens": 7900163,
+    "llm_calls": 85,
+    "tool_calls": 42,
+    "duration_sec": 726.438,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "4b3dab96-7881-4432-a10e-391af3f2033a",
+    "start": "2026-07-23T22:23:49.639Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "153ee28",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "153ee28",
+   "parent": "58c1736f8ad7b887295e10c666fcfa78c83d7d13",
+   "historical": {
+    "message": "feat(card-detail): add reusable card detail side panel\n\nNew card:detail IPC channel returns card attributes from the newest scan\nrow, market price with scan fallback, the latest TCGplayer pricing\nsnapshot, and all non-removed physical copies for a SKU. CardDetailPanel\nrenders a non-modal 440px right-side panel (identity band, price block\nwith stale marker, copies list with highlighted origin, provenance\nfooter) with instant seed render, skeleton loading, inline retry,\nEsc/arrow-key handling, focus return, and reduced-motion support.\nSearch and Storage rows open it; rows without a resolved SKU stay inert.\n\nConstraint: read-only v1; status history, other printings, and Camera Scan wiring deferred to v2.\nRejected: modal with backdrop and full-screen takeover; glance flow needs the source list to stay visible and interactive.\nConfidence: high\nScope-risk: narrow\nNot-tested: no unit test infra for renderer; verified via typecheck, biome lint, and two reviewer passes.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 9478996,
+    "noncached_tokens": 442026,
+    "output_tokens": 42456,
+    "cache_read_tokens": 9036970,
+    "llm_calls": 120,
+    "tool_calls": 68,
+    "duration_sec": 618.43,
+    "subagents": 2
+   },
+   "provenance": {
+    "session": "f2988195-9ebc-45ea-93b5-9c74f595437c",
+    "start": "2026-07-20T02:57:18.663Z",
+    "args": ""
+   }
+  },
+  {
+   "id": "edde149",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "edde149",
+   "parent": "e5eacbadc728a3182640e8839d68bd3c7e5f05ff",
+   "historical": {
+    "message": "feat(brand): standardize logo across site and social onto one mark\n\nThe Card Harbor logo had diverged: the app/taskbar icon and og-image used\nthe detailed harbor mark, while the site favicon and the inline header SVGs\nused a different, simplified redraw. Unify everything onto the single brand\nmark (src/renderer/src/assets/card-harbor-mark.png) that the app icon already\nuses.\n\n- generate-icon.mjs: promote from app-icon-only to the single source for\n  every logo raster. In addition to build/icon.{ico,png} it now emits the\n  full site favicon set (favicon.ico, favicon-16x16, favicon-32x32,\n  apple-touch-icon, a favicon.svg badge), a square logo.png for schema.org\n  Organization.logo, and a square, transparent brand-mark.png for in-page\n  headers. brand-mark.png is padded to a square canvas so a fixed square CSS\n  box renders it without distortion.\n- generate-og-image.mjs (new): rebuilds site/public/og-image.png from the\n  same mark, de-shadowing it for the white card. Centered lockup (mark +\n  one-line name + tagline) survives a square center-crop so Slack/Discord/\n  iMessage thumbnails stay readable.\n- Base.astro: wire the full favicon set + web manifest + theme-color, and\n  point Organization.logo at /logo.png (square raster) instead of the SVG.\n- index.astro, Legal.astro: replace the inline simplified brand-mark SVG in\n  the header with <img src=\"/brand-mark.png\"> so headers use the real mark.\n- site.webmanifest (new): PWA manifest referencing the generated icons.\n\nConstraint: keep one brand mark as the single source; the app icon already\n  uses it, so the site and social assets move to it rather than the reverse.\nRejected: keeping a separate simplified favicon/header glyph (the whole point\n  was that it read as a different logo); vectorizing the raster mark (it is a\n  raster brand asset, so favicon.svg wraps it and og/headers use PNGs).\nDirective: standardize the logo, seeing different versions across app, site,\n  and SEO.\nConfidence: high\nScope-risk: narrow\nNot-tested: no automated coverage; verified by running both generators,\n  building the site (6 pages), inspecting the built head for the favicon set /\n  manifest / theme-color / JSON-LD logo, and eyeballing the mark at favicon,\n  header (28px, undistorted), and og-image sizes plus a 240px square crop.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 11890503,
+    "noncached_tokens": 665994,
+    "output_tokens": 48116,
+    "cache_read_tokens": 11224509,
+    "llm_calls": 59,
+    "tool_calls": 24,
+    "duration_sec": 444.727,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "831021df-73f1-4161-92fe-d77e397450d6",
+    "start": "2026-07-23T23:43:24.327Z",
+    "args": ""
+   }
+  }
+ ],
+ "holdout": [
+  {
+   "id": "11767a1",
+   "repo": "C:\\Users\\johnw\\Projects\\glissa",
+   "commit": "11767a1",
+   "parent": "3d5ae010e192f5f9239fe053a2b30b4693a19a26",
+   "historical": {
+    "message": "fix(session): tear down worktree after PTY reap on quick delete\n\nQuick delete fired sess.discardWorktree() unawaited and BEFORE\nsess.destroy() killed the PTY. On Windows `git worktree remove --force`\nfails while the live claude/conhost process still holds the worktree as\nits cwd (directory lock); the swallowed failure leaked the worktree, and\nthe follow-up `branch -D` then failed too (branch still checked out), so\na same-named re-add hit \"session branch already checked out; running in\nplace\". Destroy first, then discard only after the _killReap promise\nsettles, so removal runs on a dead process and drops both worktree and\nbranch cleanly.\n\nConstraint: _teardownSession stays sync (called from a sync reload loop); discard is deferred fire-and-forget, ordered via the reap promise.\nRejected: awaiting discard inline (would make teardown async across all callers); killing PTY inside discardWorktree (couples an operator action to the teardown path).\nDirective: Explicit removal throws the worktree away; shutdown/restart still skip discard so pending-review worktrees survive the next-boot reconcile.\nConfidence: high\nScope-risk: narrow\nNot-tested: live Windows quick-delete + same-name re-add (verified by root-cause reasoning + existing teardown/kill suites, 50 pass)\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 4947784,
+    "noncached_tokens": 515025,
+    "output_tokens": 21994,
+    "cache_read_tokens": 4432759,
+    "llm_calls": 53,
+    "tool_calls": 23,
+    "duration_sec": 365.581,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "2c63cdc9-14b7-4df7-a617-854a2dbdc492",
+    "start": "2026-07-22T21:45:06.011Z",
+    "args": "and merge"
+   }
+  },
+  {
+   "id": "c468d9f",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "c468d9f",
+   "parent": "860fa4338e4450dc3dc5196f101ee107d783daba",
+   "historical": {
+    "message": "chore: bump version down to 0.9.0 ahead of first public release\n\nApp has not shipped yet; 1.0.0 is reserved for the first public release.\nThe update feed and tag pipeline will start at v0.9.0.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 5261259,
+    "noncached_tokens": 49186,
+    "output_tokens": 15412,
+    "cache_read_tokens": 5212073,
+    "llm_calls": 29,
+    "tool_calls": 10,
+    "duration_sec": 581.37,
+    "subagents": 0
+   },
+   "provenance": {
+    "session": "bc97153e-24c9-4a4e-a7cb-67c465a58f30",
+    "start": "2026-07-21T14:29:03.078Z",
+    "args": "and merge, bump v down to below 1.0.0"
+   }
+  },
+  {
+   "id": "b3c88bf",
+   "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+   "commit": "b3c88bf",
+   "parent": "e52222376b1a2442f6bd21bff6036e56a32313e4",
+   "historical": {
+    "message": "feat(site): add SEO metadata, structured data, and crawl files\n\nHarden the marketing site for search and social sharing. Add self-referencing\ncanonical, full Open Graph + Twitter summary_large_image tags, and a generated\n1200x630 og-image.png so links unfurl with a real preview card. Emit JSON-LD\nfor Organization and WebSite sitewide and SoftwareApplication (Free/Pro offers)\non the homepage. Ship robots.txt, sitemap.xml, llms.txt, and Netlify security\nheaders. Trim the homepage title/description to SERP limits and point internal\nlegal links at their trailing-slash canonical form to drop a 301 hop.\n\nThe Pro offer models the recurring price via UnitPriceSpecification (monthly),\nnot a flat amount, to match on-page pricing and avoid a rich-results mismatch.\nOrganization logo points at the square favicon, not the wide social banner.\n\nConstraint: Netlify deploys from main; static Astro; Paddle checkout runs\nclient-side and must not break.\nRejected: shipping a live Content-Security-Policy (staged commented-out in\n_headers to avoid blocking the Paddle checkout iframe/XHR until verified against\na real checkout); @astrojs/sitemap (peer-dep risk vs astro ^7) in favor of a\nstatic sitemap.\nDirective: fix upstream, no bandaids; deslop + code-review gates run pre-commit.\nConfidence: high\nScope-risk: narrow\nNot-tested: live social-unfurl rendering (Facebook Sharing Debugger, LinkedIn\nPost Inspector, X/Slack/iMessage paste) requires the deployed URL; CSP remains\ndisabled pending a live Paddle checkout test.",
+    "gross_tokens": 12140620,
+    "noncached_tokens": 825267,
+    "output_tokens": 72633,
+    "cache_read_tokens": 11315353,
+    "llm_calls": 83,
+    "tool_calls": 33,
+    "duration_sec": 707.419,
+    "subagents": 1
+   },
+   "provenance": {
+    "session": "4f4077c3-bc3d-4de2-ae9d-cd1ee3f845ca",
+    "start": "2026-07-23T22:23:46.863Z",
+    "args": ""
+   }
+  }
+ ]
+}

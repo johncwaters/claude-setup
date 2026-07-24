@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 4752,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "f48204aa-5699-48c8-8157-f4c75423faa3",
+  "total_cost_usd": 0.12602129999999998,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 18652,
+    "cache_read_input_tokens": 33761,
+    "output_tokens": 265,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18652,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 265,
+        "cache_read_input_tokens": 33761,
+        "cache_creation_input_tokens": 18652,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 18652
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 265,
+      "cacheReadInputTokens": 33761,
+      "cacheCreationInputTokens": 18652,
+      "webSearchRequests": 0,
+      "costUSD": 0.12602129999999998,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"verdict\":\"approve\",\"findings\":[{\"severity\":\"medium\",\"file\":\"package.json\",\"line\":3,\"issue\":\"Version downgraded 1.0.0 to 0.9.0, lockfile matches but reverses semver direction\",\"fix\":\"Confirm intentional (revert of premature bump) not accidental; align with release/tag history before publish\"}]}",
+  "ttft_ms": 3836,
+  "ttft_stream_ms": 2006,
+  "time_to_request_ms": 419,
+  "type": "result",
+  "duration_ms": 5186,
+  "uuid": "87ea268f-06a2-481b-880c-865fe63c97db"
+}

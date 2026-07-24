@@ -1,0 +1,58 @@
+{
+  "id": "30e2e32",
+  "repo": "C:\\Users\\johnw\\Projects\\glissa",
+  "source_commit": "30e2e32",
+  "outcome": "COMMITTED",
+  "commit_message": "feat(theme): add Rainbow Unicorns pastel theme\n\nNew optional theme entry in THEMES map: pastel purple/pink palette for UI variables and matching xterm terminal color set. No changes to theme selection logic or DEFAULT_THEME.\n\nConfidence: high\nScope-risk: narrow\nNot-tested: visual rendering of new theme not checked in browser",
+  "wall_time_sec": 36.41552139999112,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 197018,
+  "noncached_tokens": 101635,
+  "output_tokens": 387,
+  "warnings": [],
+  "findings": [],
+  "historical": {
+    "message": "feat(theme): add Rainbow Unicorns pastel light theme\n\nAdd a fifth theme, unicorn (\"Rainbow Unicorns (Pastel)\"), to the THEMES\nmap in public/theme.js: pale lavender-pink surfaces, pink accent, and\nrainbow state colors that keep the established semantics (running green,\nwaiting amber, failed red, starting violet, complete fuchsia). Second\nlight theme after Compleated; terminal palette uses darkened ANSI tones\nfor light-background legibility. Settings dialog picks it up via\ngetThemeList() with no other changes.\n\nAll accent, state, and muted-text colors verified at or above 4.5:1 WCAG\nAA contrast against their backgrounds after review flagged the initial\ndraft values.\n\nConfidence: high\nScope-risk: narrow\nNot-tested: visual appearance in a live browser session\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 3676993,
+    "noncached_tokens": 367920,
+    "output_tokens": 43917,
+    "cache_read_tokens": 3309073,
+    "llm_calls": 44,
+    "tool_calls": 16,
+    "duration_sec": 405.441,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 3676993,
+      "new": 197018,
+      "pct_change": -94.64187176858917
+    },
+    "noncached_tokens": {
+      "old": 367920,
+      "new": 101635,
+      "pct_change": -72.3757882148293
+    },
+    "output_tokens": {
+      "old": 43917,
+      "new": 387,
+      "pct_change": -99.11879226723137
+    },
+    "llm_calls": {
+      "old": 44,
+      "new": 3,
+      "pct_change": -93.18181818181817
+    },
+    "tool_calls": {
+      "old": 16,
+      "new": 17,
+      "pct_change": 6.25
+    },
+    "duration_sec": {
+      "old": 405.441,
+      "new": 36.41552139999112,
+      "pct_change": -91.01829331518245
+    }
+  }
+}

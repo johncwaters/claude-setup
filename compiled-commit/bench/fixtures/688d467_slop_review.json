@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 36364,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "0462f074-d68b-4438-a504-1c124c107664",
+  "total_cost_usd": 0.2891967,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 38720,
+    "cache_read_input_tokens": 27919,
+    "output_tokens": 3233,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 38720,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3233,
+        "cache_read_input_tokens": 27919,
+        "cache_creation_input_tokens": 38720,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 38720
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 3233,
+      "cacheReadInputTokens": 27919,
+      "cacheCreationInputTokens": 38720,
+      "webSearchRequests": 0,
+      "costUSD": 0.2891967,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"src/modules/trips/components/stops/StopCardEditor.tsx\",\"issue\":\"Same condition `!readOnly && onToggleAdjustLocation` computed twice (once to render adjust button, once inverted-order as `onToggleAdjustLocation && !readOnly` for className ternary). Duplicated boolean logic instead of single derived var.\",\"category\":\"duplication\"},{\"file\":\"src/modules/trips/components/map/TripMap.tsx\",\"issue\":\"New useEffect for adjust-mode toggling carries 4-line comment plus biome-ignore justifying a lint suppression that could instead be avoided by including stops via a ref read, rather than explaining around it.\",\"category\":\"over-abstraction\"},{\"file\":\"src/modules/common/utils/map/__tests__/keyboardDrag.test.ts\",\"issue\":\"Decorative ASCII banner comment block added around new describe, purely decorative section divider carrying no info beyond the describe title itself.\",\"category\":\"useless-comment\"}],\"patch\":null}",
+  "ttft_ms": 34584,
+  "ttft_stream_ms": 2449,
+  "time_to_request_ms": 1239,
+  "type": "result",
+  "duration_ms": 37617,
+  "uuid": "a5c14150-a696-4616-acf3-ee88df9dbcc4"
+}

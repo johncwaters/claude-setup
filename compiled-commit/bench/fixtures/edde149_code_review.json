@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 38925,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "cef492ec-6e0b-43bc-8b9c-038e3975fbc7",
+  "total_cost_usd": 0.231804,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 30006,
+    "cache_read_input_tokens": 33940,
+    "output_tokens": 2772,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 30006,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2772,
+        "cache_read_input_tokens": 33940,
+        "cache_creation_input_tokens": 30006,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 30006
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 2772,
+      "cacheReadInputTokens": 33940,
+      "cacheCreationInputTokens": 30006,
+      "webSearchRequests": 0,
+      "costUSD": 0.231804,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"verdict\":\"approve\",\"findings\":[{\"severity\":\"low\",\"file\":\"scripts/generate-icon.mjs\",\"line\":112,\"issue\":\"favicon.svg draws rounded background rect then overlays badge256 image which already bakes in same background+radius (from renderBadge compositing onto backgroundSvg) - redundant double-background, harmless since image fully covers rect.\",\"fix\":\"Skip separate rect and just embed badge256 image, or skip background compositing in renderBadge call for badge256 and let SVG rect provide it.\"},{\"severity\":\"low\",\"file\":\"scripts/generate-og-image.mjs\",\"line\":21,\"issue\":\"Deshadow logic re-encodes extractChannel(3) alpha as PNG buffer then joinChannel(alpha) onto rgb buffer; unverified this sharp pipeline produces correct alpha-adjusted image (no test/run evidence in diff).\",\"fix\":\"Run script once and visually confirm mark has no dark halo before merging; add inline note if empirically tuned.\"}]}",
+  "ttft_ms": 35620,
+  "ttft_stream_ms": 6541,
+  "time_to_request_ms": 729,
+  "type": "result",
+  "duration_ms": 39645,
+  "uuid": "030f85ab-989b-4293-ae6e-08a8d32b40ed"
+}

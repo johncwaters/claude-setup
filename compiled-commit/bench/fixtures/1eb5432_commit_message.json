@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 4679,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "960f6ec6-9148-4134-b138-e4f40c90480a",
+  "total_cost_usd": 0.18345270000000002,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 28357,
+    "cache_read_input_tokens": 33749,
+    "output_tokens": 212,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 28357,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 212,
+        "cache_read_input_tokens": 33749,
+        "cache_creation_input_tokens": 28357,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 28357
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 212,
+      "cacheReadInputTokens": 33749,
+      "cacheCreationInputTokens": 28357,
+      "webSearchRequests": 0,
+      "costUSD": 0.18345270000000002,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"type\":\"build\",\"scope\":\"site\",\"description\":\"bump Astro from ^5.0.0 to ^7.1.0\",\"body\":\"Upgrade Astro dependency to the v7 line and regenerate package-lock.json accordingly. Lockfile picks up the new native compiler-binding packages and satteri-based markdown pipeline that replace the old @astrojs/markdown-remark/remark-* toolchain.\",\"trailers\":{\"constraint\":null,\"rejected\":null,\"directive\":null,\"confidence\":\"medium\",\"scope_risk\":\"moderate\",\"not_tested\":\"site build/dev server not run against the new Astro version\"},\"trivial\":false}",
+  "ttft_ms": 5413,
+  "ttft_stream_ms": 2694,
+  "time_to_request_ms": 886,
+  "type": "result",
+  "duration_ms": 5615,
+  "uuid": "4eeb2966-9912-489f-b0ca-9cd215df0998"
+}

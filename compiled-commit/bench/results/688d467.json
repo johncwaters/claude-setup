@@ -1,0 +1,93 @@
+{
+  "id": "688d467",
+  "repo": "C:\\Users\\johnw\\Projects\\milepost",
+  "source_commit": "688d467",
+  "outcome": "COMMITTED",
+  "commit_message": "feat(trips): add per-stop adjust-location mode for map pins\n\nTrip map pins were always draggable for any non-read-only trip and keyboard drag had no gating, so any stop could be moved even outside an intentional edit. Introduce an explicit adjust-location toggle wired from the stop editor (StopCardEditor and IntermediateStopEditor) through TripEditor, TripRailContent, StopList, and DayBucket into TripMap. Only the stop currently being adjusted is draggable (mouse via marker.setDraggable, keyboard via a new isEnabled gate on attachKeyboardDrag); all others stay locked. Adjust mode resets whenever the editing stop changes or the editor collapses, and the active pin gets a visual outline plus an aria-label update reflecting draggability.\n\nConstraint: Escape/blur flushing in keyboardDrag must stay active even when isEnabled is false so a pending write is never stranded when a stop leaves adjust mode.\nConfidence: high\nScope-risk: moderate\nNot-tested: No manual browser verification of drag/keyboard interaction across desktop and mobile sheet variants; relies on updated keyboardDrag.test.ts unit coverage only.",
+  "wall_time_sec": 134.59507720000693,
+  "git_op_count": 17,
+  "llm_call_count": 4,
+  "gross_tokens": 206729,
+  "noncached_tokens": 110702,
+  "output_tokens": 6285,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "src/modules/trips/components/stops/StopCardEditor.tsx",
+      "issue": "Same condition `!readOnly && onToggleAdjustLocation` computed twice (once to render adjust button, once inverted-order as `onToggleAdjustLocation && !readOnly` for className ternary). Duplicated boolean logic instead of single derived var.",
+      "category": "duplication"
+    },
+    {
+      "stage": "slop",
+      "file": "src/modules/trips/components/map/TripMap.tsx",
+      "issue": "New useEffect for adjust-mode toggling carries 4-line comment plus biome-ignore justifying a lint suppression that could instead be avoided by including stops via a ref read, rather than explaining around it.",
+      "category": "over-abstraction"
+    },
+    {
+      "stage": "slop",
+      "file": "src/modules/common/utils/map/__tests__/keyboardDrag.test.ts",
+      "issue": "Decorative ASCII banner comment block added around new describe, purely decorative section divider carrying no info beyond the describe title itself.",
+      "category": "useless-comment"
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "src/modules/trips/components/map/TripMap.tsx",
+      "line": 648,
+      "issue": "New draggable-toggle effect depends on `stops` only for its trigger comment reasoning (biome-ignore), not for value it reads. If a future editor moves the biome-ignore or drops the comment, exhaustive-deps could silently reintroduce a stale marker list bug.",
+      "fix": "Consider deriving a stable trigger (e.g. a stops-changed counter/ref) instead of relying on a lint-suppression comment to carry the invariant."
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "src/modules/trips/hooks/useEditingStopLifecycle.ts",
+      "line": 44,
+      "issue": "Effect resetting adjustingStopId fires on every editingStopId change including initial mount, which is a harmless no-op but adds an extra render pass.",
+      "fix": "Not required, purely cosmetic; skip if it matters via a mounted ref."
+    }
+  ],
+  "historical": {
+    "message": "feat: gate map pin drag behind explicit adjust mode\n\nStop pins on the trip map were draggable at all times (mouse and keyboard\narrows), so panning the map often nudged a pin by accident. Dragging is now\nlocked behind a deliberate per-stop action: tap a pin to open its editor,\nclick \"Adjust location on map\" to unlock that one pin (with a ring\naffordance), then \"Done adjusting\" / closing the editor / selecting another\nstop re-locks it. Read-only maps (share, print, marketing demo) stay\nnon-draggable, unchanged.\n\nAdjust state lives in useEditingStopLifecycle (adjustingStopId), auto-clears\non any selection change. TripMap creates markers non-draggable and an effect\ntoggles setDraggable + the affordance for the active stop; keyboardDrag gains\nan isEnabled gate that keeps Escape/blur flush reachable so a pending write is\nnever stranded. Persistence path (onMarkerDrag -> autosave -> Convex) is\nunchanged.\n\nConstraint: no else statements, why-only comments, no read-only regression.\nRejected: a global map-wide edit-mode toggle (too coarse; user asked for a\nper-stop action).\nDirective: lock pin drag behind a deliberate action per user request.\nConfidence: high\nScope-risk: moderate\nNot-tested: live browser drag; covered by astro check, biome, keyboardDrag\nunit tests, and StopCardEditor/rail browser tests.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 3010553,
+    "noncached_tokens": 90575,
+    "output_tokens": 12094,
+    "cache_read_tokens": 2919978,
+    "llm_calls": 26,
+    "tool_calls": 9,
+    "duration_sec": 473.085,
+    "subagents": 0
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 3010553,
+      "new": 206729,
+      "pct_change": -93.13318848729784
+    },
+    "noncached_tokens": {
+      "old": 90575,
+      "new": 110702,
+      "pct_change": 22.221363510902567
+    },
+    "output_tokens": {
+      "old": 12094,
+      "new": 6285,
+      "pct_change": -48.0320820241442
+    },
+    "llm_calls": {
+      "old": 26,
+      "new": 4,
+      "pct_change": -84.61538461538461
+    },
+    "tool_calls": {
+      "old": 9,
+      "new": 17,
+      "pct_change": 88.88888888888889
+    },
+    "duration_sec": {
+      "old": 473.085,
+      "new": 134.59507720000693,
+      "pct_change": -71.5494938118928
+    }
+  }
+}

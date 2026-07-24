@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 8196,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "3d96bd9c-b34a-498b-b500-828b61af4464",
+  "total_cost_usd": 0.13191329999999998,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 19259,
+    "cache_read_input_tokens": 33761,
+    "output_tokens": 415,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 19259,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 415,
+        "cache_read_input_tokens": 33761,
+        "cache_creation_input_tokens": 19259,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19259
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 415,
+      "cacheReadInputTokens": 33761,
+      "cacheCreationInputTokens": 19259,
+      "webSearchRequests": 0,
+      "costUSD": 0.13191329999999998,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"type\":\"fix\",\"scope\":null,\"description\":\"revert package version to 0.9.0\",\"body\":\"Version was bumped to 1.0.0 prematurely; roll back to 0.9.0 in package.json and package-lock.json until the actual 1.0.0 release is ready.\",\"trailers\":{\"constraint\":null,\"rejected\":null,\"directive\":null,\"confidence\":null,\"scope_risk\":null,\"not_tested\":null},\"trivial\":true}",
+  "ttft_ms": 6994,
+  "ttft_stream_ms": 3211,
+  "time_to_request_ms": 626,
+  "type": "result",
+  "duration_ms": 8821,
+  "uuid": "d329222b-f20b-4042-9aea-b0b63a7c2037"
+}

@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 26055,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "28eecd61-86eb-4423-bd52-152cd379811b",
+  "total_cost_usd": 0.2121537,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 28232,
+    "cache_read_input_tokens": 27919,
+    "output_tokens": 2292,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 28232,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2292,
+        "cache_read_input_tokens": 27919,
+        "cache_creation_input_tokens": 28232,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 28232
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 2292,
+      "cacheReadInputTokens": 27919,
+      "cacheCreationInputTokens": 28232,
+      "webSearchRequests": 0,
+      "costUSD": 0.2121537,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"site/src/layouts/Base.astro\",\"issue\":\"organizationLd includes `sameAs: []`, an empty placeholder array with no real social links wired in. Dead field that serializes into the live JSON-LD output for no benefit; typical AI-authored placeholder left over from a template.\",\"category\":\"dead-code\"},{\"file\":\"site/src/layouts/Base.astro\",\"issue\":\"`logo: logo,` skips object shorthand for no reason (unlike every other key in the same literal). Trivial but a giveaway of unreviewed generated code.\",\"category\":\"style-slop\"}],\"patch\":\"--- a/site/src/layouts/Base.astro\\n+++ b/site/src/layouts/Base.astro\\n@@ -25,8 +25,7 @@ const organizationLd = {\\n   name: publisher,\\n   url: siteUrl,\\n-  logo: logo,\\n-  sameAs: [],\\n+  logo,\\n }\\n\"}",
+  "ttft_ms": 24731,
+  "ttft_stream_ms": 3156,
+  "time_to_request_ms": 2051,
+  "type": "result",
+  "duration_ms": 28125,
+  "uuid": "5afde617-4599-454a-bb32-8ce27cda18fd"
+}

@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 29416,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "dbc2648c-9901-48f8-b277-aef4d810a3af",
+  "total_cost_usd": 0.36566099999999996,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 55150,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 2317,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 55150,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2317,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 55150,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 55150
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 2317,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 55150,
+      "webSearchRequests": 0,
+      "costUSD": 0.36566099999999996,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"server/backend.js\",\"issue\":\"backend.js reaches into sess._killReap, a private/internal Session field, directly from outside the Session class instead of exposing a public method (e.g. sess.whenKilled() or similar). Couples backend.js to Session's internal implementation detail.\",\"category\":\"encapsulation\"}],\"patch\":null}",
+  "ttft_ms": 28502,
+  "ttft_stream_ms": 2171,
+  "time_to_request_ms": 277,
+  "type": "result",
+  "duration_ms": 29689,
+  "uuid": "8b80a4a0-1be4-443f-82ac-784e6b9ccedf"
+}

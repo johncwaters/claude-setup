@@ -1,0 +1,97 @@
+{
+  "id": "b3c88bf",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "b3c88bf",
+  "outcome": "COMMITTED",
+  "commit_message": "feat(site): add SEO metadata, structured data, and crawler files\n\nBase layout gains canonical URL, full Open Graph and Twitter card tags, and JSON-LD (Organization, WebSite, and homepage SoftwareApplication with pricing offers). Legal footer and homepage links normalized to trailing-slash paths to match canonical URLs. Added robots.txt, sitemap.xml, llms.txt, and a Netlify/Cloudflare _headers file with security headers; CSP is staged commented-out pending a live Paddle checkout verification.\n\nConstraint: CSP left commented out in _headers until a live Paddle checkout is verified against the allowlist\nConfidence: medium\nScope-risk: moderate\nNot-tested: Astro build/dev not run to confirm JSON-LD renders correctly and trailing-slash links resolve without redirect loops",
+  "wall_time_sec": 83.07528099999763,
+  "git_op_count": 23,
+  "llm_call_count": 4,
+  "gross_tokens": 230129,
+  "noncached_tokens": 100579,
+  "output_tokens": 4122,
+  "warnings": [
+    "SLOP_PATCH_INVALID: retry produced no usable patch"
+  ],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "site/src/layouts/Base.astro",
+      "issue": "organizationLd includes `sameAs: []`, an empty placeholder array with no real social links wired in. Dead field that serializes into the live JSON-LD output for no benefit; typical AI-authored placeholder left over from a template.",
+      "category": "dead-code"
+    },
+    {
+      "stage": "slop",
+      "file": "site/src/layouts/Base.astro",
+      "issue": "`logo: logo,` skips object shorthand for no reason (unlike every other key in the same literal). Trivial but a giveaway of unreviewed generated code.",
+      "category": "style-slop"
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "site/src/layouts/Base.astro",
+      "line": 13,
+      "issue": "Organization schema logo points at favicon.svg; schema.org/Google recommend a raster logo (png/jpg), svg may not validate in Rich Results.",
+      "fix": "Point logo at og-image.png or a dedicated raster logo asset."
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "site/public/sitemap.xml",
+      "line": null,
+      "issue": "URLs missing <lastmod>; reduces crawler freshness signal.",
+      "fix": "Add <lastmod> per entry if deploy pipeline can inject build date."
+    },
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "site/public/_headers",
+      "line": 10,
+      "issue": "CSP left commented out pending manual Paddle checkout verification, so no CSP is active on deploy.",
+      "fix": "Track as follow-up task to verify and enable CSP before considering hardening complete."
+    }
+  ],
+  "historical": {
+    "message": "feat(site): add SEO metadata, structured data, and crawl files\n\nHarden the marketing site for search and social sharing. Add self-referencing\ncanonical, full Open Graph + Twitter summary_large_image tags, and a generated\n1200x630 og-image.png so links unfurl with a real preview card. Emit JSON-LD\nfor Organization and WebSite sitewide and SoftwareApplication (Free/Pro offers)\non the homepage. Ship robots.txt, sitemap.xml, llms.txt, and Netlify security\nheaders. Trim the homepage title/description to SERP limits and point internal\nlegal links at their trailing-slash canonical form to drop a 301 hop.\n\nThe Pro offer models the recurring price via UnitPriceSpecification (monthly),\nnot a flat amount, to match on-page pricing and avoid a rich-results mismatch.\nOrganization logo points at the square favicon, not the wide social banner.\n\nConstraint: Netlify deploys from main; static Astro; Paddle checkout runs\nclient-side and must not break.\nRejected: shipping a live Content-Security-Policy (staged commented-out in\n_headers to avoid blocking the Paddle checkout iframe/XHR until verified against\na real checkout); @astrojs/sitemap (peer-dep risk vs astro ^7) in favor of a\nstatic sitemap.\nDirective: fix upstream, no bandaids; deslop + code-review gates run pre-commit.\nConfidence: high\nScope-risk: narrow\nNot-tested: live social-unfurl rendering (Facebook Sharing Debugger, LinkedIn\nPost Inspector, X/Slack/iMessage paste) requires the deployed URL; CSP remains\ndisabled pending a live Paddle checkout test.",
+    "gross_tokens": 12140620,
+    "noncached_tokens": 825267,
+    "output_tokens": 72633,
+    "cache_read_tokens": 11315353,
+    "llm_calls": 83,
+    "tool_calls": 33,
+    "duration_sec": 707.419,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 12140620,
+      "new": 230129,
+      "pct_change": -98.10447077661603
+    },
+    "noncached_tokens": {
+      "old": 825267,
+      "new": 100579,
+      "pct_change": -87.81255036248875
+    },
+    "output_tokens": {
+      "old": 72633,
+      "new": 4122,
+      "pct_change": -94.32489364338524
+    },
+    "llm_calls": {
+      "old": 83,
+      "new": 4,
+      "pct_change": -95.18072289156626
+    },
+    "tool_calls": {
+      "old": 33,
+      "new": 23,
+      "pct_change": -30.303030303030305
+    },
+    "duration_sec": {
+      "old": 707.419,
+      "new": 83.07528099999763,
+      "pct_change": -88.25656633480334
+    }
+  }
+}

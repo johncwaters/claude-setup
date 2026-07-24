@@ -1,0 +1,81 @@
+{
+  "id": "419d1b6",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "419d1b6",
+  "outcome": "COMMITTED",
+  "commit_message": "refactor(card-detail): replace copies list with count chip, widen panel\n\nRemove the full Copies section (per-location list with highlight dot and status) from CardDetailPanel and replace it with a compact count-badge chip in the header showing the number of copies. The panel widens (440px to 560px, 380px to 480px on narrower viewports) and the thumbnail grows to 200px with a fixed 5:7 aspect ratio so the no-image placeholder still renders as a card-shaped box. SearchTab no longer needs to pass highlightPhysicalCardId since the per-copy highlight logic is gone along with the list it highlighted.\n\nConfidence: high\nScope-risk: narrow\nNot-tested: no UI verification in a browser; layout and chip rendering unconfirmed",
+  "wall_time_sec": 90.71247440000298,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 232636,
+  "noncached_tokens": 127327,
+  "output_tokens": 6381,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "src/renderer/src/CardDetailPanel.tsx",
+      "issue": "Copy-count chip render uses a nested ternary (detail !== null ? ... : error === null ? ... : null) inline in JSX. Not wrong, but a three-way branch crammed into one ternary chain is harder to scan than a small helper or early-return variable.",
+      "category": "readability"
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "src/renderer/src/CardDetailPanel.tsx",
+      "line": 22,
+      "issue": "MIDDLE_DOT constant was only consumed by the now-deleted CopiesSection block; if it has no other use site in the file it is now dead code and will trip unused-var lint.",
+      "fix": "Grep remaining file for MIDDLE_DOT usage; remove the constant if unused elsewhere."
+    },
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "src/renderer/src/CardDetailPanel.tsx",
+      "line": 238,
+      "issue": "Entire Copies list feature (per-copy location, status, highlight of the selected physical card) was removed and replaced with a plain count badge, dropping the highlightPhysicalCardId-driven UX with no replacement.",
+      "fix": "Confirm with product/design this was an intended simplification, not an accidental regression, before merging."
+    }
+  ],
+  "historical": {
+    "message": "feat(detail): replace copies list with count badge and enlarge card image\n\nThe per-copy list in the card detail panel (location, status, copy number)\nprovided no value in this view; the copy count is now a chip badge next to\nthe condition/printing chips, with a skeleton chip while the detail IPC\ncall loads. The panel widens from 440px to 560px (380px to 480px under the\n1200px breakpoint) and the thumbnail grows from 120px to 200px with a 5/7\naspect-ratio so the no-image placeholder keeps a card-shaped box.\n\nRemoves the now-unused highlightPhysicalCardId prop and its SearchTab call\nsite, the copy sort helper, the copies skeleton, and all associated CSS.\n\nConstraint: CardStatusText and LocationCode components kept; still used by\nStorageTab, PlacementStage, and guided picking.\nRejected: showing the count in the provenance footer; the chips row keeps\nit visible next to the other card attributes.\nConfidence: high\nScope-risk: narrow\nNot-tested: no component tests exist for this panel (logic-only test\nconvention); verified via tsc and biome only.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 4255526,
+    "noncached_tokens": 364095,
+    "output_tokens": 26779,
+    "cache_read_tokens": 3891431,
+    "llm_calls": 58,
+    "tool_calls": 32,
+    "duration_sec": 320.144,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 4255526,
+      "new": 232636,
+      "pct_change": -94.53331973532767
+    },
+    "noncached_tokens": {
+      "old": 364095,
+      "new": 127327,
+      "pct_change": -65.02918194427278
+    },
+    "output_tokens": {
+      "old": 26779,
+      "new": 6381,
+      "pct_change": -76.17162702117331
+    },
+    "llm_calls": {
+      "old": 58,
+      "new": 3,
+      "pct_change": -94.82758620689656
+    },
+    "tool_calls": {
+      "old": 32,
+      "new": 17,
+      "pct_change": -46.875
+    },
+    "duration_sec": {
+      "old": 320.144,
+      "new": 90.71247440000298,
+      "pct_change": -71.66510245389482
+    }
+  }
+}

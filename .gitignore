@@ -15,6 +15,7 @@
 !hooks/**
 !skills/**
 !setup/**
+!compiled-commit/**
 
 # Never sync these even if a rule above matches
 .credentials.json

@@ -1,0 +1,81 @@
+{
+  "id": "11767a1",
+  "repo": "C:\\Users\\johnw\\Projects\\glissa",
+  "source_commit": "11767a1",
+  "outcome": "COMMITTED",
+  "commit_message": "fix(session): sequence worktree discard after PTY reap on explicit removal\n\ndiscardWorktree() ran before destroy(), while the PTY still held the worktree as its cwd on Windows. git worktree remove --force failed under that directory lock, leaking the worktree and its checked-out branch, so the follow-up branch -D also failed and a same-named re-add hit \"session branch already checked out\". Discard now runs after destroy() kills the PTY and its reap settles.\n\nConstraint: git worktree remove --force cannot run while a live process holds the worktree as its cwd on Windows (directory lock)\nConfidence: medium\nScope-risk: narrow\nNot-tested: no test run confirming session removal no longer leaks worktree/branch on Windows",
+  "wall_time_sec": 89.46103619999485,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 172502,
+  "noncached_tokens": 98356,
+  "output_tokens": 6144,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "slop",
+      "file": "server/backend.js",
+      "issue": "backend.js reaches into sess._killReap, a private/internal Session field, directly from outside the Session class instead of exposing a public method (e.g. sess.whenKilled() or similar). Couples backend.js to Session's internal implementation detail.",
+      "category": "encapsulation"
+    },
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "server/backend.js",
+      "line": 1005,
+      "issue": "Fix assumes a property named sess._killReap holds the PTY kill/reap promise. If sessions.js actually exposes this under a different name (e.g. a reap promise set inside destroy()), Promise.resolve(sess._killReap) resolves immediately with undefined and discardWorktree runs right after destroy() with no delay, silently reintroducing the exact race (worktree still held by cwd) this diff is meant to fix.",
+      "fix": "Confirm sess._killReap is set synchronously inside Session.destroy() in session/sessions.js and actually resolves only after the PTY process exit/reap completes."
+    },
+    {
+      "stage": "review",
+      "severity": "low",
+      "file": "server/backend.js",
+      "line": 1008,
+      "issue": "sessions.delete(id) fires immediately, before the chained discardWorktree completes. A same-named session re-added quickly, before the deferred worktree/branch removal settles, can still hit the 'branch already checked out' failure the comment describes, just in a narrower window.",
+      "fix": "If this matters in practice, await the discardWorktree chain (or track pending discards) before allowing a same-name re-add, or document the narrowed race as acceptable."
+    }
+  ],
+  "historical": {
+    "message": "fix(session): tear down worktree after PTY reap on quick delete\n\nQuick delete fired sess.discardWorktree() unawaited and BEFORE\nsess.destroy() killed the PTY. On Windows `git worktree remove --force`\nfails while the live claude/conhost process still holds the worktree as\nits cwd (directory lock); the swallowed failure leaked the worktree, and\nthe follow-up `branch -D` then failed too (branch still checked out), so\na same-named re-add hit \"session branch already checked out; running in\nplace\". Destroy first, then discard only after the _killReap promise\nsettles, so removal runs on a dead process and drops both worktree and\nbranch cleanly.\n\nConstraint: _teardownSession stays sync (called from a sync reload loop); discard is deferred fire-and-forget, ordered via the reap promise.\nRejected: awaiting discard inline (would make teardown async across all callers); killing PTY inside discardWorktree (couples an operator action to the teardown path).\nDirective: Explicit removal throws the worktree away; shutdown/restart still skip discard so pending-review worktrees survive the next-boot reconcile.\nConfidence: high\nScope-risk: narrow\nNot-tested: live Windows quick-delete + same-name re-add (verified by root-cause reasoning + existing teardown/kill suites, 50 pass)\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+    "gross_tokens": 4947784,
+    "noncached_tokens": 515025,
+    "output_tokens": 21994,
+    "cache_read_tokens": 4432759,
+    "llm_calls": 53,
+    "tool_calls": 23,
+    "duration_sec": 365.581,
+    "subagents": 1
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 4947784,
+      "new": 172502,
+      "pct_change": -96.51355030858258
+    },
+    "noncached_tokens": {
+      "old": 515025,
+      "new": 98356,
+      "pct_change": -80.90267462744526
+    },
+    "output_tokens": {
+      "old": 21994,
+      "new": 6144,
+      "pct_change": -72.06510866599982
+    },
+    "llm_calls": {
+      "old": 53,
+      "new": 3,
+      "pct_change": -94.33962264150944
+    },
+    "tool_calls": {
+      "old": 23,
+      "new": 17,
+      "pct_change": -26.08695652173913
+    },
+    "duration_sec": {
+      "old": 365.581,
+      "new": 89.46103619999485,
+      "pct_change": -75.52907941058346
+    }
+  }
+}

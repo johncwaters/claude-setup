@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 31165,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "04275cda-94e3-4f2e-b56f-b973a7d6919c",
+  "total_cost_usd": 0.22242989999999999,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 28981,
+    "cache_read_input_tokens": 31343,
+    "output_tokens": 2609,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 28981,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2609,
+        "cache_read_input_tokens": 31343,
+        "cache_creation_input_tokens": 28981,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 28981
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 2609,
+      "cacheReadInputTokens": 31343,
+      "cacheCreationInputTokens": 28981,
+      "webSearchRequests": 0,
+      "costUSD": 0.22242989999999999,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"src/renderer/src/SearchTab.tsx\",\"issue\":\"toggleRow/moveSelection/handleRowKeyDown row-selection keyboard nav copied near-verbatim into StorageTab.tsx (CardManifestTable). Same Enter/Space toggle + ArrowUp/ArrowDown focus-move logic in two place, no shared hook.\",\"category\":\"duplication\"},{\"file\":\"src/renderer/src/StorageTab.tsx\",\"issue\":\"Duplicate of SearchTab keyboard nav logic (moveSelection/handleRowKeyDown) inside CardManifestTable. Should extract shared useRowSelection hook instead of two parallel implementation.\",\"category\":\"duplication\"},{\"file\":\"src/renderer/src/SearchTab.css\",\"issue\":\".search-row rule block (cursor, focus-visible outline, is-selected background) identical in structure to .storage-card-row block in StorageTab.css, only class name differ. Copy-paste CSS.\",\"category\":\"duplication\"},{\"file\":\"src/renderer/src/StorageTab.css\",\"issue\":\"Same identical CSS pattern (cursor pointer, focus-visible outline, is-selected background) as SearchTab.css .search-row, just renamed selector.\",\"category\":\"duplication\"},{\"file\":\"src/renderer/src/CardDetailPanel.tsx\",\"issue\":\"Loading/error/loaded three-way branch repeated separately for price section and copies section with near-same shape (error null-check, then loading skeleton, then content). Could collapse into one render helper.\",\"category\":\"over-abstraction\"}],\"patch\":null}",
+  "ttft_ms": 26739,
+  "ttft_stream_ms": 3315,
+  "time_to_request_ms": 236,
+  "type": "result",
+  "duration_ms": 31405,
+  "uuid": "8e90aee5-36b2-4429-9643-69d4df18a86c"
+}

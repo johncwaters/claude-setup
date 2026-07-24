@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 9928,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "d9c1af91-945c-4733-aa35-97e80e05effe",
+  "total_cost_usd": 0.0807669,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 10081,
+    "cache_read_input_tokens": 36983,
+    "output_tokens": 612,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 10081,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 612,
+        "cache_read_input_tokens": 36983,
+        "cache_creation_input_tokens": 10081,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 10081
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 612,
+      "cacheReadInputTokens": 36983,
+      "cacheCreationInputTokens": 10081,
+      "webSearchRequests": 0,
+      "costUSD": 0.0807669,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"type\":\"refactor\",\"scope\":\"card-detail\",\"description\":\"replace copies list with count chip, widen panel\",\"body\":\"Remove the full Copies section (per-location list with highlight dot and status) from CardDetailPanel and replace it with a compact count-badge chip in the header showing the number of copies. The panel widens (440px to 560px, 380px to 480px on narrower viewports) and the thumbnail grows to 200px with a fixed 5:7 aspect ratio so the no-image placeholder still renders as a card-shaped box. SearchTab no longer needs to pass highlightPhysicalCardId since the per-copy highlight logic is gone along with the list it highlighted.\",\"trailers\":{\"constraint\":null,\"rejected\":null,\"directive\":null,\"confidence\":\"high\",\"scope_risk\":\"narrow\",\"not_tested\":\"no UI verification in a browser; layout and chip rendering unconfirmed\"},\"trivial\":false}",
+  "ttft_ms": 5415,
+  "ttft_stream_ms": 1496,
+  "time_to_request_ms": 282,
+  "type": "result",
+  "duration_ms": 10211,
+  "uuid": "2f39cd97-23c1-4481-bd30-1d4116fbef6c"
+}

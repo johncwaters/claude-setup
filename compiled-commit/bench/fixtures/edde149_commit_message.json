@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 10088,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "d983ea76-d8de-4b0d-9ac0-4c2711a9def6",
+  "total_cost_usd": 0.20267100000000002,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 30623,
+    "cache_read_input_tokens": 33940,
+    "output_tokens": 583,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 30623,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 583,
+        "cache_read_input_tokens": 33940,
+        "cache_creation_input_tokens": 30623,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 30623
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 583,
+      "cacheReadInputTokens": 33940,
+      "cacheCreationInputTokens": 30623,
+      "webSearchRequests": 0,
+      "costUSD": 0.20267100000000002,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"type\":\"feat\",\"scope\":\"site\",\"description\":\"unify brand assets across app icon, favicons, and og-image\",\"body\":\"Extend generate-icon.mjs into the single source of truth for every Card Harbor logo raster: it now emits site favicons (ico, 32/16 png, apple-touch-icon), a transparent brand-mark png for in-page headers, and a scalable favicon.svg, all derived from the same brand mark used for the Electron app icon. Add generate-og-image.mjs to build the 1200x630 social card from the same mark instead of a hand-drawn one. Base.astro now links the full favicon set plus site.webmanifest and theme-color, and its schema.org logo points at the new logo.png. Legal.astro and index.astro swap their inline hand-coded brand-mark SVGs for the generated brand-mark.png so every surface renders the same logo.\",\"trailers\":{\"constraint\":\"Generated PNG/ICO assets must be regenerated via node scripts/generate-icon.mjs and node scripts/generate-og-image.mjs whenever src/renderer/src/assets/card-harbor-mark.png changes; they are not hand-editable.\",\"rejected\":null,\"directive\":null,\"confidence\":\"medium\",\"scope_risk\":\"moderate\",\"not_tested\":\"Favicon/og-image rendering not verified in an actual browser or social-card unfurler after the asset regeneration.\"},\"trivial\":false}",
+  "ttft_ms": 5872,
+  "ttft_stream_ms": 4015,
+  "time_to_request_ms": 644,
+  "type": "result",
+  "duration_ms": 10733,
+  "uuid": "f266a705-9d5a-42b3-b5b1-20fb4b38fab7"
+}

@@ -1,6 +1,6 @@
 # Commit (compiled)
 
-This workflow is compiled. The runner at `$HOME\Projects\compiled-commit\runner.py` owns the
+This workflow is compiled. The runner at `$HOME\.claude\compiled-commit\runner.py` owns the
 entire procedure: preflight, develop sync, slop cleanup, code review, message generation,
 staging, and the commit itself, with typed outcomes. Do not reimplement any of those steps,
 do not run your own review, do not stage or commit yourself, and do not edit files to fix
@@ -11,7 +11,7 @@ findings unless the user asks after seeing the result.
 Run exactly one command (PowerShell; `$HOME` resolves the machine-specific user directory):
 
 ```
-python "$HOME\Projects\compiled-commit\runner.py" --repo <current working directory> --json <flags>
+python "$HOME\.claude\compiled-commit\runner.py" --repo <current working directory> --json <flags>
 ```
 
 Flag mapping from the user's arguments:

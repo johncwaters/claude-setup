@@ -1,0 +1,67 @@
+{
+  "id": "c468d9f",
+  "repo": "C:\\Users\\johnw\\Projects\\card-harbor",
+  "source_commit": "c468d9f",
+  "outcome": "COMMITTED",
+  "commit_message": "fix: revert package version to 0.9.0\n\nVersion was bumped to 1.0.0 prematurely; roll back to 0.9.0 in package.json and package-lock.json until the actual 1.0.0 release is ready.",
+  "wall_time_sec": 35.803115699993214,
+  "git_op_count": 17,
+  "llm_call_count": 3,
+  "gross_tokens": 158683,
+  "noncached_tokens": 63242,
+  "output_tokens": 796,
+  "warnings": [],
+  "findings": [
+    {
+      "stage": "review",
+      "severity": "medium",
+      "file": "package.json",
+      "line": 3,
+      "issue": "Version downgraded 1.0.0 to 0.9.0, lockfile matches but reverses semver direction",
+      "fix": "Confirm intentional (revert of premature bump) not accidental; align with release/tag history before publish"
+    }
+  ],
+  "historical": {
+    "message": "chore: bump version down to 0.9.0 ahead of first public release\n\nApp has not shipped yet; 1.0.0 is reserved for the first public release.\nThe update feed and tag pipeline will start at v0.9.0.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "gross_tokens": 5261259,
+    "noncached_tokens": 49186,
+    "output_tokens": 15412,
+    "cache_read_tokens": 5212073,
+    "llm_calls": 29,
+    "tool_calls": 10,
+    "duration_sec": 581.37,
+    "subagents": 0
+  },
+  "comparison": {
+    "gross_tokens": {
+      "old": 5261259,
+      "new": 158683,
+      "pct_change": -96.9839348338487
+    },
+    "noncached_tokens": {
+      "old": 49186,
+      "new": 63242,
+      "pct_change": 28.57723742528362
+    },
+    "output_tokens": {
+      "old": 15412,
+      "new": 796,
+      "pct_change": -94.83519335582663
+    },
+    "llm_calls": {
+      "old": 29,
+      "new": 3,
+      "pct_change": -89.65517241379311
+    },
+    "tool_calls": {
+      "old": 10,
+      "new": 17,
+      "pct_change": 70.0
+    },
+    "duration_sec": {
+      "old": 581.37,
+      "new": 35.803115699993214,
+      "pct_change": -93.84159559316902
+    }
+  }
+}

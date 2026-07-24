@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 17786,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "f4441983-db74-4f38-ba0b-bb7ad648e4b4",
+  "total_cost_usd": 0.1815117,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 25950,
+    "cache_read_input_tokens": 27919,
+    "output_tokens": 1162,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 25950,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1162,
+        "cache_read_input_tokens": 27919,
+        "cache_creation_input_tokens": 25950,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 25950
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 1162,
+      "cacheReadInputTokens": 27919,
+      "cacheCreationInputTokens": 25950,
+      "webSearchRequests": 0,
+      "costUSD": 0.1815117,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"src/renderer/src/camera-scan/camera-scan.css\",\"issue\":\"min-width: 150px added with no comment/rationale; magic number picked to fit longest label, breaks silently if label text changes later.\",\"category\":\"magic-number\"},{\"file\":\"src/renderer/src/camera-scan/CameraScan.tsx\",\"issue\":\"Button text dropped hotkey hints ('(R)', '(K)') and dynamic rotation degrees, but title attributes still say 'R or Space' / 'K' and aria-label still reports rotation degrees - visible label and accessible name now diverge.\",\"category\":\"inconsistency\"}],\"patch\":null}",
+  "ttft_ms": 17016,
+  "ttft_stream_ms": 4725,
+  "time_to_request_ms": 2520,
+  "type": "result",
+  "duration_ms": 20232,
+  "uuid": "785da48e-6ed9-4ab9-b88c-2f97926e3205"
+}

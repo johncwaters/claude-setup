@@ -1,0 +1,64 @@
+{
+  "is_error": false,
+  "duration_api_ms": 20964,
+  "num_turns": 1,
+  "stop_reason": "end_turn",
+  "session_id": "d44031f0-c0c3-45f0-8026-acc99d978170",
+  "total_cost_usd": 0.214584,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 29881,
+    "cache_read_input_tokens": 33940,
+    "output_tokens": 1674,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 29881,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1674,
+        "cache_read_input_tokens": 33940,
+        "cache_creation_input_tokens": 29881,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 29881
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 1674,
+      "cacheReadInputTokens": 33940,
+      "cacheCreationInputTokens": 29881,
+      "webSearchRequests": 0,
+      "costUSD": 0.214584,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"findings\":[{\"file\":\"scripts/generate-icon.mjs\",\"issue\":\"favicon.svg generation manually rebuilds a rounded rect with BACKGROUND and a hand-computed radius instead of reusing the existing backgroundSvg() helper that already does exactly this composition step, duplicating logic that lives two functions above it\",\"category\":\"duplicated-helpers\"},{\"file\":\"scripts/generate-icon.mjs\",\"issue\":\"icoFrom() and pngFrom() are near-identical: both call renderBadge, then fs.writeFileSync + console.log('wrote', ...) with the same message shape; that write+log pair is also repeated inline for favicon.svg and brand-mark.png (4 copies total of the same two lines)\",\"category\":\"duplicated-helpers\"},{\"file\":\"scripts/generate-og-image.mjs\",\"issue\":\"header comment is a mini design-doc (drop-shadow rationale, crop survival, run instructions) that mostly restates what the code below already shows; only the drop-shadow alpha hack actually needs a why-comment\",\"category\":\"useless-comments\"}],\"patch\":null}",
+  "ttft_ms": 18029,
+  "ttft_stream_ms": 2604,
+  "time_to_request_ms": 890,
+  "type": "result",
+  "duration_ms": 21861,
+  "uuid": "1912906c-2cdc-43a8-b41a-f48a3f051d59"
+}
