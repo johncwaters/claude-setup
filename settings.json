@@ -7,7 +7,8 @@
       "Bash(node:*)",
       "Bash(ls:*)",
       "WebFetch(domain:unpkg.com)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
   "model": "claude-fable-5[1m]",
   "hooks": {
@@ -31,7 +32,8 @@
     "caveman@caveman": true,
     "typescript-lsp@claude-plugins-official": true,
     "posthog@claude-plugins-official": true,
-    "github@claude-plugins-official": true
+    "github@claude-plugins-official": false,
+    "postiz@skills-dir": false
   },
   "extraKnownMarketplaces": {
     "caveman": {
@@ -54,5 +56,8 @@
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "auto"
+  "theme": "auto",
+  "skillOverrides": {
+    "ai-slop-cleaner": "off"
+  }
 }
