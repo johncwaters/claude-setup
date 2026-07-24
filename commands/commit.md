@@ -1,28 +1,28 @@
 # Commit (compiled)
 
-This workflow is compiled. The runner at `C:\Users\johnw\Projects\compiled-commit\runner.py`
-owns the entire procedure: preflight, develop sync, slop cleanup, code review, message
-generation, staging, and the commit itself, with typed outcomes. Do not reimplement any of
-those steps, do not run your own review, do not stage or commit yourself, and do not edit
-files to fix findings unless the user asks after seeing the result.
+This workflow is compiled. The runner at `$HOME\Projects\compiled-commit\runner.py` owns the
+entire procedure: preflight, develop sync, slop cleanup, code review, message generation,
+staging, and the commit itself, with typed outcomes. Do not reimplement any of those steps,
+do not run your own review, do not stage or commit yourself, and do not edit files to fix
+findings unless the user asks after seeing the result.
 
 ## Invoke
 
-Run exactly one command (PowerShell):
+Run exactly one command (PowerShell; `$HOME` resolves the machine-specific user directory):
 
 ```
-python C:\Users\johnw\Projects\compiled-commit\runner.py --repo <current working directory> --json <flags>
+python "$HOME\Projects\compiled-commit\runner.py" --repo <current working directory> --json <flags>
 ```
 
 Flag mapping from the user's arguments:
 
 - A quoted conventional message, e.g. `/commit "feat: x"`: pass as `--message "feat: x"`.
-- `--no-sync`: pass through.
-- `--skip-deslop`: pass through.
-- `--skip-review`: pass through.
 - Free-text intent that is not a conventional message (e.g. "prototype for later"): pass as
   `--context "<text>"` so the message call can explain the why. When you have session
   context about why the change was made, pass one line of it as `--context` too.
+
+The runner has additional flags for direct use (`--help`), but this command maps only the
+two above. Do not pass skip or dry-run flags unless the user explicitly names one.
 
 ## Relay the result
 
@@ -32,18 +32,26 @@ non-empty, and any `warnings`. Do not re-judge, filter, or overrule the runner's
 
 Typed outcomes and what to do:
 
-- `COMMITTED` or `DRY_RUN_OK`: done, relay.
+- `COMMITTED`: done, relay, then handle push/merge extras below if requested.
 - `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
   `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_BLOCKED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
-- Runner missing or crashes (non-JSON output): report the error verbatim. The original prose
-  workflow is archived at `~/.claude/commands/commit.md.pre-compiled.bak`; suggest the user
-  restore it if they want the old behavior. Do not execute the archived prose yourself.
+- Runner missing or crashes (non-JSON output): report the error verbatim. On the machine
+  where this workflow was compiled, the original prose workflow is archived locally at
+  `~/.claude/commands/commit.md.pre-compiled.bak` (not versioned in this repo, so it may not
+  exist elsewhere). Do not execute the archived prose yourself.
 
 ## Push and merge extras
 
-The runner never pushes. If and only if the user explicitly asked (words like "and push",
-`--push`) and the outcome is COMMITTED, run `git push` on the current branch afterward and
-report the result. Merge requests ("and merge") remain manual follow-ups: surface them back
-to the user after the commit, do not perform them as part of this command.
+The runner itself never pushes or merges. Perform these only when the user explicitly asked
+in this invocation (words like "and push", "and merge"), and only after COMMITTED:
+
+- Push: `git push` on the current branch (set upstream if none). Report the result.
+- Merge: resolve the integration branch (develop, falling back to main/master). Then:
+  `git fetch origin <integration>`, `git checkout <integration>`,
+  `git pull --ff-only origin <integration>`, `git merge --no-edit <feature-branch>`,
+  `git push origin <integration>`, `git checkout <feature-branch>`.
+  On any conflict or non-fast-forward pull: abort the merge, return to the feature branch,
+  stop and report. Never force-push, never resolve conflicts silently.
+- If the current branch already is the integration branch, merge is meaningless: push only.
