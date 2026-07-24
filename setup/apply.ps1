@@ -224,6 +224,7 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
         cmd /c "python -c ""import $mod"" >nul 2>&1"
         if ($LASTEXITCODE -eq 0) { Note-Present $pkg "already installed"; continue }
         Write-Line " .. " Yellow $pkg "pip install"
+        # cmd owns the redirects here too, same NativeCommandError trap as the probe above
         cmd /c "python -m pip install $pkg --quiet >nul 2>&1"
         if ($LASTEXITCODE -eq 0) { Note-Installed $pkg "installed"; continue }
         Note-Warned $pkg "pip install failed"

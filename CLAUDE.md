@@ -36,7 +36,7 @@ Models available, rated 1 (low) to 5 (high) on intelligence and speed, and 1 (ch
 
 | Model | Intelligence | Speed | Cost | Access | Use for |
 |---|---|---|---|---|---|
-| `opus` (claude-opus-4-8) | 5 | 2 | 5 | Agent `model=opus` | Architecture, security review, gnarly debugging, judgment calls that gate a completion claim |
+| `opus` (claude-opus-5) | 5 | 2 | 5 | Agent `model=opus` | Architecture, security review, gnarly debugging, judgment calls that gate a completion claim |
 | `sonnet` (claude-sonnet-5) | 4 | 3 | 3 | Agent `model=sonnet` (default) | Standard implementation, refactors, test writing, routine review |
 | `fable` (claude-fable-5) | 4 | 4 | 2 | Agent `model=fable` | Latency-lean orchestration when it is the active session model |
 | `GPT-5.6` (Codex CLI, `@openai/codex`) | 4 | 3 | 1 | `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6` (direct, prompt on stdin) | PC control (see step 0 below), mechanical/cheap work, independent second opinions, self-contained parallel slices needing no Claude tools |
