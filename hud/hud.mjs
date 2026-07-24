@@ -75,7 +75,12 @@ function render(payload) {
 
   const model = payload.model || {};
   const name = model.display_name || model.id;
-  if (name) parts.push(`${CYAN}Model: ${name}${RESET}`);
+  if (name) {
+    let seg = `${CYAN}Model: ${name}${RESET}`;
+    const effort = payload.effort && payload.effort.level;
+    if (effort) seg += ` ${DIM}(${effort})${RESET}`;
+    parts.push(seg);
+  }
 
   const rl = payload.rate_limits || {};
   const limits = [limitPart("5h", rl.five_hour), limitPart("wk", rl.seven_day)].filter(Boolean);
