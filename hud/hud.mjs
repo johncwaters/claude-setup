@@ -59,7 +59,7 @@ function limitPart(label, limit) {
   let part = `${DIM}${label}:${RESET}${limitColor(pct)}${pct}%${RESET}`;
   const resetDate = parseResetsAt(limit.resets_at);
   const reset = resetDate ? fmtReset(resetDate) : null;
-  if (reset) part += `${DIM}(${reset})${RESET}`;
+  if (reset) part += ` ${DIM}(${reset})${RESET}`;
   return part;
 }
 
@@ -88,7 +88,7 @@ function render(payload) {
     let seg = `${DIM}ctx:${RESET}${color}${pct}%${suffix}${RESET}`;
     const used = fmtTokens(cw.total_input_tokens);
     const size = fmtTokens(cw.context_window_size);
-    if (used && size) seg += `${DIM}(${used}/${size})${RESET}`;
+    if (used && size) seg += ` ${DIM}(${used}/${size})${RESET}`;
     parts.push(seg);
   }
 
