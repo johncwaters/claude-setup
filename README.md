@@ -49,7 +49,7 @@ Nothing secret syncs through this repo, so log in fresh:
 - [ ] `gh auth login` (GitHub CLI; git pushes ride on this via https)
 - [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for Codex routing)
 - [ ] `grok login` (Grok Build CLI; grok.com sign-in, or set `XAI_API_KEY`, needed for Grok research routing)
-- [ ] `claude mcp add --transport http posthog https://mcp.posthog.com/mcp -s user` (PostHog MCP; OAuth browser login on first use; replaces the posthog plugin, whose 100+ skills bloated the skill listing - the two used skills live in `skills/posthog-error-triage` and `skills/posthog-querying`)
+- [ ] `claude mcp add --transport http posthog https://mcp.posthog.com/mcp -s user` (PostHog MCP; OAuth browser login on first use)
 - [ ] VSCodium: re-auth MCP servers (PostHog) on first use
 - [ ] Anything project-specific (.env files) stays per-repo, not here
 
