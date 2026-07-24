@@ -220,10 +220,11 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) { Note-Warned "pyth
 if (Get-Command python -ErrorAction SilentlyContinue) {
     foreach ($mod in @("ruff", "yaml")) {
         $pkg = @{ ruff = "ruff"; yaml = "pyyaml" }[$mod]
-        python -c "import $mod" 2>$null
+        # cmd owns the redirects: under EAP=Stop, PS 5.1 turns native stderr into a terminating NativeCommandError
+        cmd /c "python -c ""import $mod"" >nul 2>&1"
         if ($LASTEXITCODE -eq 0) { Note-Present $pkg "already installed"; continue }
         Write-Line " .. " Yellow $pkg "pip install"
-        python -m pip install $pkg --quiet 2>$null | Out-Null
+        cmd /c "python -m pip install $pkg --quiet >nul 2>&1"
         if ($LASTEXITCODE -eq 0) { Note-Installed $pkg "installed"; continue }
         Note-Warned $pkg "pip install failed"
     }
