@@ -63,7 +63,7 @@ function limitPart(label, limit, showRemaining) {
   if (!limit || typeof limit.used_percentage !== "number") return null;
   const used = clampPct(limit.used_percentage);
   const pct = showRemaining ? 100 - used : used;
-  const color = showRemaining ? remainingColor(pct) : limitColor(used);
+  const color = showRemaining ? remainingColor(pct) : limitColor(pct);
   let part = `${DIM}${label}:${RESET}${color}${pct}%${RESET}`;
   const resetDate = parseResetsAt(limit.resets_at);
   const reset = resetDate ? fmtReset(resetDate) : null;
