@@ -50,6 +50,8 @@ const BIOME_EXTS = new Set([
 const FIX_CTRL =
   "Remove the character (it usually comes from a bad copy-paste or a non-UTF-8 source), re-type the affected text, and save as UTF-8.";
 
+// Numeric code points, not literal chars: this source must stay pure ASCII
+// (AGENTS.md hard rule) or the guard would deny edits to itself.
 const DASH_CHAR_NAMES = {
   0x2014: "em dash (U+2014)",
   0x2013: "en dash (U+2013)",
@@ -130,9 +132,9 @@ function loc(line, column) {
   return `line ${line}, column ${column}`;
 }
 
-// Scans text char-by-char; classify(code) returns a { why, fix } descriptor
-// for a banned code point or null. Locates the first hit as line:col relative
-// to the start of `text`.
+// classify(code) returns a { why, fix } descriptor for a banned code point or
+// null. line:col in the result is relative to the start of `text`, which for
+// dash scans is an inserted fragment, not the whole file.
 function charScanError(text, classify) {
   for (let i = 0; i < text.length; i++) {
     const hit = classify(text.charCodeAt(i));
@@ -179,8 +181,9 @@ function dashLiteralError(text) {
 // Checks only the text a tool call would INSERT, never the reconstructed
 // full file -- editing a file that already has a stray dash/ellipsis
 // elsewhere must not be blocked, only a newly introduced one.
+// No null guard on ti by design: the sole caller (validate, via the entry
+// point) defaults tool_input to {} before any validation runs.
 function dashCharError(ti) {
-  if (!ti) return null;
   if (typeof ti.content === "string") return dashLiteralError(ti.content);
   if (Array.isArray(ti.edits)) {
     for (let idx = 0; idx < ti.edits.length; idx++) {

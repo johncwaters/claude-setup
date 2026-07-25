@@ -70,13 +70,33 @@ def resolve_integration_branch(git):
     return None
 
 
-def _build_slop_prompt(packet, prior_error=None):
+def _intent_block(context):
+    """Author-intent lines shared by the slop and review prompts.
+
+    Without this, review stages judge the diff blind to intent: a change that
+    implements a previously requested fix reads as unexplained, and successive
+    runs flag reversals of each other's suggestions (finding ping-pong).
+    """
+    if not context:
+        return []
+    return [
+        "Author intent for this change (trusted, from the invoking session):",
+        context,
+        "Judge the diff against this intent. Do not flag a decision the intent "
+        "explicitly documents (such as a removal, reversal, or scope choice it "
+        "explains) unless it introduces a concrete defect visible in the diff.",
+        "",
+    ]
+
+
+def _build_slop_prompt(packet, prior_error=None, context=None):
     parts = [
         "Task: find AI-authored slop in this diff (dead code, duplicated helpers, "
         "useless comments, over-abstraction). Optionally propose a unified diff patch "
         "(paths relative to repo root) that fixes it. Only include a patch you are "
         "confident applies cleanly; omit it (null) otherwise.",
         "",
+        *_intent_block(context),
         packet.text,
     ]
     if prior_error:
@@ -85,7 +105,7 @@ def _build_slop_prompt(packet, prior_error=None):
     return "\n".join(parts)
 
 
-def _build_review_prompt(packet):
+def _build_review_prompt(packet, context=None):
     return "\n".join(
         [
             "Task: review this diff for defects. Rate each finding severity "
@@ -96,6 +116,7 @@ def _build_review_prompt(packet):
             "unverified builds, unreviewed dependency bumps, lockfile churn, style) "
             "are medium at most, never blocking.",
             "",
+            *_intent_block(context),
             packet.text,
         ]
     )
@@ -296,7 +317,7 @@ class Pipeline:
 
         self.result.stages_run.append("SLOP")
         packet = self._build_packet()
-        prompt = _build_slop_prompt(packet)
+        prompt = _build_slop_prompt(packet, context=self.config.context)
         parsed, usage, errors = self.llm.call(
             name="slop_review",
             key=self._fixture_key("slop_review"),
@@ -325,7 +346,7 @@ class Pipeline:
             self._rescope_and_rebuild()
             return
 
-        prompt = _build_slop_prompt(packet, prior_error=stderr)
+        prompt = _build_slop_prompt(packet, prior_error=stderr, context=self.config.context)
         parsed, usage, _errors = self.llm.call(
             name="slop_review",
             key=self._fixture_key("slop_review_retry"),
@@ -356,7 +377,7 @@ class Pipeline:
 
         self.result.stages_run.append("REVIEW")
         packet = self._build_packet()
-        prompt = _build_review_prompt(packet)
+        prompt = _build_review_prompt(packet, context=self.config.context)
         parsed, usage, _errors = self.llm.call(
             name="code_review",
             key=self._fixture_key("code_review"),
