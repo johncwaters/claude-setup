@@ -47,11 +47,13 @@ def is_denylisted(path):
     return False
 
 
-def compute_scope(git):
+def compute_scope(git, paths=None):
     """Stage 3 SCOPE: returns (changed: set[str], untracked: list[str])."""
-    changed = set(git.diff_name_only(cached=False)) | set(git.diff_name_only(cached=True))
+    changed = set(git.diff_name_only(cached=False, paths=paths)) | set(
+        git.diff_name_only(cached=True, paths=paths)
+    )
     untracked = []
-    for line in git.status_short():
+    for line in git.status_short(paths=paths):
         if not line.startswith("??"):
             continue
         path = line[3:].strip()
@@ -144,6 +146,7 @@ class PipelineConfig:
     llm_client: object = None
     fixture_prefix: str = "run"
     context: str = None
+    paths: list = None
 
     def __post_init__(self):
         if self.workspace is None:
@@ -276,7 +279,7 @@ class Pipeline:
 
     def _scope(self):
         self.result.stages_run.append("SCOPE")
-        changed, untracked = compute_scope(self.git)
+        changed, untracked = compute_scope(self.git, paths=self.config.paths)
         if not changed and not untracked:
             return Outcome.NOTHING_TO_COMMIT
         self.changed_files = changed
@@ -291,13 +294,15 @@ class Pipeline:
         return self._diff_packet
 
     def _compute_packet(self):
-        status_lines = "\n".join(self.git.status_short())
+        status_lines = "\n".join(self.git.status_short(paths=self.config.paths))
         branch = self.git.current_branch()
-        return build_diff_packet(self.git, self.untracked_files, status_lines, branch)
+        return build_diff_packet(
+            self.git, self.untracked_files, status_lines, branch, paths=self.config.paths
+        )
 
     def _rescope_and_rebuild(self):
         self.result.stages_run.append("SCOPE(rerun)")
-        changed, untracked = compute_scope(self.git)
+        changed, untracked = compute_scope(self.git, paths=self.config.paths)
         self.changed_files = changed
         self.untracked_files = untracked
         self._diff_packet = None
@@ -444,7 +449,7 @@ class Pipeline:
 
     def _commit(self):
         self.result.stages_run.append("COMMIT")
-        self.git.add_update()
+        self.git.add_update(paths=self.config.paths)
         for path in self.untracked_files:
             self.git.add_path(path)
 

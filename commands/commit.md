@@ -20,9 +20,14 @@ Flag mapping from the user's arguments:
 - Free-text intent that is not a conventional message (e.g. "prototype for later"): pass as
   `--context "<text>"` so the message call can explain the why. When you have session
   context about why the change was made, pass one line of it as `--context` too.
+- When you know exactly which files or directories this session changed, pass them as
+  `--paths <file-or-dir> ...` so scope, review, and staging are restricted to them. This
+  keeps another session's work-in-progress in the same checkout out of your commit. Omit
+  it only when the user asked to commit everything or you genuinely cannot enumerate what
+  changed.
 
 The runner has additional flags for direct use (`--help`), but this command maps only the
-two above. Do not pass skip flags unless the user explicitly names one.
+flags above. Do not pass skip flags unless the user explicitly names one.
 
 ## Fix findings, then report
 

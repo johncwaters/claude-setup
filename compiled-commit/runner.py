@@ -22,6 +22,12 @@ def build_arg_parser():
         default=None,
         help="One line of author intent, passed to the message call to explain the why",
     )
+    parser.add_argument(
+        "--paths",
+        nargs="+",
+        default=None,
+        help="Restrict scope, diff, and staging to these files/dirs (default: whole tree)",
+    )
     parser.add_argument("--no-sync", action="store_true", help="Skip the sync stage")
     parser.add_argument("--skip-deslop", action="store_true", help="Skip the slop review stage")
     parser.add_argument("--skip-review", action="store_true", help="Skip the code review stage")
@@ -88,6 +94,7 @@ def main(argv=None):
         no_push=args.no_push,
         llm_client=llm_client,
         context=args.context,
+        paths=args.paths,
     )
 
     result = Pipeline(config).run()

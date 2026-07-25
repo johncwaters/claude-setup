@@ -23,6 +23,8 @@ settings.local.json
 *.bak*
 *.backup*
 *.tmp.*
+__pycache__/
+*.py[cod]
 
 # Runtime/state dirs (blocked by * already, listed for clarity)
 projects/

@@ -208,8 +208,9 @@ def build_diff_packet(
     max_file_lines=400,
     max_total_chars=60000,
     untracked_size_limit=20000,
+    paths=None,
 ):
-    tracked_diff = git.diff_head()
+    tracked_diff = git.diff_head(paths=paths)
     sections = [
         (path, truncate_diff_lines(content, max_file_lines))
         for path, content in split_diff_sections(tracked_diff)

@@ -51,21 +51,32 @@ class GitOps:
         proc = self._run(["diff", "--name-only", "--diff-filter=U"])
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
-    def diff_name_only(self, cached=False):
+    def diff_name_only(self, cached=False, paths=None):
         args = ["diff", "--cached", "--name-only"] if cached else ["diff", "--name-only", "HEAD"]
+        if paths:
+            args += ["--"] + list(paths)
         proc = self._run(args)
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
-    def status_short(self):
-        proc = self._run(["status", "--short"])
+    def status_short(self, paths=None):
+        args = ["status", "--short"]
+        if paths:
+            args += ["--"] + list(paths)
+        proc = self._run(args)
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
-    def diff_head(self):
-        proc = self._run(["diff", "HEAD"])
+    def diff_head(self, paths=None):
+        args = ["diff", "HEAD"]
+        if paths:
+            args += ["--"] + list(paths)
+        proc = self._run(args)
         if proc.returncode == 0:
             return proc.stdout
         # Unborn HEAD (no commits yet): fall back to the staged-vs-empty-tree diff.
-        fallback = self._run(["diff", "--cached"])
+        fallback_args = ["diff", "--cached"]
+        if paths:
+            fallback_args += ["--"] + list(paths)
+        fallback = self._run(fallback_args)
         return fallback.stdout
 
     def log_subjects(self, n=10):
@@ -74,8 +85,11 @@ class GitOps:
             return []
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
-    def add_update(self):
-        return self._run(["add", "-u"])
+    def add_update(self, paths=None):
+        args = ["add", "-u"]
+        if paths:
+            args += ["--"] + list(paths)
+        return self._run(args)
 
     def add_path(self, path):
         return self._run(["add", "--", path])
