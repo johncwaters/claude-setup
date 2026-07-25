@@ -20,12 +20,6 @@ function limitColor(pct) {
   return GREEN;
 }
 
-function remainingColor(pct) {
-  if (pct <= 10) return RED;
-  if (pct <= 30) return YELLOW;
-  return GREEN;
-}
-
 function contextStyle(pct) {
   if (pct >= 85) return { color: RED, suffix: " CRITICAL" };
   if (pct >= 80) return { color: YELLOW, suffix: " COMPRESS?" };
@@ -59,12 +53,10 @@ function fmtReset(date) {
   return `${totalH}h${totalMin % 60}m`;
 }
 
-function limitPart(label, limit, showRemaining) {
+function limitPart(label, limit) {
   if (!limit || typeof limit.used_percentage !== "number") return null;
-  const used = clampPct(limit.used_percentage);
-  const pct = showRemaining ? 100 - used : used;
-  const color = showRemaining ? remainingColor(pct) : limitColor(pct);
-  let part = `${DIM}${label}:${RESET}${color}${pct}%${RESET}`;
+  const pct = clampPct(limit.used_percentage);
+  let part = `${DIM}${label}:${RESET}${limitColor(pct)}${pct}%${RESET}`;
   const resetDate = parseResetsAt(limit.resets_at);
   const reset = resetDate ? fmtReset(resetDate) : null;
   if (reset) part += ` ${DIM}(${reset})${RESET}`;
@@ -90,16 +82,9 @@ function render(payload) {
     parts.push(seg);
   }
 
-  // rate_limits is account-wide (no per-model bucket in the payload schema);
-  // when the session model is Fable 5 we flip to remaining% so the segment
-  // answers "how much Fable budget is left" for the windows Fable draws from.
-  const isFable = String(model.id || "").startsWith("claude-fable");
   const rl = payload.rate_limits || {};
-  const limits = [limitPart("5h", rl.five_hour, isFable), limitPart("wk", rl.seven_day, isFable)].filter(Boolean);
-  if (limits.length > 0) {
-    const prefix = isFable ? `${DIM}Fable left ${RESET}` : "";
-    parts.push(prefix + limits.join(" "));
-  }
+  const limits = [limitPart("5h", rl.five_hour), limitPart("wk", rl.seven_day)].filter(Boolean);
+  if (limits.length > 0) parts.push(limits.join(" "));
 
   const cw = payload.context_window || {};
   if (typeof cw.used_percentage === "number") {
