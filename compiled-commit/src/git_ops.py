@@ -19,6 +19,8 @@ class GitOps:
             cwd=self.repo,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
     def is_inside_work_tree(self):

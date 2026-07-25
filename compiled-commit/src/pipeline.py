@@ -460,7 +460,7 @@ class Pipeline:
                 os.remove(message_path)
 
         if proc.returncode != 0:
-            self.result.warnings.append(proc.stderr.strip())
+            self.result.warnings.append((proc.stderr or "").strip())
             return Outcome.HOOK_FAILED
 
         self.result.commit_hash = self.git.rev_parse_head()
@@ -482,7 +482,7 @@ class Pipeline:
         proc = self.git.push() if self.git.has_upstream() else self.git.push_set_upstream("origin", branch)
 
         if proc.returncode != 0:
-            self.result.warnings.append(proc.stderr.strip())
+            self.result.warnings.append((proc.stderr or "").strip())
             return Outcome.PUSH_FAILED
 
         self.result.pushed = True
