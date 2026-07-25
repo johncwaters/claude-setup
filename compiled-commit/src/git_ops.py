@@ -7,6 +7,12 @@ Code sessions (SPEC bench/run_bench.py step 5).
 import subprocess
 
 
+def _scoped(args, paths):
+    if not paths:
+        return args
+    return args + ["--"] + list(paths)
+
+
 class GitOps:
     def __init__(self, repo):
         self.repo = repo
@@ -53,30 +59,19 @@ class GitOps:
 
     def diff_name_only(self, cached=False, paths=None):
         args = ["diff", "--cached", "--name-only"] if cached else ["diff", "--name-only", "HEAD"]
-        if paths:
-            args += ["--"] + list(paths)
-        proc = self._run(args)
+        proc = self._run(_scoped(args, paths))
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
     def status_short(self, paths=None):
-        args = ["status", "--short"]
-        if paths:
-            args += ["--"] + list(paths)
-        proc = self._run(args)
+        proc = self._run(_scoped(["status", "--short"], paths))
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
     def diff_head(self, paths=None):
-        args = ["diff", "HEAD"]
-        if paths:
-            args += ["--"] + list(paths)
-        proc = self._run(args)
+        proc = self._run(_scoped(["diff", "HEAD"], paths))
         if proc.returncode == 0:
             return proc.stdout
         # Unborn HEAD (no commits yet): fall back to the staged-vs-empty-tree diff.
-        fallback_args = ["diff", "--cached"]
-        if paths:
-            fallback_args += ["--"] + list(paths)
-        fallback = self._run(fallback_args)
+        fallback = self._run(_scoped(["diff", "--cached"], paths))
         return fallback.stdout
 
     def log_subjects(self, n=10):
@@ -86,10 +81,7 @@ class GitOps:
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
     def add_update(self, paths=None):
-        args = ["add", "-u"]
-        if paths:
-            args += ["--"] + list(paths)
-        return self._run(args)
+        return self._run(_scoped(["add", "-u"], paths))
 
     def add_path(self, path):
         return self._run(["add", "--", path])
