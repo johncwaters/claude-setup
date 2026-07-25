@@ -2,7 +2,12 @@ import { readFileSync, copyFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-const hookInput = JSON.parse(readFileSync(0, "utf8").replace(/^﻿/, ""));
+let hookInput;
+try {
+  hookInput = JSON.parse(readFileSync(0, "utf8").replace(/^﻿/, ""));
+} catch {
+  process.exit(0);
+}
 const editedPath = hookInput.tool_input?.file_path;
 if (!editedPath) process.exit(0);
 
