@@ -20,10 +20,8 @@
  *   - Ruff   -> Python via `python -m ruff format`
  *   - Dart   -> Flutter/Dart via `dart format` (~0.2s; the heaviest engine -- Dart VM startup)
  *   - inline -> reject NUL, U+FFFD, stray control chars in any text file
- *   - inline -> reject a NEWLY INSERTED em dash, en dash, or horizontal
- *               ellipsis character; a file that already has one elsewhere is
- *               left alone (only Write content / Edit new_string / MultiEdit
- *               edits[].new_string are scanned, never the whole file)
+ *   - inline -> reject a newly inserted em dash, en dash, or ellipsis
+ *               (insertion-only scan; see dashCharError)
  *   - JSON   -> JSON.parse fallback when Biome can't be located
  *
  * Fail-open by design: if the hook errors, can't read the content, or an engine
@@ -52,8 +50,6 @@ const BIOME_EXTS = new Set([
 const FIX_CTRL =
   "Remove the character (it usually comes from a bad copy-paste or a non-UTF-8 source), re-type the affected text, and save as UTF-8.";
 
-// Numeric code points only, on purpose -- same reason as the control-char
-// scan below (see AGENTS.md hard rule: keep this source pure ASCII).
 const DASH_CHAR_NAMES = {
   0x2014: "em dash (U+2014)",
   0x2013: "en dash (U+2013)",
@@ -134,49 +130,57 @@ function loc(line, column) {
   return `line ${line}, column ${column}`;
 }
 
-function controlCharError(content) {
-  // Allowed whitespace controls: tab(0x09) LF(0x0A) FF(0x0C) CR(0x0D).
-  // Forbidden: other C0 (<=0x1F), DEL+C1 (0x7F-0x9F), and U+FFFD.
-  for (let i = 0; i < content.length; i++) {
-    const c = content.charCodeAt(i);
-    if (c >= 0x20 && c < 0x7f) continue; // printable ASCII: never a control char
-    const allowed = c === 0x09 || c === 0x0a || c === 0x0c || c === 0x0d;
-    const bad = c === 0xfffd || (c <= 0x1f && !allowed) || (c >= 0x7f && c <= 0x9f);
-    if (!bad) continue;
-    const { line, column } = posOf(content, i);
-    const where = loc(line, column);
-    if (c === 0x00) return { where, why: "contains a NUL byte (U+0000)", fix: FIX_CTRL };
-    if (c === 0xfffd) {
-      return {
-        where,
-        why: "contains the Unicode replacement character (U+FFFD), a sign of broken/mis-decoded encoding",
-        fix: "The text was decoded with the wrong encoding. Re-read the source and re-type the affected text, then save as UTF-8.",
-      };
-    }
-    const hex = c.toString(16).toUpperCase().padStart(4, "0");
-    return { where, why: `contains a stray control character (U+${hex})`, fix: FIX_CTRL };
+// Scans text char-by-char; classify(code) returns a { why, fix } descriptor
+// for a banned code point or null. Locates the first hit as line:col relative
+// to the start of `text`.
+function charScanError(text, classify) {
+  for (let i = 0; i < text.length; i++) {
+    const hit = classify(text.charCodeAt(i));
+    if (!hit) continue;
+    const { line, column } = posOf(text, i);
+    return { where: loc(line, column), ...hit };
   }
   return null;
 }
 
-// Scans one string (an inserted-text fragment, not the whole file) for a
-// banned dash/ellipsis char. line:col is relative to the start of `text`.
-function dashLiteralError(text) {
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    const name = DASH_CHAR_NAMES[code];
-    if (!name) continue;
-    const { line, column } = posOf(text, i);
-    const fix = code === 0x2026 ? FIX_ELLIPSIS : FIX_DASH;
-    return { where: loc(line, column), why: `introduces a banned ${name} character`, fix };
+function classifyControlChar(c) {
+  // Allowed whitespace controls: tab(0x09) LF(0x0A) FF(0x0C) CR(0x0D).
+  // Forbidden: other C0 (<=0x1F), DEL+C1 (0x7F-0x9F), and U+FFFD.
+  if (c >= 0x20 && c < 0x7f) return null; // printable ASCII: never a control char
+  const allowed = c === 0x09 || c === 0x0a || c === 0x0c || c === 0x0d;
+  const bad = c === 0xfffd || (c <= 0x1f && !allowed) || (c >= 0x7f && c <= 0x9f);
+  if (!bad) return null;
+  if (c === 0x00) return { why: "contains a NUL byte (U+0000)", fix: FIX_CTRL };
+  if (c === 0xfffd) {
+    return {
+      why: "contains the Unicode replacement character (U+FFFD), a sign of broken/mis-decoded encoding",
+      fix: "The text was decoded with the wrong encoding. Re-read the source and re-type the affected text, then save as UTF-8.",
+    };
   }
-  return null;
+  const hex = c.toString(16).toUpperCase().padStart(4, "0");
+  return { why: `contains a stray control character (U+${hex})`, fix: FIX_CTRL };
+}
+
+function classifyDashChar(c) {
+  const name = DASH_CHAR_NAMES[c];
+  if (!name) return null;
+  const fix = c === 0x2026 ? FIX_ELLIPSIS : FIX_DASH;
+  return { why: `introduces a banned ${name} character`, fix };
+}
+
+function controlCharError(content) {
+  return charScanError(content, classifyControlChar);
+}
+
+function dashLiteralError(text) {
+  return charScanError(text, classifyDashChar);
 }
 
 // Checks only the text a tool call would INSERT, never the reconstructed
 // full file -- editing a file that already has a stray dash/ellipsis
 // elsewhere must not be blocked, only a newly introduced one.
 function dashCharError(ti) {
+  if (!ti) return null;
   if (typeof ti.content === "string") return dashLiteralError(ti.content);
   if (Array.isArray(ti.edits)) {
     for (let idx = 0; idx < ti.edits.length; idx++) {

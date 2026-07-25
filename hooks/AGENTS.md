@@ -105,11 +105,9 @@ expression`, and a `tsconfig.json` with `//` comments must ALLOW.
   field and `old_string`/`new_string` replay. Deliberate (the exact Edit hook
   payload schema was never confirmed). Keep both paths.
 - **`dashCharError()` scans only the INSERTED text, never the reconstructed
-  file.** It reads straight from `tool_input` (Write `content`, Edit
-  `new_string`, each MultiEdit `edits[].new_string`), not the `content` string
-  `reconstruct()` builds. This is deliberate: a file that already has an em
-  dash, en dash, or ellipsis elsewhere must stay editable, only a newly
-  introduced one denies. Do not switch it to scanning `content`.
+  file.** Deliberate (rationale in its source comment): a file that already
+  has a dash or ellipsis elsewhere must stay editable. Do not switch it to
+  scanning `content`.
 - **Biome runs as the native exe via a constructed path**
   (`@biomejs/cli-<platform>-<arch>`), with a `node bin/biome` shim fallback.
   `biomeCmd()` returns `[bin, ...prefixArgs]`. No directory globbing — keep it.
