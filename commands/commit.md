@@ -56,17 +56,17 @@ Typed outcomes and what to do:
   `~/.claude/commands/commit.md.pre-compiled.bak` (not versioned in this repo, so it may not
   exist elsewhere). Do not execute the archived prose yourself.
 
-## Merge extra
+## Merge into develop (default)
 
-Pushing the current branch is the runner's job and happens by default. Merging is not:
-perform it only when the user explicitly asked in this invocation (words like "and merge"),
-and only after COMMITTED:
+Pushing the current branch is the runner's job and happens by default. After COMMITTED,
+merging into the integration branch is also the default: resolve it (develop, falling back
+to main/master), and if the current branch already is the integration branch there is
+nothing extra to do, the runner already pushed it. Otherwise:
 
-- Merge: resolve the integration branch (develop, falling back to main/master). Then:
-  `git fetch origin <integration>`, `git checkout <integration>`,
+- `git fetch origin <integration>`, `git checkout <integration>`,
   `git pull --ff-only origin <integration>`, `git merge --no-edit <feature-branch>`,
   `git push origin <integration>`, `git checkout <feature-branch>`.
   On any conflict or non-fast-forward pull: abort the merge, return to the feature branch,
   stop and report. Never force-push, never resolve conflicts silently.
-- If the current branch already is the integration branch, merge is meaningless: nothing
-  extra to do, the runner already pushed it.
+- Skip the merge only when the user asked for commit-only (words like "commit only",
+  "don't merge") or the branch is part of a PR flow that reviews before merge.

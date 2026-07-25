@@ -20,6 +20,10 @@
  *   - Ruff   -> Python via `python -m ruff format`
  *   - Dart   -> Flutter/Dart via `dart format` (~0.2s; the heaviest engine -- Dart VM startup)
  *   - inline -> reject NUL, U+FFFD, stray control chars in any text file
+ *   - inline -> reject a NEWLY INSERTED em dash, en dash, or horizontal
+ *               ellipsis character; a file that already has one elsewhere is
+ *               left alone (only Write content / Edit new_string / MultiEdit
+ *               edits[].new_string are scanned, never the whole file)
  *   - JSON   -> JSON.parse fallback when Biome can't be located
  *
  * Fail-open by design: if the hook errors, can't read the content, or an engine
@@ -47,6 +51,18 @@ const BIOME_EXTS = new Set([
 
 const FIX_CTRL =
   "Remove the character (it usually comes from a bad copy-paste or a non-UTF-8 source), re-type the affected text, and save as UTF-8.";
+
+// Numeric code points only, on purpose -- same reason as the control-char
+// scan below (see AGENTS.md hard rule: keep this source pure ASCII).
+const DASH_CHAR_NAMES = {
+  0x2014: "em dash (U+2014)",
+  0x2013: "en dash (U+2013)",
+  0x2026: "ellipsis (U+2026)",
+};
+
+const FIX_DASH =
+  "Replace the em dash / en dash with an ASCII hyphen, or rephrase using a comma, colon, or parentheses.";
+const FIX_ELLIPSIS = "Replace the ellipsis character with three ASCII dots (...).";
 
 function allow() {
   process.exit(0); // no output => tool proceeds
@@ -140,6 +156,39 @@ function controlCharError(content) {
     const hex = c.toString(16).toUpperCase().padStart(4, "0");
     return { where, why: `contains a stray control character (U+${hex})`, fix: FIX_CTRL };
   }
+  return null;
+}
+
+// Scans one string (an inserted-text fragment, not the whole file) for a
+// banned dash/ellipsis char. line:col is relative to the start of `text`.
+function dashLiteralError(text) {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    const name = DASH_CHAR_NAMES[code];
+    if (!name) continue;
+    const { line, column } = posOf(text, i);
+    const fix = code === 0x2026 ? FIX_ELLIPSIS : FIX_DASH;
+    return { where: loc(line, column), why: `introduces a banned ${name} character`, fix };
+  }
+  return null;
+}
+
+// Checks only the text a tool call would INSERT, never the reconstructed
+// full file -- editing a file that already has a stray dash/ellipsis
+// elsewhere must not be blocked, only a newly introduced one.
+function dashCharError(ti) {
+  if (typeof ti.content === "string") return dashLiteralError(ti.content);
+  if (Array.isArray(ti.edits)) {
+    for (let idx = 0; idx < ti.edits.length; idx++) {
+      const newStr = ti.edits[idx] && ti.edits[idx].new_string;
+      if (typeof newStr !== "string") continue;
+      const err = dashLiteralError(newStr);
+      if (!err) continue;
+      return { ...err, where: `edit ${idx + 1}, ${err.where}` };
+    }
+    return null;
+  }
+  if (typeof ti.new_string === "string") return dashLiteralError(ti.new_string);
   return null;
 }
 
@@ -322,13 +371,15 @@ function validateDart(content) {
   };
 }
 
-function validate(filePath, content) {
+function validate(filePath, content, ti) {
   const ext = path.extname(filePath).toLowerCase();
   // Control-char scan runs before Biome/Ruff for text files, so a file with both
   // a control char and a syntax error reports the control char (deterministic).
   if (TEXT_EXTS.has(ext)) {
     const cc = controlCharError(content);
     if (cc) return cc;
+    const dash = dashCharError(ti);
+    if (dash) return dash;
   }
   if (ext === ".py") return validatePython(content);
   if (ext === ".dart") return validateDart(content);
@@ -363,7 +414,7 @@ process.stdin.on("end", () => {
 
   let error = null;
   try {
-    error = validate(filePath, content);
+    error = validate(filePath, content, ti);
   } catch {
     return allow(); // validator crash -> don't block
   }
