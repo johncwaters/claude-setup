@@ -52,6 +52,7 @@ Copy-Config "VSCodium keybindings" (Join-Path $setupDir "vscodium\keybindings.js
 Copy-Config "VSCodium mcp.json"    (Join-Path $setupDir "vscodium\mcp.json")         (Join-Path $codiumUser "mcp.json")
 Copy-Config "glissa config"        (Join-Path $setupDir "glissa\config.json")        (Join-Path $env:USERPROFILE ".glissa\config.json")
 Copy-Config "gitconfig"            (Join-Path $setupDir "git\.gitconfig")            (Join-Path $env:USERPROFILE ".gitconfig")
+Copy-Config "Codex AGENTS.md"      (Join-Path $setupDir "..\AGENTS.md")              (Join-Path $env:USERPROFILE ".codex\AGENTS.md")
 $wtDir = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
 if (Test-Path $wtDir) { Copy-Config "Windows Terminal" (Join-Path $setupDir "terminal\settings.json") (Join-Path $wtDir "settings.json") }
 if (-not (Test-Path $wtDir)) { Note-Warned "Windows Terminal" "not installed, skipping settings" }
