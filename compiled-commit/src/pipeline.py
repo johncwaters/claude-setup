@@ -71,12 +71,7 @@ def resolve_integration_branch(git):
 
 
 def _intent_block(context):
-    """Author-intent lines shared by the slop and review prompts.
-
-    Without this, review stages judge the diff blind to intent: a change that
-    implements a previously requested fix reads as unexplained, and successive
-    runs flag reversals of each other's suggestions (finding ping-pong).
-    """
+    """Author-intent lines shared by the slop and review prompts."""
     if not context:
         return []
     return [
