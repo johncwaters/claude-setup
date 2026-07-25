@@ -29,6 +29,17 @@ Go easy on comments. Default to none. Comment only the "why", never the "what".
 - Doc comments on public APIs follow the project's existing convention; keep them factual and brief.
 </code_style_comments>
 
+<code_style_naming>
+Name variables and functions so the code reads almost like natural language. `if (totalCardsInDeck > 0)` beats `if (tcd > 0)` or `if (count > 0)`.
+- Names state what the value IS or what the function DOES, in domain words: `remainingRetryBudget`, `isDeckEmpty`, `markInvoicePaid`, not `val`, `flag2`, `handleData`.
+- Booleans read as assertions: `is`/`has`/`can`/`should` prefixes (`hasUnsavedChanges`, `canRedeal`).
+- Functions are verb phrases; collections are plural or `xById`/`xByName` maps; units and qualifiers go in the name when ambiguity is possible (`timeoutMs`, `priceInCents`, `maxVisibleRows`).
+- No abbreviations except universally understood ones (`id`, `url`, `max`, `min`, `i`/`j` only in tight index loops). No single letters, no `tmp`/`data`/`info`/`result` when a specific name exists, no encoding the type in the name.
+- Length follows scope: a name alive for 3 lines may be short; one crossing a function boundary or file must be self-explanatory without reading its definition.
+- If a comment is needed to explain what a variable holds, the name is wrong: rename instead.
+- The read-aloud test: if a line cannot be read aloud as a rough English sentence, rename until it can.
+</code_style_naming>
+
 <routing>
 Single source of truth for model selection, subagent delegation, and Codex offload. No other section in this file governs routing.
 
