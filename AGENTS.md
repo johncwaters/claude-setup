@@ -40,6 +40,13 @@ Name variables and functions so the code reads almost like natural language. `if
 - The read-aloud test: if a line cannot be read aloud as a rough English sentence, rename until it can.
 </code_style_naming>
 
+<ui_button_labels>
+Never repurpose a button's label as a status indicator. A button labeled "Commit" stays "Commit" for its whole lifecycle, never "Analyzing...", "Saving...", or "Loading...".
+- Show progress outside the label: disable the control, add a spinner next to (not instead of) the text, or render status text in a separate element.
+- A stable label keeps layout from shifting and keeps the action findable mid-operation.
+- Applies to every action control (buttons, menu items, links styled as buttons) in every framework.
+</ui_button_labels>
+
 <research_not_assume>
 Do not assume. Research. Do not bandaid. Fix upstream.
 - Unknown API/SDK/framework: fetch official docs (or `document-specialist` agent) before writing. Training data is stale.
