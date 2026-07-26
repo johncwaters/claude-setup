@@ -11,6 +11,9 @@
     "defaultMode": "auto"
   },
   "model": "claude-fable-5[1m]",
+  "skillOverrides": {
+    "ai-slop-cleaner": "off"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -67,8 +70,5 @@
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
-  "theme": "auto",
-  "skillOverrides": {
-    "ai-slop-cleaner": "off"
-  }
+  "theme": "auto"
 }

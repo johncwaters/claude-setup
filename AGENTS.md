@@ -41,10 +41,14 @@ Name variables and functions so the code reads almost like natural language. `if
 </code_style_naming>
 
 <ui_button_labels>
-Never repurpose a button's label as a status indicator. A button labeled "Commit" stays "Commit" for its whole lifecycle, never "Analyzing...", "Saving...", or "Loading...".
-- Show progress outside the label: disable the control, add a spinner next to (not instead of) the text, or render status text in a separate element.
+A button's label carries NO state of any kind, ever. One control, one constant label for its whole lifecycle.
+- No progress words: "Commit" stays "Commit", never "Analyzing...", "Saving...", or "Loading...".
+- No counts or data: "Open listing", never "List 79 cards". Counts, totals, and dollar values go in status text or dialog copy next to the control.
+- No outcome- or situation-dependent variants: never "Run again", "Publish again", "Retry", or "They are live, mark done" for a control whose stable action name is "Update prices", "Publish live", or "Mark as published". Label the action, not the situation; the surrounding copy explains the situation.
+- No toggling label with panel state: never "Run"/"Hide" swaps; use a stable label plus a separate expanded/selected indicator.
+- Progress indicators live OUTSIDE the button element entirely: disable the control and render a spinner or status text as a sibling next to it. A spinner inside the button is a violation even when the label text is unchanged.
 - A stable label keeps layout from shifting and keeps the action findable mid-operation.
-- Applies to every action control (buttons, menu items, links styled as buttons) in every framework.
+- Applies to every action control (buttons, menu items, links styled as buttons), in every framework, and in mockups and prototypes as much as shipped UI.
 </ui_button_labels>
 
 <research_not_assume>
