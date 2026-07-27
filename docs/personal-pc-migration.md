@@ -47,10 +47,10 @@ All three comparisons must pass. Do not rationalize a diff away; a mismatch mean
 ```powershell
 $snap = Join-Path $env:TEMP "profile-migration-snapshot"
 fc.exe /b "$snap\CLAUDE.md" "$env:USERPROFILE\.claude\CLAUDE.md"
-fc.exe /b "$snap\commit.md" "$env:USERPROFILE\.claude\commands\commit.md"
+fc.exe /b "$env:USERPROFILE\.claude\profiles\personal\commit.md" "$env:USERPROFILE\.claude\commands\commit.md"
 ```
 
-Both must report no differences (byte identical). `settings.json` is compared semantically because key order changes:
+Both must report no differences. `CLAUDE.md` is compared against the snapshot byte for byte. `commit.md` is compared against its profile source instead of the snapshot because the branch intentionally added a frontmatter `description` block to the command after the pre-migration baseline; against the snapshot, that leading frontmatter block is the only acceptable difference, and any other diff fails the test. `settings.json` is compared semantically because key order changes:
 
 ```powershell
 node -e "const f=require('fs');const eq=(a,b)=>{if(typeof a!==typeof b)return false;if(a===null||typeof a!=='object')return a===b;const ka=Object.keys(a).sort(),kb=Object.keys(b).sort();if(JSON.stringify(ka)!==JSON.stringify(kb))return false;return ka.every(k=>eq(a[k],b[k]))};const s=JSON.parse(f.readFileSync(process.env.TEMP+'/profile-migration-snapshot/settings.json','utf8'));const r=JSON.parse(f.readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log(eq(s,r)?'settings MATCH':'settings DIFFER')"

@@ -1,3 +1,7 @@
+---
+description: Personal workflow. Compiled runner does slop cleanup, code review, conventional message, commit, push, then merges into develop by default.
+---
+
 # Commit (compiled)
 
 This workflow is compiled. The runner at `$HOME\.claude\compiled-commit\runner.py` owns the

@@ -1,3 +1,7 @@
+---
+description: Work workflow. Compiled runner does slop cleanup, code review, conventional message, commit, push of the feature branch. Never merges; hands off to /elm-pull-request.
+---
+
 # Commit (compiled)
 
 This workflow is compiled. The runner at `$HOME\.claude\compiled-commit\runner.py` owns the
