@@ -34,6 +34,8 @@ Each machine adopts one profile, `personal` or `work`, and apply runs only that 
 
 The work profile installs nothing beyond biome and the pip tools, so it assumes git, node, and python are already on the machine. When node is missing, apply warns instead of failing and `settings.json` gets rendered on the next run after node is installed.
 
+Extension sync direction is per profile (`vscodiumExtensionSync` in `profile.json`): `personal` syncs exactly to `extensions.txt`, uninstalling extras; `work` is additive, installing the tracked list but never uninstalling, so machine-specific extensions (sideloaded work tooling) survive.
+
 The chosen profile lives in a `.machine-profile` marker file at the repo root (ignored by git, so it stays local to the machine). Set it once by passing `-Profile personal` or `-Profile work` to `install.ps1` or `apply.ps1`; the marker records the choice and later runs reuse it. With no marker and no flag, apply prompts for the profile on an interactive host. Each profile's exact step list is `profiles/<profile>/profile.json`.
 
 ## Setup on a new machine: one command

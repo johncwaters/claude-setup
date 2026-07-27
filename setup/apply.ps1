@@ -422,6 +422,10 @@ if (Step-Enabled "python-tools") {
 Write-Section "VSCodium extensions"
 if (-not (Step-Enabled "vscodium-extensions")) { Note-Skipped "VSCodium extensions" }
 if (Step-Enabled "vscodium-extensions") {
+    # exact sync removes extras (personal default); additive never uninstalls, so
+    # machine-specific extensions (e.g. sideloaded work tooling) survive on work machines
+    $extSync = "exact"
+    if ($profileJson.vscodiumExtensionSync) { $extSync = $profileJson.vscodiumExtensionSync }
     $extFile = Join-Path $setupDir "vscodium\extensions.txt"
     if (-not (Get-Command codium -ErrorAction SilentlyContinue)) { Note-Warned "codium" "not on PATH, skipping extensions" }
     if ((Test-Path $extFile) -and (Get-Command codium -ErrorAction SilentlyContinue)) {
@@ -429,19 +433,23 @@ if (Step-Enabled "vscodium-extensions") {
         $have = codium --list-extensions
         $missing = @($wanted | Where-Object { $have -notcontains $_ })
         $extra = @($have | Where-Object { $wanted -notcontains $_ })
-        if ($missing.Count -eq 0 -and $extra.Count -eq 0) { Note-Present "extensions" "all $($wanted.Count) in sync" }
+        if ($extSync -eq "exact" -and $missing.Count -eq 0 -and $extra.Count -eq 0) { Note-Present "extensions" "all $($wanted.Count) in sync" }
+        if ($extSync -ne "exact" -and $missing.Count -eq 0) { Note-Present "extensions" "all $($wanted.Count) present" }
         foreach ($ext in $missing) {
             Write-Line " .. " Yellow $ext "installing"
             codium --install-extension $ext | Out-Null
             if ($LASTEXITCODE -eq 0) { Note-Installed $ext "installed"; continue }
             Note-Warned $ext "install failed"
         }
-        foreach ($ext in $extra) {
-            Write-Line " .. " Yellow $ext "uninstalling (not in extensions.txt)"
-            codium --uninstall-extension $ext | Out-Null
-            if ($LASTEXITCODE -eq 0) { Note-Applied $ext "removed"; continue }
-            Note-Warned $ext "uninstall failed"
+        if ($extSync -eq "exact") {
+            foreach ($ext in $extra) {
+                Write-Line " .. " Yellow $ext "uninstalling (not in extensions.txt)"
+                codium --uninstall-extension $ext | Out-Null
+                if ($LASTEXITCODE -eq 0) { Note-Applied $ext "removed"; continue }
+                Note-Warned $ext "uninstall failed"
+            }
         }
+        if ($extSync -ne "exact" -and $extra.Count -gt 0) { Note-Present "extensions extra" "$($extra.Count) kept (additive sync)" }
     }
 }
 
