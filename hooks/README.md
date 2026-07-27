@@ -20,7 +20,9 @@ so the agent can correct it immediately instead of guessing.
 
 ## How it's wired
 
-In `C:\Users\johnw\.claude\settings.json` (user-level = **global**, all projects):
+The hooks block now lives in `settings.base.json` with `{{HOME}}` tokens, and
+`setup/apply.ps1` renders it into the machine's `settings.json` (user-level =
+**global**, all projects), substituting the real home path for each token:
 
 ```json
 "hooks": {
@@ -28,7 +30,7 @@ In `C:\Users\johnw\.claude\settings.json` (user-level = **global**, all projects
     {
       "matcher": "Write|Edit|MultiEdit",
       "hooks": [
-        { "type": "command", "command": "node C:/Users/johnw/.claude/hooks/validate-file.mjs" }
+        { "type": "command", "command": "node {{HOME}}/.claude/hooks/validate-file.mjs" }
       ]
     }
   ]

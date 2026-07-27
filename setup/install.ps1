@@ -1,6 +1,7 @@
 # One-command machine bootstrap: clone or update claude-setup, then apply it.
 param(
     [switch]$SkipInstalls,
+    [ValidateSet("personal","work")][string]$Profile,
     [string]$Root = (Join-Path $env:USERPROFILE ".claude")
 )
 $ErrorActionPreference = "Stop"
@@ -42,4 +43,6 @@ if (-not $isRepo) {
 }
 Write-Host "  At commit $(git -C $Root rev-parse --short HEAD)" -ForegroundColor DarkGray
 
-& (Join-Path $Root "setup\apply.ps1") -SkipInstalls:$SkipInstalls
+$applyArgs = @{ SkipInstalls = $SkipInstalls }
+if ($Profile) { $applyArgs.Profile = $Profile }
+& (Join-Path $Root "setup\apply.ps1") @applyArgs

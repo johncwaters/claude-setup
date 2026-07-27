@@ -1,6 +1,11 @@
 # Collect live machine config into this repo. Run before committing config changes.
 $ErrorActionPreference = "Stop"
 $setupDir = $PSScriptRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$markerPath = Join-Path $repoRoot ".machine-profile"
+$machineProfile = "personal"
+if (Test-Path $markerPath) { $machineProfile = (Get-Content $markerPath -Raw).Trim() }
+if (-not (Test-Path $markerPath)) { Write-Warning "no .machine-profile marker, assuming personal" }
 
 function Copy-IfExists($src, $dest) {
     if (-not (Test-Path $src)) { Write-Warning "missing: $src"; return }
@@ -18,6 +23,11 @@ $codium = Get-Command codium -ErrorAction SilentlyContinue
 if ($codium) {
     codium --list-extensions | Sort-Object | Set-Content -Encoding utf8 (Join-Path $setupDir "vscodium\extensions.txt")
     Write-Host "collected: extension list"
+}
+
+if ($machineProfile -eq "work") {
+    Write-Host "note: glissa, repos, gitconfig, terminal, and npm-globals collection are personal-profile only; workflow edits (CLAUDE.md, settings.json, commit.md) are committed directly from ~/.claude, not collected."
+    return
 }
 
 # Glissa

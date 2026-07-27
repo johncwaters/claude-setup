@@ -4,11 +4,11 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
 
 ## What is tracked
 
-- `CLAUDE.md`: global instructions (routing, delegation, style rules)
-- `settings.json`: model, permissions, hooks, enabled plugins
+- `profiles/`: per machine profile config. `personal/` and `work/` each hold a `CLAUDE.md`, a `commit.md`, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
+- `settings.base.json`: the settings shared by every profile (model, hooks, status line, effort, and so on), with `{{HOME}}` tokens that apply fills in for the machine
 - `skills/`: custom skills (impeccable, ai-slop-cleaner, code-review, release); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer)
-- `commands/`: custom slash commands (commit, seo-audit)
+- `commands/`: custom slash commands (seo-audit is tracked directly; commit is rendered per profile, see Machine profiles below)
 - `hooks/`: file-format guard hook (validate-file)
 - `setup/`: everything beyond Claude Code
   - `vscodium/`: settings, keybindings, mcp.json, extensions.txt
@@ -21,7 +21,20 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
   - `fonts/`: CommitMono (referenced by VSCodium settings)
   - `collect.ps1` / `apply.ps1`: sync scripts (see below)
 
-Everything else in `~/.claude` (credentials, history, sessions, caches, plugins) is ignored. Plugins reinstall automatically on first launch from `enabledPlugins` and `extraKnownMarketplaces` in `settings.json`.
+`CLAUDE.md`, `settings.json`, and `commands/commit.md` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, the two markdown files copied straight from the profile), so the live files exist on disk but git ignores them.
+
+Everything else in `~/.claude` (credentials, history, sessions, caches, plugins) is ignored. Plugins reinstall automatically on first launch from the `enabledPlugins` and `extraKnownMarketplaces` that end up in the rendered `settings.json`.
+
+## Machine profiles
+
+Each machine adopts one profile, `personal` or `work`, and apply runs only that profile's steps.
+
+- `personal` runs the full set: workflow config and settings render, VSCodium config, glissa, gitconfig, Codex AGENTS.md, Windows Terminal, software installs, fonts, project repos, npm globals, python tools, and VSCodium extensions.
+- `work` runs a focused set: workflow config and settings render, VSCodium config, fonts, the biome hook dependency, python tools, and VSCodium extensions. It skips all software installs, project repos, npm globals sync, glissa, gitconfig, and Windows Terminal.
+
+The work profile installs nothing beyond biome and the pip tools, so it assumes git, node, and python are already on the machine. When node is missing, apply warns instead of failing and `settings.json` gets rendered on the next run after node is installed.
+
+The chosen profile lives in a `.machine-profile` marker file at the repo root (ignored by git, so it stays local to the machine). Set it once by passing `-Profile personal` or `-Profile work` to `install.ps1` or `apply.ps1`; the marker records the choice and later runs reuse it. With no marker and no flag, apply prompts for the profile on an interactive host. Each profile's exact step list is `profiles/<profile>/profile.json`.
 
 ## Setup on a new machine: one command
 
@@ -29,6 +42,12 @@ Paste into PowerShell (only prereq is winget, which ships with Windows 11). A br
 
 ```powershell
 winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements; $env:Path=[Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')+';'+$env:Path; $d="$env:USERPROFILE\.claude"; New-Item -ItemType Directory -Force $d | Out-Null; git -C $d init -b master; git -C $d config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C $d config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C $d fetch origin; git -C $d checkout -f -B master origin/master; powershell -ExecutionPolicy Bypass -File "$d\setup\install.ps1"
+```
+
+For a work machine, use the same one-liner with the profile flag on the final call:
+
+```powershell
+winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements; $env:Path=[Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')+';'+$env:Path; $d="$env:USERPROFILE\.claude"; New-Item -ItemType Directory -Force $d | Out-Null; git -C $d init -b master; git -C $d config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C $d config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C $d fetch origin; git -C $d checkout -f -B master origin/master; powershell -ExecutionPolicy Bypass -File "$d\setup\install.ps1" -Profile work
 ```
 
 That bootstraps git, clones this repo into `~/.claude`, and runs `setup/install.ps1`, which pulls latest and hands off to `setup/apply.ps1`: config copies, then installs anything missing (git, gh, node, Claude Code, VSCodium, CommitMono fonts, project repos from `repos.txt`, npm globals, VSCodium extensions). Extensions sync exactly to `extensions.txt`; project repos clone into `~/Projects`, fast-forward on reruns, and get their node deps installed. Everything is idempotent; rerun any time.
@@ -40,6 +59,8 @@ powershell -File $env:USERPROFILE\.claude\setup\install.ps1
 ```
 
 Pulls latest and applies. `-SkipInstalls` copies config only.
+
+Sync through `install.ps1`, not a bare `git pull`. Because the rendered `CLAUDE.md`, `settings.json`, and `commands/commit.md` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. `install.ps1` pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
 
 ## Auth checklist (manual, once per machine)
 
@@ -55,4 +76,4 @@ Nothing secret syncs through this repo, so log in fresh:
 
 ## Publishing changes from a machine
 
-`powershell -File ~\.claude\setup\collect.ps1` grabs live VSCodium/glissa/git/terminal config into the repo, then add/commit/push from `~/.claude`. Claude Code files (CLAUDE.md, skills, etc.) live in the repo directly; no collect step needed for them.
+`powershell -File ~\.claude\setup\collect.ps1` grabs live VSCodium/glissa/git/terminal config into the repo, then add/commit/push from `~/.claude`. On a work machine collect gathers only the VSCodium config; the rest is personal only. Claude Code files (skills, agents, and the profile workflow files under `profiles/`) live in the repo directly; no collect step is needed for them. Edit the workflow config in `profiles/<profile>/`, not the rendered root copies, since those are regenerated by apply.

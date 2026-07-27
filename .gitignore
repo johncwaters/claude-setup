@@ -6,9 +6,8 @@
 !.gitignore
 !.gitattributes
 !README.md
-!CLAUDE.md
 !AGENTS.md
-!settings.json
+!settings.base.json
 !agents/**
 !docs/**
 !hud/**
@@ -17,6 +16,7 @@
 !skills/**
 !setup/**
 !compiled-commit/**
+!profiles/**
 
 # Never sync these even if a rule above matches
 .credentials.json
@@ -26,6 +26,10 @@ settings.local.json
 *.tmp.*
 __pycache__/
 *.py[cod]
+/CLAUDE.md
+/settings.json
+commands/commit.md
+/.machine-profile
 
 # Runtime/state dirs (blocked by * already, listed for clarity)
 projects/
