@@ -523,8 +523,6 @@ class Pipeline:
 
         origin_exists = "origin" in self.git.list_remotes()
         if origin_exists:
-            # refs/remotes/origin/* may be stale when sync was skipped; refresh them before
-            # deciding whether develop or a mainline exists (fetches of absent refs just fail)
             for name in ("develop",) + MAINLINE_CANDIDATES:
                 self.git.fetch("origin", name)
 
