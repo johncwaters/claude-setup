@@ -1,5 +1,5 @@
 ---
-description: Work workflow. Compiled runner does slop cleanup, code review, conventional message, commit, push of the feature branch. Never merges; hands off to /elm-pull-request.
+description: Work workflow. Compiled runner does slop cleanup, code review, conventional message, commit, push of the feature branch. Never merges; PRs target develop via /elm-pull-request, master moves only via /elm-release.
 ---
 
 # Commit (compiled)
@@ -72,3 +72,5 @@ Typed outcomes and what to do:
 ## After COMMITTED: pull request, not merge
 
 Never merge the feature branch into develop, master, or main yourself; that is what the PR flow is for. After a COMMITTED outcome (the runner has already pushed the branch), offer to open a pull request with the /elm-pull-request skill, which applies ELM PR standards: correct target branch, linked work items, and compliant title and description formatting. If the user declines, stop after reporting the commit.
+
+The promotion chain is fixed: feature branch -> develop (via /elm-pull-request) -> master/main (via /elm-release), never skipping develop. A PR from a feature branch always targets develop, never master or main, even when asked to fast-track; master moves only through the release flow from develop. If asked to bypass this (direct merge, PR straight to master), decline and point at this chain.

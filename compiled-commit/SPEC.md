@@ -38,10 +38,11 @@ Typed state machine. Each stage returns either next state or a typed terminal fa
 Terminal states (failures.py enum `Outcome`): COMMITTED, NOT_A_REPO, DETACHED_HEAD,
 OPERATION_IN_PROGRESS, NOTHING_TO_COMMIT, SYNC_DIVERGED, MERGE_CONFLICT, GATE_FAILED,
 REVIEW_DEAD, REVIEW_BLOCKED, SLOP_PATCH_INVALID (warning, non-terminal), MESSAGE_INVALID,
-HOOK_FAILED, PUSH_FAILED.
+HOOK_FAILED, PUSH_FAILED, PROMOTE_CONFLICT, PROMOTE_FAILED.
 
 Result object (dataclass, serialized to JSON on stdout at end): outcome, commit_hash,
-commit_message, findings (slop + review), warnings, llm_usage (per call: name, model,
+commit_message, pushed, promoted (list of branch names promotion advanced, empty by
+default), findings (slop + review), warnings, llm_usage (per call: name, model,
 input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens,
 duration_ms, retries), git_op_count, wall_time_sec, stages_run.
 
@@ -66,7 +67,8 @@ Merge conflict -> `git merge --abort`, MERGE_CONFLICT stop, list conflicting fil
 Changed = union of `git diff --name-only HEAD` and `git diff --cached --name-only`.
 Untracked candidates = `git status --short` lines starting `??`. Include untracked files by
 default (they are part of the change), but exclude obvious junk via denylist
-(node_modules/, dist/, .env*, *.log, __pycache__/). Both empty -> NOTHING_TO_COMMIT.
+(node_modules/, dist/, .env*, *.log, __pycache__/). Both empty -> NOTHING_TO_COMMIT
+(with --promote this does not terminate the run; see Stage 10 for the sync-repair path).
 
 ### Stage 4 DIFF PACKET (src/validators.py build_diff_packet)
 `git diff HEAD` for tracked; for each included untracked file under 20KB append a synthetic
@@ -122,6 +124,56 @@ No `origin` remote configured -> skip with a warning, outcome stays COMMITTED. O
 when it does not. Nonzero exit -> PUSH_FAILED with stderr captured; commit_hash from
 Stage 8 is still populated in the result. Success: result field `pushed` set true.
 
+### Stage 10 PROMOTE (runs only with --promote, after a successful COMMIT and a successful
+or skipped-by---no-push PUSH; skipped entirely when --promote is absent, contributing
+nothing to stages_run)
+Clean-tree sync-repair path: when SCOPE finds nothing to commit and --promote is set, do
+not terminate at SCOPE; skip Stages 4 through 9 (no LLM calls, no commit, no push) and run
+PROMOTE anyway from the current branch. The outcome stays NOTHING_TO_COMMIT (exit code
+unchanged) with the promoted list, promote warnings, and the PROMOTE stage entry
+populated. PROMOTE_CONFLICT and PROMOTE_FAILED still win as the outcome when promotion
+fails on this path. This makes "--promote on a clean tree" an idempotent carry of develop
+into mainline, e.g. after a pull request merges into develop.
+Invariant: every change flows feature -> develop -> mainline (main or master), never
+skipping develop; mainline only ever receives merges from develop, keeping develop and
+mainline in sync.
+Resolve mainline: first existing of main, master (`refs/heads/<b>` then
+`refs/remotes/origin/<b>`). Resolve develop: existing `refs/heads/develop` or
+`refs/remotes/origin/develop`. If develop is missing and mainline exists, create local
+develop at mainline's tip (prefer `origin/<mainline>` after a fetch when origin exists,
+otherwise local mainline), warn that it was created, and `git push -u origin develop` when
+origin exists. Neither develop nor mainline present -> warning "no develop or mainline
+branch; promotion skipped", stage records PROMOTE(skipped), outcome stays COMMITTED.
+Hops from the current branch B:
+- B == mainline: warning "commit landed directly on <mainline>; promotion skipped, develop
+  not updated", PROMOTE(skipped), stay COMMITTED (mainline is never merged into develop).
+- B == develop: hop [develop -> mainline] when mainline exists; no mainline -> nothing to
+  do (PROMOTE(skipped) with a note).
+- otherwise: hops [B -> develop, develop -> mainline], dropping the second when no mainline.
+Each hop src -> dst, in order:
+1. When origin exists: `git fetch origin <dst>` (failure -> warning, continue with local
+   state), then `git fetch origin <dst>:<dst>`; a non-fast-forward rejection here means
+   local dst diverged from origin -> PROMOTE_FAILED (commit_hash and pushed stay populated).
+   Other failures (dst absent on origin, checked out elsewhere) -> warning, continue local.
+2. `git fetch . <src>:<dst>` to fast-forward dst to src without touching the working tree
+   (the normal path, since SYNC already merged develop into the feature branch, and it
+   works even when unrelated files are dirty).
+3. Non-fast-forward rejection of step 2 -> fall back to a real merge: require a clean
+   working tree (`git status --porcelain` empty ignoring untracked); if dirty ->
+   PROMOTE_FAILED "working tree not clean; cannot merge <src> into <dst>". Otherwise
+   remember the original branch, `git checkout <dst>`, `git merge --no-edit <src>`; on
+   conflict collect the files, `git merge --abort`, `git checkout <original>`,
+   PROMOTE_CONFLICT with the files listed; on success `git checkout <original>`.
+4. Step 2 refused because dst is checked out in another worktree (stderr contains
+   "checked out") -> PROMOTE_FAILED naming the branch.
+5. Push: origin present -> `git push origin <dst>` (plain refspec, no checkout); nonzero ->
+   PROMOTE_FAILED with stderr. No origin -> a single stage warning "no origin remote;
+   promoted branches updated locally only", keep going.
+6. On success append dst to the result list `promoted`.
+Never force-push, never delete branches, never auto-resolve conflicts, never `--no-verify`.
+PROMOTE_CONFLICT and PROMOTE_FAILED are terminal but leave commit_hash, commit_message,
+pushed, and findings from earlier stages intact.
+
 ## LLM adapter (src/llm.py)
 
 `class LlmClient(mode, model, fixtures_dir, record)`.
@@ -143,13 +195,16 @@ Default model: claude-sonnet-5. Never claude-haiku.
 ```
 python runner.py [--repo PATH] [--message "..."] [--no-sync] [--skip-deslop]
                  [--skip-review] [--replay-fixtures DIR] [--record DIR]
-                 [--model ID] [--json] [--no-push]
+                 [--model ID] [--json] [--no-push] [--promote]
 ```
 --repo defaults to cwd. --replay-fixtures: LLM replay mode plus sync skip. --json: print
 full result JSON only. Human output otherwise: terse stage lines then outcome.
 Exit code 0 only for COMMITTED; distinct nonzero per failure class.
 Pushing runs by default after a successful commit (Stage 9). --no-push skips it; the
 benchmark always passes it since a replay clone's origin is the real source repository.
+--promote (default off) enables Stage 10: after commit and push it advances the change
+outward feature -> develop -> mainline. PROMOTE_CONFLICT and PROMOTE_FAILED get distinct
+nonzero exit codes.
 
 ## Benchmark (bench/run_bench.py)
 

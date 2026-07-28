@@ -47,6 +47,16 @@ class GitOps:
     def fetch_update_local_ref(self, remote, branch):
         return self._run(["fetch", remote, f"{branch}:{branch}"])
 
+    def fetch_local_ff(self, src, dst):
+        # Fast-forward local ref dst to src without touching the working tree.
+        return self._run(["fetch", ".", f"{src}:{dst}"])
+
+    def checkout(self, ref):
+        return self._run(["checkout", ref])
+
+    def create_branch_at(self, name, start_point):
+        return self._run(["branch", name, start_point])
+
     def merge_no_edit(self, ref):
         return self._run(["merge", "--no-edit", ref])
 
@@ -112,3 +122,6 @@ class GitOps:
 
     def push_set_upstream(self, remote, branch):
         return self._run(["push", "-u", remote, branch])
+
+    def push_ref(self, remote, branch):
+        return self._run(["push", remote, branch])

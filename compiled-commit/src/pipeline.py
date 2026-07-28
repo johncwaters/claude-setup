@@ -16,6 +16,8 @@ from src.schemas import CODE_REVIEW_SCHEMA, COMMIT_MESSAGE_SCHEMA, SLOP_REVIEW_S
 
 INTEGRATION_BRANCH_CANDIDATES = ("develop", "main", "master")
 
+MAINLINE_CANDIDATES = ("main", "master")
+
 DENYLIST_DIR_PREFIXES = ("node_modules/", "dist/", "__pycache__/")
 
 CONVENTION_NOTE = (
@@ -65,6 +67,15 @@ def compute_scope(git, paths=None):
 
 def resolve_integration_branch(git):
     for name in INTEGRATION_BRANCH_CANDIDATES:
+        if git.verify_ref(f"refs/heads/{name}"):
+            return name
+        if git.verify_ref(f"refs/remotes/origin/{name}"):
+            return name
+    return None
+
+
+def resolve_mainline(git):
+    for name in MAINLINE_CANDIDATES:
         if git.verify_ref(f"refs/heads/{name}"):
             return name
         if git.verify_ref(f"refs/remotes/origin/{name}"):
@@ -143,6 +154,7 @@ class PipelineConfig:
     skip_deslop: bool = False
     skip_review: bool = False
     no_push: bool = False
+    promote: bool = False
     llm_client: object = None
     fixture_prefix: str = "run"
     context: str = None
@@ -164,6 +176,7 @@ class Pipeline:
         self.untracked_files = []
         self.rendered_message = None
         self._diff_packet = None
+        self._no_origin_promote_warned = False
 
     def run(self):
         if not self._workspace_confined():
@@ -180,9 +193,14 @@ class Pipeline:
         if outcome:
             return self._finish(outcome)
 
-        outcome = self._scope()
-        if outcome:
-            return self._finish(outcome)
+        scope_outcome = self._scope()
+        if scope_outcome:
+            if scope_outcome == Outcome.NOTHING_TO_COMMIT and self.config.promote:
+                promote_outcome = self._promote()
+                if promote_outcome:
+                    return self._finish(promote_outcome)
+                return self._finish(Outcome.NOTHING_TO_COMMIT)
+            return self._finish(scope_outcome)
 
         self._slop()
 
@@ -201,6 +219,10 @@ class Pipeline:
         push_outcome = self._push()
         if push_outcome:
             return self._finish(push_outcome)
+
+        promote_outcome = self._promote()
+        if promote_outcome:
+            return self._finish(promote_outcome)
 
         return self._finish(Outcome.COMMITTED)
 
@@ -491,6 +513,186 @@ class Pipeline:
             return Outcome.PUSH_FAILED
 
         self.result.pushed = True
+        return None
+
+    # -- Stage 10 -------------------------------------------------------
+
+    def _promote(self):
+        if not self.config.promote:
+            return None
+
+        mainline = resolve_mainline(self.git)
+        develop_present = self.git.verify_ref("refs/heads/develop") or self.git.verify_ref(
+            "refs/remotes/origin/develop"
+        )
+
+        if not develop_present and mainline is None:
+            self.result.stages_run.append("PROMOTE(skipped)")
+            self.result.warnings.append("no develop or mainline branch; promotion skipped")
+            return None
+
+        current = self.git.current_branch()
+        if mainline is not None and current == mainline:
+            self.result.stages_run.append("PROMOTE(skipped)")
+            self.result.warnings.append(
+                f"commit landed directly on {mainline}; promotion skipped, develop not updated"
+            )
+            return None
+
+        hops = self._promotion_hops(current, mainline)
+        if not hops:
+            self.result.stages_run.append("PROMOTE(skipped)")
+            self.result.warnings.append(
+                "current branch is develop and no mainline exists; nothing to promote"
+            )
+            return None
+
+        self.result.stages_run.append("PROMOTE")
+        origin_exists = "origin" in self.git.list_remotes()
+
+        if not develop_present:
+            self._create_develop(mainline, origin_exists)
+
+        for src, dst in hops:
+            outcome = self._promote_hop(src, dst, origin_exists)
+            if outcome:
+                return outcome
+        return None
+
+    def _promotion_hops(self, current, mainline):
+        if current == "develop":
+            if mainline is None:
+                return []
+            return [("develop", mainline)]
+        hops = [(current, "develop")]
+        if mainline is not None:
+            hops.append(("develop", mainline))
+        return hops
+
+    def _create_develop(self, mainline, origin_exists):
+        start_point = mainline
+        if origin_exists:
+            self.git.fetch("origin", mainline)
+            if self.git.verify_ref(f"refs/remotes/origin/{mainline}"):
+                start_point = f"origin/{mainline}"
+        self.git.create_branch_at("develop", start_point)
+        self.result.warnings.append(
+            f"develop branch did not exist; created it at {start_point}"
+        )
+        if not origin_exists:
+            return
+        push = self.git.push_set_upstream("origin", "develop")
+        if push.returncode != 0:
+            self.result.warnings.append(
+                f"created develop locally but pushing it to origin failed: {(push.stderr or '').strip()}"
+            )
+
+    def _promote_hop(self, src, dst, origin_exists):
+        if origin_exists:
+            outcome = self._sync_dst_with_origin(dst)
+            if outcome:
+                return outcome
+
+        ff = self.git.fetch_local_ff(src, dst)
+        if ff.returncode != 0:
+            outcome = self._handle_ff_refusal(src, dst, ff.stderr or "")
+            if outcome:
+                return outcome
+
+        return self._push_promoted(dst, origin_exists)
+
+    def _sync_dst_with_origin(self, dst):
+        fetch = self.git.fetch("origin", dst)
+        if fetch.returncode != 0:
+            self.result.warnings.append(
+                f"could not fetch origin {dst}; continuing with local state: {(fetch.stderr or '').strip()}"
+            )
+            return None
+
+        update = self.git.fetch_update_local_ref("origin", dst)
+        if update.returncode == 0:
+            return None
+
+        stderr = update.stderr or ""
+        if "non-fast-forward" in stderr or "rejected" in stderr:
+            self.result.warnings.append(
+                f"local {dst} has diverged from origin/{dst}; promotion stopped"
+            )
+            return Outcome.PROMOTE_FAILED
+
+        self.result.warnings.append(
+            f"could not update local {dst} from origin, continuing with local state: {stderr.strip()}"
+        )
+        return None
+
+    def _handle_ff_refusal(self, src, dst, stderr):
+        if "checked out" in stderr:
+            self.result.warnings.append(
+                f"{dst} is checked out in another worktree and must be updated there; promotion stopped"
+            )
+            return Outcome.PROMOTE_FAILED
+        if "non-fast-forward" not in stderr and "rejected" not in stderr:
+            self.result.warnings.append(
+                f"could not fast-forward {dst} from {src}; promotion stopped: {stderr.strip()}"
+            )
+            return Outcome.PROMOTE_FAILED
+        return self._merge_fallback(src, dst)
+
+    def _merge_fallback(self, src, dst):
+        dirty = [line for line in self.git.status_short() if not line.startswith("??")]
+        if dirty:
+            self.result.warnings.append(f"working tree not clean; cannot merge {src} into {dst}")
+            return Outcome.PROMOTE_FAILED
+
+        original = self.git.current_branch()
+        checkout_dst = self.git.checkout(dst)
+        if checkout_dst.returncode != 0:
+            self.result.warnings.append(
+                f"could not check out {dst} for merge; promotion stopped: {(checkout_dst.stderr or '').strip()}"
+            )
+            return Outcome.PROMOTE_FAILED
+
+        merge = self.git.merge_no_edit(src)
+        if merge.returncode != 0:
+            conflicting = self.git.conflicting_files()
+            self.git.merge_abort()
+            restore = self.git.checkout(original)
+            if restore.returncode != 0:
+                self.result.warnings.append(
+                    f"aborted the conflicted merge of {src} into {dst} but could not return to "
+                    f"{original}; repository left on {dst}: {(restore.stderr or '').strip()}"
+                )
+            self.result.warnings.append(
+                f"merge conflict promoting {src} into {dst}: {', '.join(conflicting)}"
+            )
+            return Outcome.PROMOTE_CONFLICT
+
+        restore = self.git.checkout(original)
+        if restore.returncode != 0:
+            self.result.warnings.append(
+                f"merged {src} into {dst} but could not return to {original}; repository left on "
+                f"{dst}: {(restore.stderr or '').strip()}"
+            )
+        return None
+
+    def _push_promoted(self, dst, origin_exists):
+        if not origin_exists:
+            if not self._no_origin_promote_warned:
+                self.result.warnings.append(
+                    "no origin remote; promoted branches updated locally only"
+                )
+                self._no_origin_promote_warned = True
+            self.result.promoted.append(dst)
+            return None
+
+        push = self.git.push_ref("origin", dst)
+        if push.returncode != 0:
+            self.result.warnings.append(
+                f"failed to push {dst} to origin; promotion stopped: {(push.stderr or '').strip()}"
+            )
+            return Outcome.PROMOTE_FAILED
+
+        self.result.promoted.append(dst)
         return None
 
     # -- helpers ----------------------------------------------------------

@@ -48,6 +48,12 @@ def build_arg_parser():
         action="store_true",
         help="Skip the push stage after a successful commit (for automation and benchmarks)",
     )
+    parser.add_argument(
+        "--promote",
+        action="store_true",
+        help="After commit and push, promote the change outward: feature into develop, "
+        "develop into mainline (main or master). Never skips develop",
+    )
     return parser
 
 
@@ -72,6 +78,8 @@ def _print_human(result):
     if result.commit_hash:
         print(f"commit: {result.commit_hash}")
         print(f"pushed: {result.pushed}")
+    if result.promoted:
+        print(f"promoted: {', '.join(result.promoted)}")
     if result.commit_message:
         print("message:")
         print(result.commit_message)
@@ -92,6 +100,7 @@ def main(argv=None):
         skip_deslop=args.skip_deslop,
         skip_review=args.skip_review,
         no_push=args.no_push,
+        promote=args.promote,
         llm_client=llm_client,
         context=args.context,
         paths=args.paths,

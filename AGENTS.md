@@ -60,3 +60,11 @@ Do not assume. Research. Do not bandaid. Fix upstream.
 - Flaky test: find the race or shared state. Do not retry-loop or skip.
 State the assumption in one line before acting so the user can redirect early.
 </research_not_assume>
+
+<docs_must_be_enforceable>
+Gate every new doc (README section, wiki page, spec, process note, convention writeup) on one question: does this doc actually provide value? A doc whose claims cannot be enforced by a script, lint rule, CI check, or test is dead weight: it drifts from reality the day after it merges and nobody notices.
+- Prefer the executable artifact over the prose: a lint rule beats a style guide page, a test beats a behavior description, a schema beats a field glossary, a check script beats a checklist.
+- A doc that states a rule, convention, or process must ship with (or point to) the automation that enforces it. No automation possible: do not write the doc; say it fails this gate and propose the enforceable alternative instead.
+- Applies to newly introduced docs going forward, not retroactive deletion of existing ones.
+- Org-mandated docs (ELM README standards, ADO wiki requirements) still get written, but push their checkable claims into automation (the readme-lint pattern) rather than adding unenforced prose.
+</docs_must_be_enforceable>

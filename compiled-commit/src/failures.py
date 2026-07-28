@@ -20,6 +20,8 @@ class Outcome(Enum):
     MESSAGE_INVALID = "MESSAGE_INVALID"
     HOOK_FAILED = "HOOK_FAILED"
     PUSH_FAILED = "PUSH_FAILED"
+    PROMOTE_CONFLICT = "PROMOTE_CONFLICT"
+    PROMOTE_FAILED = "PROMOTE_FAILED"
 
 
 # Exit code 0 is reserved for COMMITTED (see SPEC "Runner"). Every failure class gets a
@@ -39,6 +41,8 @@ EXIT_CODES = {
     Outcome.MESSAGE_INVALID: 20,
     Outcome.HOOK_FAILED: 21,
     Outcome.PUSH_FAILED: 22,
+    Outcome.PROMOTE_CONFLICT: 23,
+    Outcome.PROMOTE_FAILED: 24,
 }
 
 
@@ -60,6 +64,7 @@ class PipelineResult:
     commit_hash: str = None
     commit_message: str = None
     pushed: bool = False
+    promoted: list = field(default_factory=list)
     findings: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
     llm_usage: list = field(default_factory=list)

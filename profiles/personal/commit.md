@@ -1,5 +1,5 @@
 ---
-description: Personal workflow. Compiled runner does slop cleanup, code review, conventional message, commit, push, then merges into develop by default.
+description: Personal workflow. Compiled runner does slop cleanup, code review, conventional message, commit, push, then promotes through develop into main/master by default.
 ---
 
 # Commit (compiled)
@@ -9,6 +9,14 @@ entire procedure: preflight, develop sync, slop cleanup, code review, message ge
 staging, and the commit itself, with typed outcomes. Do not reimplement any of those steps,
 do not run your own review, and do not stage or commit yourself. Findings are yours to fix:
 apply them and re-run the runner as described under Fix findings below.
+
+## Branch guard (personal)
+
+Before invoking the runner, check the current branch (`git branch --show-current`). If it
+is `main` or `master`: do not commit there. Switch to `develop` first (create it from
+main/master if it does not exist); uncommitted changes carry over with the checkout. Then
+proceed. Committing on `develop` or a feature branch is fine. Nothing lands on main/master
+directly; main/master only ever receives merges from develop.
 
 ## Invoke
 
@@ -29,6 +37,8 @@ Flag mapping from the user's arguments:
   keeps another session's work-in-progress in the same checkout out of your commit. Omit
   it only when the user asked to commit everything or you genuinely cannot enumerate what
   changed.
+- Pass `--promote` by default so the runner carries the commit through develop into
+  main/master. Omit it only in the two cases listed under Promotion through develop below.
 
 The runner has additional flags for direct use (`--help`), but this command maps only the
 flags above. Do not pass skip flags unless the user explicitly names one.
@@ -50,13 +60,20 @@ next-step suggestions. Expand only on failure outcomes.
 Typed outcomes and what to do:
 
 - `COMMITTED`: the runner has already pushed (the result's `pushed` field says whether a
-  push happened; it is skipped with a warning when the repo has no origin). Fix findings
-  per above, then report; handle the merge extra below if requested.
+  push happened; it is skipped with a warning when the repo has no origin). When
+  `--promote` was passed, the result's `promoted` field lists the integration branches the
+  runner carried the commit into. Fix findings per above, then report.
 - `REVIEW_BLOCKED`: no commit happened. Fix the findings per above and re-run; still
   blocked after two passes, stop and report.
 - `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
   push error. Do not retry the push yourself unless the user asks.
-- `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
+- `PROMOTE_CONFLICT`, `PROMOTE_FAILED`: the commit exists and the feature branch is pushed
+  (`commit_hash` and `pushed` are populated); promotion did not complete, and the
+  `promoted` field says which branches did update. Relay the warnings and stop. Never
+  resolve conflicts or finish the promotion by hand.
+- `NOTHING_TO_COMMIT` with `--promote`: no commit was made, but the runner still ran
+  promotion; report what the `promoted` field says instead of treating it as a failure.
+- `NOTHING_TO_COMMIT` (without `--promote`), `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
   `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
@@ -65,17 +82,20 @@ Typed outcomes and what to do:
   `~/.claude/commands/commit.md.pre-compiled.bak` (not versioned in this repo, so it may not
   exist elsewhere). Do not execute the archived prose yourself.
 
-## Merge into develop (default)
+## Promotion through develop (default)
 
-Pushing the current branch is the runner's job and happens by default. After COMMITTED,
-merging into the integration branch is also the default: resolve it (develop, falling back
-to main/master), and if the current branch already is the integration branch there is
-nothing extra to do, the runner already pushed it. Otherwise:
+Promotion is the runner's job, not yours: with `--promote` it merges the feature branch
+into develop, then develop into main/master, pushing each hop, and it creates develop from
+main/master when the repo has none. The invariant it enforces: every change goes through
+develop, and main/master only ever receives merges from develop, so the two never drift.
+Never merge branches yourself, and never merge anything other than develop into
+main/master, even when asked to "just merge it quickly"; re-run the runner instead.
 
-- `git fetch origin <integration>`, `git checkout <integration>`,
-  `git pull --ff-only origin <integration>`, `git merge --no-edit <feature-branch>`,
-  `git push origin <integration>`, `git checkout <feature-branch>`.
-  On any conflict or non-fast-forward pull: abort the merge, return to the feature branch,
-  stop and report. Never force-push, never resolve conflicts silently.
-- Skip the merge only when the user asked for commit-only (words like "commit only",
-  "don't merge") or the branch is part of a PR flow that reviews before merge.
+Omit `--promote` in exactly two cases:
+
+- The user asked for commit-only (words like "commit only", "don't merge").
+- The branch is part of a PR flow that reviews before merge. The PR must target develop,
+  never main/master; after the PR merges, promote develop into main/master by running the
+  runner on develop with `--promote`. A clean tree is fine: with `--promote` the runner
+  still performs promotion on a NOTHING_TO_COMMIT outcome, so this doubles as the way to
+  repair develop/main drift.
