@@ -135,7 +135,7 @@ Judge token usage is written to `judge.json` only and is never merged into
 | `HOOK_FAILED` | 21 | `git commit` exited nonzero (e.g. a pre-commit hook failed) |
 | `PUSH_FAILED` | 22 | The commit succeeded but `git push` (or `git push -u origin <branch>` when there was no upstream) exited nonzero; `commit_hash` is still populated in the result, and the push stderr is captured as a warning |
 | `PROMOTE_CONFLICT` | 23 | A `--promote` hop could not fast-forward and the fallback merge conflicted; the merge was aborted and the original branch restored. `commit_hash`, `commit_message`, `pushed`, and `findings` stay populated; the conflicting files are captured as a warning |
-| `PROMOTE_FAILED` | 24 | A `--promote` hop could not complete: local develop/mainline diverged from origin, the target is checked out in another worktree, the fallback merge needed a clean working tree that was dirty, or a promotion push exited nonzero. Earlier-stage result fields stay populated and the stderr or reason is captured as a warning |
+| `PROMOTE_FAILED` | 24 | A `--promote` hop could not complete: local develop/mainline diverged from origin, the target is checked out in another worktree, the fallback merge needed a clean working tree that was dirty, the merge target could not be checked out, the post-merge restore checkout failed (the merge landed locally but the push was skipped and the repo is left on the target branch), or a promotion push exited nonzero. Earlier-stage result fields stay populated and the stderr or reason is captured as a warning |
 
 `SLOP_PATCH_INVALID` is listed as a warning code, not a terminal `outcome` value: it is
 recorded as a warning string and the pipeline continues to the next stage, per SPEC.

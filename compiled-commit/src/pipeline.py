@@ -521,6 +521,13 @@ class Pipeline:
         if not self.config.promote:
             return None
 
+        origin_exists = "origin" in self.git.list_remotes()
+        if origin_exists:
+            # refs/remotes/origin/* may be stale when sync was skipped; refresh them before
+            # deciding whether develop or a mainline exists (fetches of absent refs just fail)
+            for name in ("develop",) + MAINLINE_CANDIDATES:
+                self.git.fetch("origin", name)
+
         mainline = resolve_mainline(self.git)
         develop_present = self.git.verify_ref("refs/heads/develop") or self.git.verify_ref(
             "refs/remotes/origin/develop"
@@ -548,7 +555,6 @@ class Pipeline:
             return None
 
         self.result.stages_run.append("PROMOTE")
-        origin_exists = "origin" in self.git.list_remotes()
 
         if not develop_present:
             self._create_develop(mainline, origin_exists)
@@ -670,9 +676,10 @@ class Pipeline:
         restore = self.git.checkout(original)
         if restore.returncode != 0:
             self.result.warnings.append(
-                f"merged {src} into {dst} but could not return to {original}; repository left on "
-                f"{dst}: {(restore.stderr or '').strip()}"
+                f"merged {src} into {dst} locally but could not return to {original}; repository "
+                f"left on {dst}, push of {dst} skipped: {(restore.stderr or '').strip()}"
             )
+            return Outcome.PROMOTE_FAILED
         return None
 
     def _push_promoted(self, dst, origin_exists):

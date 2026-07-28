@@ -137,6 +137,10 @@ into mainline, e.g. after a pull request merges into develop.
 Invariant: every change flows feature -> develop -> mainline (main or master), never
 skipping develop; mainline only ever receives merges from develop, keeping develop and
 mainline in sync.
+When origin exists, first refresh the remote-tracking refs the stage depends on
+(`git fetch origin develop`, then each mainline candidate; fetches of absent refs just
+fail), since `refs/remotes/origin/*` may be stale when sync was skipped and a stale view
+could misdetect an existing origin develop as missing.
 Resolve mainline: first existing of main, master (`refs/heads/<b>` then
 `refs/remotes/origin/<b>`). Resolve develop: existing `refs/heads/develop` or
 `refs/remotes/origin/develop`. If develop is missing and mainline exists, create local
@@ -161,9 +165,12 @@ Each hop src -> dst, in order:
 3. Non-fast-forward rejection of step 2 -> fall back to a real merge: require a clean
    working tree (`git status --porcelain` empty ignoring untracked); if dirty ->
    PROMOTE_FAILED "working tree not clean; cannot merge <src> into <dst>". Otherwise
-   remember the original branch, `git checkout <dst>`, `git merge --no-edit <src>`; on
-   conflict collect the files, `git merge --abort`, `git checkout <original>`,
-   PROMOTE_CONFLICT with the files listed; on success `git checkout <original>`.
+   remember the original branch, `git checkout <dst>` (nonzero -> PROMOTE_FAILED, no merge
+   attempted), `git merge --no-edit <src>`; on conflict collect the files,
+   `git merge --abort`, `git checkout <original>` (nonzero -> extra warning naming the
+   branch left on), PROMOTE_CONFLICT with the files listed; on success
+   `git checkout <original>`, and if that restore fails -> PROMOTE_FAILED with a warning
+   that dst was merged locally but the push was skipped and the repo was left on dst.
 4. Step 2 refused because dst is checked out in another worktree (stderr contains
    "checked out") -> PROMOTE_FAILED naming the branch.
 5. Push: origin present -> `git push origin <dst>` (plain refspec, no checkout); nonzero ->
