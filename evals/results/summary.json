@@ -6,9 +6,35 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.1001080999999997,
+    "mean_cost_usd": 2.20544685,
     "reason_code_histogram": {
       "missing-events": 2
+    }
+  },
+  "ch-flag-gated-rollout::llms-txt": {
+    "task": "ch-flag-gated-rollout",
+    "regime": "llms-txt",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.5,
+    "mean_cost_usd": 5.47942125,
+    "reason_code_histogram": {
+      "pass": 1,
+      "missing-events": 1
+    }
+  },
+  "ch-flag-gated-rollout::mcp": {
+    "task": "ch-flag-gated-rollout",
+    "regime": "mcp",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.5,
+    "mean_cost_usd": 2.1537684000000006,
+    "reason_code_histogram": {
+      "pass": 1,
+      "missing-events": 1
     }
   },
   "ch-flag-gated-rollout::bundle": {
@@ -18,9 +44,10 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.4544750000000002,
+    "mean_cost_usd": 2.1469963499999998,
     "reason_code_histogram": {
-      "missing-events": 2
+      "build-fail": 1,
+      "missing-events": 1
     }
   },
   "ch-main-process-capture::none": {
@@ -30,10 +57,35 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.9590523,
+    "mean_cost_usd": 1.7181169500000002,
     "reason_code_histogram": {
-      "missing-events": 1,
-      "build-fail": 1
+      "build-fail": 1,
+      "missing-events": 1
+    }
+  },
+  "ch-main-process-capture::llms-txt": {
+    "task": "ch-main-process-capture",
+    "regime": "llms-txt",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.5,
+    "mean_cost_usd": 5.081293700000002,
+    "reason_code_histogram": {
+      "build-fail": 1,
+      "pass": 1
+    }
+  },
+  "ch-main-process-capture::mcp": {
+    "task": "ch-main-process-capture",
+    "regime": "mcp",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.9959762000000003,
+    "reason_code_histogram": {
+      "build-fail": 2
     }
   },
   "ch-main-process-capture::bundle": {
@@ -43,9 +95,9 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.03119795,
+    "mean_cost_usd": 2.3464237499999996,
     "reason_code_histogram": {
-      "missing-events": 2
+      "build-fail": 2
     }
   },
   "ch-release-tagging::none": {
@@ -54,10 +106,34 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 1.66251975,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 2.0474809499999997,
     "reason_code_histogram": {
-      "build-fail": 2
+      "pass": 2
+    }
+  },
+  "ch-release-tagging::llms-txt": {
+    "task": "ch-release-tagging",
+    "regime": "llms-txt",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 4.647273950000001,
+    "reason_code_histogram": {
+      "pass": 2
+    }
+  },
+  "ch-release-tagging::mcp": {
+    "task": "ch-release-tagging",
+    "regime": "mcp",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 1.7246496,
+    "reason_code_histogram": {
+      "pass": 2
     }
   },
   "ch-release-tagging::bundle": {
@@ -66,11 +142,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 1.12577175,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 1.7527325999999999,
     "reason_code_histogram": {
-      "missing-events": 1,
-      "build-fail": 1
+      "pass": 2
     }
   },
   "kp-release-impact::none": {
@@ -80,7 +155,31 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.22200825,
+    "mean_cost_usd": 0.16714455,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-release-impact::llms-txt": {
+    "task": "kp-release-impact",
+    "regime": "llms-txt",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.1969952,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-release-impact::mcp": {
+    "task": "kp-release-impact",
+    "regime": "mcp",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.30518294999999995,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -91,10 +190,11 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 0.2280213,
+    "pass_rate": 0.5,
+    "mean_cost_usd": 0.4016259,
     "reason_code_histogram": {
-      "wrong-answer": 2
+      "wrong-answer": 1,
+      "pass": 1
     }
   },
   "kp-reminder-funnel::none": {
@@ -104,7 +204,31 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.22693245,
+    "mean_cost_usd": 0.24104565,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-reminder-funnel::llms-txt": {
+    "task": "kp-reminder-funnel",
+    "regime": "llms-txt",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.36240575,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-reminder-funnel::mcp": {
+    "task": "kp-reminder-funnel",
+    "regime": "mcp",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.1959084,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -116,7 +240,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.5156073000000001,
+    "mean_cost_usd": 0.32662305,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -128,7 +252,31 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.27792015000000003,
+    "mean_cost_usd": 0.10707465,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-store-engagement::llms-txt": {
+    "task": "kp-store-engagement",
+    "regime": "llms-txt",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.2219174,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-store-engagement::mcp": {
+    "task": "kp-store-engagement",
+    "regime": "mcp",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.21968685,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -140,7 +288,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.1971408,
+    "mean_cost_usd": 0.21756720000000002,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
