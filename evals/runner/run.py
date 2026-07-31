@@ -119,13 +119,13 @@ def _print_plan(task, regime, trial, assembly, prompt):
 
 
 def _token_budget_exceeded_entry(task, regime, trial, wall_secs, turns, usage, model, bundle_hash,
-                                  snapshot_hashes, max_gross_tokens):
+                                  snapshot_hashes, max_noncached_tokens):
     return JournalEntry(
         ts=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         task=task["id"], regime=regime, trial=trial, status="infra",
         passed=False, reason_code="check-infra", wall_secs=wall_secs, turns=turns, usage=usage,
         model=model, bundle_hash=bundle_hash, snapshot_hashes=snapshot_hashes, posthog_captured=False,
-        detail=f"token-budget-exceeded: {usage['gross']} > {max_gross_tokens}",
+        detail=f"token-budget-exceeded: {usage['noncached']} > {max_noncached_tokens}",
     )
 
 
@@ -167,11 +167,11 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
         }
         bundle_hash = assembly.snapshot_hashes.get("bundle")
 
-        max_gross_tokens = config.get("token_budget", {}).get("max_gross_tokens_per_run")
-        if max_gross_tokens and usage["gross"] > max_gross_tokens:
+        max_noncached_tokens = config.get("token_budget", {}).get("max_noncached_tokens_per_run")
+        if max_noncached_tokens and usage["noncached"] > max_noncached_tokens:
             entry = _token_budget_exceeded_entry(
                 task, regime, trial, wall_secs, claude_result.num_turns, usage, config["model"],
-                bundle_hash, assembly.snapshot_hashes, max_gross_tokens,
+                bundle_hash, assembly.snapshot_hashes, max_noncached_tokens,
             )
             journal.append(entry)
             return entry

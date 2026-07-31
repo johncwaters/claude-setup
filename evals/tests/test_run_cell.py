@@ -89,12 +89,12 @@ class TokenBudgetTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp_root, ignore_errors=True)
 
-    def test_gross_tokens_over_cap_journals_infra_with_token_budget_detail(self):
+    def test_noncached_tokens_over_cap_journals_infra_with_token_budget_detail(self):
         task = run_module.load_task(FIXTURE_TASK_DIR)
         journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
         config = {
             "model": "claude-sonnet-5", "max_turns": 5,
-            "token_budget": {"max_gross_tokens_per_run": 1000},
+            "token_budget": {"max_noncached_tokens_per_run": 1000},
         }
 
         entry = run_module.run_cell(task, "none", 1, config, journal, self.replay_dir, False, False)
@@ -103,12 +103,12 @@ class TokenBudgetTests(unittest.TestCase):
         self.assertEqual(entry.reason_code, "check-infra")
         self.assertEqual(entry.detail, "token-budget-exceeded: 1000000 > 1000")
 
-    def test_gross_tokens_within_cap_scores_normally(self):
+    def test_noncached_tokens_within_cap_scores_normally(self):
         task = run_module.load_task(FIXTURE_TASK_DIR)
         journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
         config = {
             "model": "claude-sonnet-5", "max_turns": 5,
-            "token_budget": {"max_gross_tokens_per_run": 5_000_000},
+            "token_budget": {"max_noncached_tokens_per_run": 5_000_000},
         }
 
         entry = run_module.run_cell(task, "none", 1, config, journal, self.replay_dir, False, False)
