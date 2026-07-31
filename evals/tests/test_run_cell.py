@@ -1,8 +1,12 @@
+import glob
+import io
 import json
 import os
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from unittest import mock
 
 from runner import run as run_module
 from runner.journal import Journal, JournalEntry
@@ -115,6 +119,130 @@ class TokenBudgetTests(unittest.TestCase):
 
         self.assertEqual(entry.status, "completed")
         self.assertTrue(entry.passed)
+
+
+class McpConfigLifecycleTests(unittest.TestCase):
+    """The generated MCP config holds a live bearer token, so no cell may leave one behind."""
+
+    def setUp(self):
+        self.tmp_root = tempfile.mkdtemp(prefix="evals-lifecycle-test-")
+        self.replay_dir = os.path.join(self.tmp_root, "fixtures")
+        os.makedirs(self.replay_dir)
+        self.results_dir = os.path.join(self.tmp_root, "results")
+        self.saved_environ = dict(os.environ)
+        os.environ["EVALS_TEST_LIFECYCLE_TOKEN"] = "test-token"
+        os.environ["EVALS_TEST_LIFECYCLE_PROJECT"] = "1234"
+        self.config = {
+            "model": "claude-sonnet-5", "max_turns": 5,
+            "posthog": {
+                "mcp_token_env": "EVALS_TEST_LIFECYCLE_TOKEN",
+                "scratch_project_id_env": "EVALS_TEST_LIFECYCLE_PROJECT",
+            },
+        }
+        self.captured_dirs = []
+        self.real_assemble = run_module.regimes.assemble
+
+    def tearDown(self):
+        run_module.regimes.assemble = self.real_assemble
+        shutil.rmtree(self.tmp_root, ignore_errors=True)
+        if run_module.regimes._private_mcp_config_root:
+            shutil.rmtree(run_module.regimes._private_mcp_config_root, ignore_errors=True)
+            run_module.regimes._private_mcp_config_root = None
+        os.environ.clear()
+        os.environ.update(self.saved_environ)
+
+    def _run_mcp_cell(self):
+        def recording_assemble(*args, **kwargs):
+            assembly = self.real_assemble(*args, **kwargs)
+            if assembly.mcp_config_dir:
+                self.captured_dirs.append((assembly.mcp_config_dir, assembly.mcp_config_path))
+            return assembly
+
+        run_module.regimes.assemble = recording_assemble
+        task = run_module.load_task(FIXTURE_TASK_DIR)
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+        return run_module.run_cell(task, "mcp", 1, self.config, journal, self.replay_dir, False, False)
+
+    def _write_replay_fixture(self):
+        with open(os.path.join(self.replay_dir, "sample-task_mcp_1.json"), "w", encoding="utf-8") as handle:
+            json.dump({
+                "num_turns": 1, "total_cost_usd": 0.01,
+                "usage": {"input_tokens": 10, "cache_creation_input_tokens": 0,
+                          "cache_read_input_tokens": 0, "output_tokens": 5},
+                "result": "4",
+            }, handle)
+
+    def test_token_file_is_deleted_after_a_successful_cell(self):
+        self._write_replay_fixture()
+
+        entry = self._run_mcp_cell()
+
+        self.assertEqual(entry.status, "completed")
+        self.assertEqual(len(self.captured_dirs), 1)
+        config_dir, config_path = self.captured_dirs[0]
+        self.assertFalse(os.path.exists(config_path))
+        self.assertFalse(os.path.exists(config_dir))
+
+    def test_a_finished_cell_leaves_no_mcp_config_residue_in_temp(self):
+        self._write_replay_fixture()
+        # a delta, not an absolute count: a batch running concurrently from another checkout
+        # owns its own temp dirs and must not flake this
+        residue_before = set(glob.glob(os.path.join(tempfile.gettempdir(), "evals-mcp*")))
+
+        self._run_mcp_cell()
+
+        residue_after = set(glob.glob(os.path.join(tempfile.gettempdir(), "evals-mcp*")))
+        self.assertEqual(residue_after - residue_before, set())
+
+    def test_token_file_is_deleted_when_the_cell_fails(self):
+        # no replay fixture written, so claude_cli.run raises inside run_cell
+        entry = self._run_mcp_cell()
+
+        self.assertEqual(entry.status, "infra")
+        self.assertEqual(len(self.captured_dirs), 1)
+        config_dir, config_path = self.captured_dirs[0]
+        self.assertFalse(os.path.exists(config_path))
+        self.assertFalse(os.path.exists(config_dir))
+
+    def test_an_undeletable_config_is_left_empty_and_shouted_about(self):
+        config_dir = tempfile.mkdtemp(prefix="cell-", dir=self.tmp_root)
+        config_path = os.path.join(config_dir, ".mcp.json")
+        with open(config_path, "w", encoding="utf-8") as handle:
+            handle.write('{"headers": {"Authorization": "Bearer phx_live_secret"}}')
+
+        # stand in for a lock that survives every retry: rmtree's ignore_errors fallback
+        # would otherwise leave the readable token behind without a word
+        with mock.patch.object(run_module.shutil, "rmtree"):
+            with redirect_stdout(io.StringIO()) as printed:
+                run_module._teardown_mcp_config(config_dir, config_path)
+
+        with open(config_path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "")
+        self.assertIn("WARNING", printed.getvalue())
+        self.assertIn(config_dir, printed.getvalue())
+
+    def test_a_removable_config_is_deleted_without_a_warning(self):
+        config_dir = tempfile.mkdtemp(prefix="cell-", dir=self.tmp_root)
+        config_path = os.path.join(config_dir, ".mcp.json")
+        with open(config_path, "w", encoding="utf-8") as handle:
+            handle.write('{"headers": {"Authorization": "Bearer phx_live_secret"}}')
+
+        with redirect_stdout(io.StringIO()) as printed:
+            run_module._teardown_mcp_config(config_dir, config_path)
+
+        self.assertFalse(os.path.exists(config_dir))
+        self.assertNotIn("WARNING", printed.getvalue())
+
+    def test_dry_run_leaves_no_token_file_behind(self):
+        task = run_module.load_task(FIXTURE_TASK_DIR)
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+
+        with redirect_stdout(io.StringIO()) as printed:
+            run_module.run_cell(task, "mcp", 1, self.config, journal, self.replay_dir, False, True)
+
+        self.assertIn("mcp_config_path=None", printed.getvalue())
+        self.assertNotIn("test-token", printed.getvalue())
+        self.assertIn("Bearer <redacted>", printed.getvalue())
 
 
 class SummarizeScopingTests(unittest.TestCase):

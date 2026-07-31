@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from runner import claude_cli
 
@@ -26,6 +27,73 @@ class BuildCmdTests(unittest.TestCase):
         cmd = claude_cli._build_cmd("claude-sonnet-5", 30, [], [], "/tmp/.mcp.json")
         self.assertIn("--mcp-config", cmd)
         self.assertEqual(cmd[cmd.index("--mcp-config") + 1], "/tmp/.mcp.json")
+
+    def test_strict_mcp_config_is_set_on_every_run_so_ambient_servers_never_load(self):
+        with_mcp = claude_cli._build_cmd("claude-sonnet-5", 30, [], [], "/tmp/.mcp.json")
+        without_mcp = claude_cli._build_cmd("claude-sonnet-5", 30, ["WebFetch"], [], None)
+        self.assertIn("--strict-mcp-config", with_mcp)
+        self.assertIn("--strict-mcp-config", without_mcp)
+
+    def test_strict_mcp_config_precedes_the_variadic_mcp_config_flag(self):
+        cmd = claude_cli._build_cmd("claude-sonnet-5", 30, [], [], "/tmp/.mcp.json")
+        self.assertLess(cmd.index("--strict-mcp-config"), cmd.index("--mcp-config"))
+
+
+class AgentSubprocessEnvironmentTests(unittest.TestCase):
+    """run.py loads evals/.env into os.environ; the agent must never inherit those keys."""
+
+    def setUp(self):
+        self.saved_environ = dict(os.environ)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self.saved_environ)
+
+    def _env_handed_to_subprocess(self):
+        class FakeCompletedProcess:
+            returncode = 0
+            stdout = json.dumps({"result": "ok", "usage": {}})
+            stderr = ""
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return FakeCompletedProcess()
+
+        with mock.patch.object(claude_cli.subprocess, "run", fake_run):
+            claude_cli.run(
+                prompt="x", model="claude-sonnet-5", max_turns=1, cwd=os.getcwd(),
+                disallowed_tools=[], task_id="t", regime="none", trial=1,
+            )
+        self.assertIsNotNone(captured["env"], "claude_cli must pass an explicit env, not inherit")
+        return captured["env"]
+
+    def test_no_evals_posthog_variable_reaches_the_agent(self):
+        os.environ["EVALS_POSTHOG_PERSONAL_KEY"] = "phx-secret"
+        os.environ["EVALS_POSTHOG_PROJECT_KEY"] = "phc-secret"
+        os.environ["EVALS_POSTHOG_SCRATCH_PROJECT_ID"] = "1"
+        os.environ["EVALS_POSTHOG_KEEPLINGS_PROJECT_ID"] = "2"
+
+        agent_env = self._env_handed_to_subprocess()
+
+        leaked = [name for name in agent_env if name.startswith("EVALS_POSTHOG_")]
+        self.assertEqual(leaked, [])
+        self.assertNotIn("phx-secret", agent_env.values())
+
+    def test_future_evals_posthog_variables_are_dropped_by_prefix(self):
+        os.environ["EVALS_POSTHOG_SOME_FUTURE_CREDENTIAL"] = "not-yet-invented"
+
+        agent_env = self._env_handed_to_subprocess()
+
+        self.assertNotIn("EVALS_POSTHOG_SOME_FUTURE_CREDENTIAL", agent_env)
+
+    def test_unrelated_variables_still_reach_the_agent(self):
+        os.environ["EVALS_UNRELATED_SETTING"] = "keep-me"
+
+        agent_env = self._env_handed_to_subprocess()
+
+        self.assertEqual(agent_env.get("EVALS_UNRELATED_SETTING"), "keep-me")
 
 
 class ClaudeCliReplayTests(unittest.TestCase):

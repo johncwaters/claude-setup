@@ -24,7 +24,10 @@ posthog:
   host: https://us.i.posthog.com
   project_api_key_env: EVALS_POSTHOG_PROJECT_KEY         # write key used to emit eval_run_completed events
   personal_api_key_env: EVALS_POSTHOG_PERSONAL_KEY       # read access for dashboards; also the mcp regime's auth token
-  scratch_project_id_env: EVALS_POSTHOG_SCRATCH_PROJECT_ID   # prospective-task writes and mcp-regime writes land only here
+  scratch_project_id_env: EVALS_POSTHOG_SCRATCH_PROJECT_ID   # harness telemetry writes go through the project API key only;
+                                                              # agent MCP access is read-only in every regime, so nothing an
+                                                              # agent does writes anywhere. Doubles as the mcp regime's default
+                                                              # project pin for tasks with no posthog_project_id_env
   keeplings_project_id_env: EVALS_POSTHOG_KEEPLINGS_PROJECT_ID   # kp- checks' HogQL query target; keeplings production
   mcp_url: https://mcp.posthog.com/mcp
   mcp_token_env: EVALS_POSTHOG_PERSONAL_KEY              # env var read for the mcp regime's Authorization header

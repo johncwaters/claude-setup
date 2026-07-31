@@ -56,11 +56,29 @@ over `.env`. `evals/.env` is gitignored, never commit real credentials.
 |---|---|
 | `EVALS_POSTHOG_PROJECT_KEY` | write key used to emit `eval_run_completed` events |
 | `EVALS_POSTHOG_PERSONAL_KEY` | read access for dashboards; also the `mcp` regime's Authorization header |
-| `EVALS_POSTHOG_SCRATCH_PROJECT_ID` | prospective-task and `mcp`-regime writes land only here, never in keeplings production |
-| `EVALS_POSTHOG_KEEPLINGS_PROJECT_ID` | keeplings production project id the `kp-` tasks' reference HogQL queries run against |
+| `EVALS_POSTHOG_SCRATCH_PROJECT_ID` | default `mcp`-regime project pin for tasks that don't name their own |
+| `EVALS_POSTHOG_KEEPLINGS_PROJECT_ID` | keeplings production project id the `kp-` tasks' reference HogQL queries run against, and their `mcp`-regime pin |
 
 Any run with the corresponding key absent is a no-op for that piece (PostHog capture
-never crashes a run); the `mcp` regime writes an empty bearer token if its env var is unset.
+never crashes a run). The `mcp` regime is the exception: a missing token or an unset
+project-id env var fails the cell as `check-infra` rather than running unauthenticated or
+unpinned.
+
+No `EVALS_POSTHOG_`-prefixed variable reaches the agent's environment in any regime:
+`claude_cli` strips them from the subprocess env, so a `bundle` or `none` run cannot
+quietly query the live API with them. The `mcp` regime's token instead travels in a
+generated config file, written under a private temp root and deleted in `run_cell`'s
+`finally` as part of cell teardown. `--dry-run` never materializes the file at all; it
+prints the config shape with the token redacted.
+
+Be precise about what that buys. Passing a secret through a file the agent's own process
+can open is not a boundary: during its own `mcp` cell, an agent with filesystem read can
+read the raw key, and no path choice changes that. What the design does guarantee is that
+no token-bearing file exists on disk at all while a `none`, `llms-txt`, or `bundle` cell
+runs, which is the property the regime comparison actually depends on. The key itself is
+the real control: it is scoped query-read-only and pinned to one project by the
+`Authorization` and `x-posthog-*` headers, so reading it grants nothing the `mcp` session
+did not already have.
 
 ## Adding a task
 
@@ -79,7 +97,10 @@ in, and a `reference.md` stub. It refuses to overwrite an existing task id.
 
 `task.yml` fields: `id`, `class` (one of `install-instrumentation`, `hogql-analysis`,
 `error-tracking`, `product-config`), `mode` (`prospective` | `retrospective`), `repo`,
-`pinned_commit`, `prompt_file`, `time_window`, `bundle`, `captured`, `reference`.
+`pinned_commit`, `prompt_file`, `time_window`, `bundle`, `captured`, `reference`, and the
+optional `posthog_project_id_env` naming the env var whose value the `mcp` regime pins the
+session to (defaults to `EVALS_POSTHOG_SCRATCH_PROJECT_ID`; the `kp-` tasks set it to
+`EVALS_POSTHOG_KEEPLINGS_PROJECT_ID` so they query keeplings production, not the sandbox).
 
 `checks.py` must define `run_checks(workspace, task, config) -> dict` returning
 `{"passed": bool, "reason_code": str, "detail": str}`. `reason_code` vocabulary: `pass`,
@@ -93,8 +114,15 @@ regime pass rates and always rerun).
 - `llms-txt`: injects `bundles/snapshots/llms-txt.md`. A separate snapshot step downloads
   and freezes this file; the regime itself never fetches the web at run time and fails
   loudly with instructions if the snapshot is missing.
-- `mcp`: writes a `.mcp.json` into the run workspace pointing at `https://mcp.posthog.com/mcp`,
-  no doc injection.
+- `mcp`: points the agent at `https://mcp.posthog.com/mcp` via a generated config written
+  outside the workspace, so it is not part of the tree the agent is pointed at (see the
+  credentials section above for what that does and does not guarantee), no doc injection. The
+  entry declares `"type": "http"` and carries a bearer personal API key, `x-posthog-read-only:
+  true`, and an `x-posthog-project-id` pin. The server is deliberately named `posthog-evals`,
+  never `posthog`: Claude Code caches a needs-auth verdict per server name, so colliding with
+  a developer's own OAuth `posthog` server makes it skip connecting without sending our
+  Authorization header. Every run also passes `--strict-mcp-config` so no ambient
+  user-scoped MCP server leaks into any regime.
 - `bundle`: injects the task's hand-built context bundle from `bundles/<name>.md` (task.yml's
   `bundle` field); fails loudly if the task has no bundle configured or the file is missing.
 

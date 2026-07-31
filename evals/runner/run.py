@@ -78,6 +78,27 @@ def _resolve_workspace(task):
     return workspace, (task["repo"], branch)
 
 
+def _teardown_mcp_config(config_dir, config_path):
+    """Delete the cell's MCP config, and blank the token first so a failed unlink is inert.
+
+    _rmtree_retry falls back to ignore_errors, so a locked file would otherwise leave a
+    readable bearer token behind with nothing said about it. Truncating first means the
+    worst case is an empty file, and a surviving directory gets shouted about rather than
+    passing silently.
+    """
+    if config_path:
+        try:
+            with open(config_path, "w", encoding="utf-8"):
+                pass
+        except OSError:
+            pass
+    _rmtree_retry(config_dir)
+    if os.path.exists(config_dir):
+        print(f"WARNING: could not remove MCP config dir {config_dir}; its .mcp.json has been "
+              "emptied, but delete the directory by hand")
+    regimes.discard_empty_config_root()
+
+
 def _teardown_workspace(workspace, worktree_info):
     if worktree_info is None:
         _rmtree_retry(workspace)
@@ -113,6 +134,8 @@ def _print_plan(task, regime, trial, assembly, prompt):
     print(f"  disallowed_tools={assembly.disallowed_tools}")
     print(f"  allowed_tools={assembly.allowed_tools}")
     print(f"  mcp_config_path={assembly.mcp_config_path}")
+    if assembly.mcp_config_preview is not None:
+        print(f"  mcp_config (not written in dry-run)={json.dumps(assembly.mcp_config_preview)}")
     print(f"  context_chars={len(assembly.context_text) if assembly.context_text else 0}")
     print(f"  snapshot_hashes={assembly.snapshot_hashes}")
     print(f"  prompt_chars={len(prompt)}")
@@ -133,9 +156,11 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
     cell_start = time.monotonic()
     workspace = None
     worktree_info = None
+    assembly = None
     try:
         workspace, worktree_info = _resolve_workspace(task)
-        assembly = regimes.assemble(regime, task, config, workspace, evals_root=evals_root)
+        assembly = regimes.assemble(regime, task, config, workspace, evals_root=evals_root,
+                                    dry_run=dry_run)
         prompt = _build_prompt(task, assembly)
 
         if dry_run:
@@ -201,6 +226,9 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
         journal.append(entry)
         return entry
     finally:
+        # the mcp config dir holds a live bearer token; it must not outlive the cell
+        if assembly is not None and assembly.mcp_config_dir is not None:
+            _teardown_mcp_config(assembly.mcp_config_dir, assembly.mcp_config_path)
         if workspace is not None:
             _teardown_workspace(workspace, worktree_info)
 
