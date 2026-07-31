@@ -1,14 +1,148 @@
 {
+  "ch-flag-gated-rollout::none": {
+    "task": "ch-flag-gated-rollout",
+    "regime": "none",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.1001080999999997,
+    "reason_code_histogram": {
+      "missing-events": 2
+    }
+  },
+  "ch-flag-gated-rollout::bundle": {
+    "task": "ch-flag-gated-rollout",
+    "regime": "bundle",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.4544750000000002,
+    "reason_code_histogram": {
+      "missing-events": 2
+    }
+  },
+  "ch-main-process-capture::none": {
+    "task": "ch-main-process-capture",
+    "regime": "none",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.9590523,
+    "reason_code_histogram": {
+      "missing-events": 1,
+      "build-fail": 1
+    }
+  },
+  "ch-main-process-capture::bundle": {
+    "task": "ch-main-process-capture",
+    "regime": "bundle",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.03119795,
+    "reason_code_histogram": {
+      "missing-events": 2
+    }
+  },
+  "ch-release-tagging::none": {
+    "task": "ch-release-tagging",
+    "regime": "none",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.66251975,
+    "reason_code_histogram": {
+      "build-fail": 2
+    }
+  },
+  "ch-release-tagging::bundle": {
+    "task": "ch-release-tagging",
+    "regime": "bundle",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 1.12577175,
+    "reason_code_histogram": {
+      "missing-events": 1,
+      "build-fail": 1
+    }
+  },
+  "kp-release-impact::none": {
+    "task": "kp-release-impact",
+    "regime": "none",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.22200825,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
   "kp-release-impact::bundle": {
     "task": "kp-release-impact",
     "regime": "bundle",
-    "scored_trials": 0,
-    "infra_trials": 1,
-    "total_trials": 1,
-    "pass_rate": null,
-    "mean_cost_usd": null,
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.2280213,
     "reason_code_histogram": {
-      "check-infra": 1
+      "wrong-answer": 2
+    }
+  },
+  "kp-reminder-funnel::none": {
+    "task": "kp-reminder-funnel",
+    "regime": "none",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.22693245,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-reminder-funnel::bundle": {
+    "task": "kp-reminder-funnel",
+    "regime": "bundle",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.5156073000000001,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-store-engagement::none": {
+    "task": "kp-store-engagement",
+    "regime": "none",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.27792015000000003,
+    "reason_code_histogram": {
+      "wrong-answer": 2
+    }
+  },
+  "kp-store-engagement::bundle": {
+    "task": "kp-store-engagement",
+    "regime": "bundle",
+    "scored_trials": 2,
+    "infra_trials": 0,
+    "total_trials": 2,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.1971408,
+    "reason_code_histogram": {
+      "wrong-answer": 2
     }
   }
 }
