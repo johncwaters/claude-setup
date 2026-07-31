@@ -97,7 +97,7 @@
 <header>
   <h1>Agent-Docs Eval Harness for PostHog</h1>
   <div class="subtitle">Measure how well coding agents complete real PostHog tasks under different context regimes, publish the findings, keep the suite running nightly.</div>
-  <div class="meta">Plan drafted 2026-07-30, fast-track revision same day. Lives at <code>evals/</code> in this repo. Application project for the PostHog Context Engineer role.</div>
+  <div class="meta">Plan drafted 2026-07-30. Lives at <code>evals/</code> in this repo. Application project for the PostHog Context Engineer role. No timeline: steps complete in order, at working pace.</div>
 </header>
 
 <section>
@@ -194,26 +194,26 @@
 </section>
 
 <section>
-  <h2>Fast track (one week to live, then rolling)</h2>
+  <h2>Build order</h2>
   <div class="phase">
-    <h3>Days 0-1: Intake first</h3>
+    <h3>1. Intake first</h3>
     <div class="when"><code>evals capture</code> command + first 6 real tasks</div>
     <p>Capture comes before the runner because daily task volume is the asset: snapshot 3 card-harbor integration slices (prospective) and 3 keeplings analytics questions with verified answers (retrospective). From here, every day of normal product work adds tasks at near-zero cost.</p>
   </div>
   <div class="phase">
-    <h3>Days 2-3: Runner core</h3>
+    <h3>2. Runner core</h3>
     <div class="when">Worktree spawn, checks, journal, PostHog events; score under none + bundle</div>
     <p>Prove the loop end to end on the captured tasks with the two regimes that carry the core claim (baseline vs curated context). Exit: 6 real tasks scored, reproducible.</p>
   </div>
   <div class="phase">
-    <h3>Days 4-5: Full regimes + nightly</h3>
+    <h3>3. Full regimes + nightly</h3>
     <div class="when">llms-txt and mcp regimes; scheduled nightly batches begin</div>
     <p>Nightly batches fill the matrix while usage limits are idle, with rate-limit backoff and journal resume. Exit: matrix filling unattended, failure alerting via PostHog.</p>
   </div>
   <div class="phase">
-    <h3>Days 6-7: Dashboards + writeup draft</h3>
+    <h3>4. Dashboards + writeup</h3>
     <div class="when">Then rolling: capture daily, nightly runs accumulate, writeup hardens</div>
-    <p>Dashboards from the first complete matrix, writeup drafted against real numbers, doc-gap findings filed upstream as they surface. Submission gate: nightly trend live for a week (the rolling week after fast-track, not extra calendar time).</p>
+    <p>Dashboards from the first complete matrix, writeup drafted against real numbers, doc-gap findings filed upstream as they surface. Submission gate is data, not calendar: at least a week of nightly trend accumulated before applying, running in the background while later steps proceed.</p>
   </div>
 </section>
 
