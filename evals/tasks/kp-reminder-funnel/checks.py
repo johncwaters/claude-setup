@@ -1,4 +1,4 @@
-"""Programmatic checks for kp-checkin-funnel.
+"""Programmatic checks for kp-reminder-funnel.
 
 The agent's deliverable is `answer.json` in the workspace root (schema below). This
 validates that schema, then (when credentials are configured) executes a reference
@@ -14,16 +14,14 @@ run_checks(workspace, task, config) -> dict with keys:
 Expected answer.json schema:
 {
   "window": {"start": "<iso8601>", "end": "<iso8601>"},
-  "users_armed": <int>,
-  "users_fired": <int>,
-  "users_opened": <int>,
-  "armed_to_fired_rate": <number>,
-  "fired_to_opened_rate": <number>,
+  "users_created_reminder": <int>,
+  "users_confirmed_after": <int>,
+  "conversion_rate": <number>,
   "hogql": "<the query text the agent ran>"
 }
 
-Numeric tolerance (see reference.md): user counts within 5% relative or 2 absolute,
-whichever is larger; conversion rates within 0.03 (3 percentage points) absolute.
+Numeric tolerance (see reference.md): user counts within 2 absolute; conversion rate
+within 0.03 (3 percentage points) absolute.
 """
 
 import json
@@ -33,8 +31,8 @@ import urllib.error
 import urllib.request
 
 REQUIRED_KEYS = {
-    "window", "users_armed", "users_fired", "users_opened",
-    "armed_to_fired_rate", "fired_to_opened_rate", "hogql",
+    "window", "users_created_reminder", "users_confirmed_after",
+    "conversion_rate", "hogql",
 }
 WRITE_KEYWORDS_RE = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b", re.IGNORECASE
@@ -42,23 +40,19 @@ WRITE_KEYWORDS_RE = re.compile(
 
 REFERENCE_HOGQL = """
 SELECT
-    countIf(has_armed) AS users_armed,
-    countIf(has_armed AND has_fired) AS users_fired,
-    countIf(has_armed AND has_fired AND has_opened) AS users_opened
+    countIf(has_created) AS users_created_reminder,
+    countIf(has_created AND has_confirmed_after) AS users_confirmed_after
 FROM (
     SELECT
         person_id,
-        minIf(timestamp, event = 'checkin_nudge_armed') AS first_armed,
-        minIf(timestamp, event = 'checkin_nudge_fired_inferred') AS first_fired,
-        minIf(timestamp, event = 'checkin_nudge_opened') AS first_opened,
-        first_armed != toDateTime(0) AS has_armed,
-        (first_fired != toDateTime(0) AND first_fired >= first_armed) AS has_fired,
-        (first_opened != toDateTime(0) AND (first_fired != toDateTime(0) AND first_fired >= first_armed)
-            AND first_opened >= first_fired) AS has_opened
+        minIf(timestamp, event = 'reminder_created') AS first_created,
+        minIf(timestamp, event = 'habit_confirmed') AS first_confirmed,
+        first_created != toDateTime(0) AS has_created,
+        (first_confirmed != toDateTime(0) AND first_confirmed >= first_created) AS has_confirmed_after
     FROM events
     WHERE timestamp >= toDateTime('2026-07-12 00:00:00')
       AND timestamp < toDateTime('2026-07-26 00:00:00')
-      AND event IN ('checkin_nudge_armed', 'checkin_nudge_fired_inferred', 'checkin_nudge_opened')
+      AND event IN ('reminder_created', 'habit_confirmed')
     GROUP BY person_id
 )
 """
@@ -94,12 +88,11 @@ def _schema_ok(answer):
         return False
     if not isinstance(answer.get("hogql"), str) or not answer["hogql"].strip():
         return False
-    for key in ("users_armed", "users_fired", "users_opened"):
+    for key in ("users_created_reminder", "users_confirmed_after"):
         if not isinstance(answer.get(key), int) or isinstance(answer.get(key), bool):
             return False
-    for key in ("armed_to_fired_rate", "fired_to_opened_rate"):
-        if not isinstance(answer.get(key), (int, float)) or isinstance(answer.get(key), bool):
-            return False
+    if not isinstance(answer.get("conversion_rate"), (int, float)) or isinstance(answer.get("conversion_rate"), bool):
+        return False
     window = answer.get("window")
     if not isinstance(window, dict) or "start" not in window or "end" not in window:
         return False
@@ -165,26 +158,21 @@ def run_checks(workspace, task, config):
     reference_rows = reference_body.get("results") or []
     if not reference_rows:
         return _infra("reference HogQL returned no rows; cannot verify")
-    ref_armed, ref_fired, ref_opened = reference_rows[0]
-    ref_armed_to_fired_rate = (ref_fired / ref_armed) if ref_armed else 0.0
-    ref_fired_to_opened_rate = (ref_opened / ref_fired) if ref_fired else 0.0
+    ref_created, ref_confirmed_after = reference_rows[0]
+    ref_conversion_rate = (ref_confirmed_after / ref_created) if ref_created else 0.0
 
     mismatches = []
-    if not _within_tolerance(answer["users_armed"], ref_armed):
-        mismatches.append(f"users_armed {answer['users_armed']} vs reference {ref_armed}")
-    if not _within_tolerance(answer["users_fired"], ref_fired):
-        mismatches.append(f"users_fired {answer['users_fired']} vs reference {ref_fired}")
-    if not _within_tolerance(answer["users_opened"], ref_opened):
-        mismatches.append(f"users_opened {answer['users_opened']} vs reference {ref_opened}")
-    if abs(answer["armed_to_fired_rate"] - ref_armed_to_fired_rate) > 0.03:
-        mismatches.append(f"armed_to_fired_rate {answer['armed_to_fired_rate']} vs reference {ref_armed_to_fired_rate:.4f}")
-    if abs(answer["fired_to_opened_rate"] - ref_fired_to_opened_rate) > 0.03:
-        mismatches.append(f"fired_to_opened_rate {answer['fired_to_opened_rate']} vs reference {ref_fired_to_opened_rate:.4f}")
+    if not _within_tolerance(answer["users_created_reminder"], ref_created):
+        mismatches.append(f"users_created_reminder {answer['users_created_reminder']} vs reference {ref_created}")
+    if not _within_tolerance(answer["users_confirmed_after"], ref_confirmed_after):
+        mismatches.append(f"users_confirmed_after {answer['users_confirmed_after']} vs reference {ref_confirmed_after}")
+    if abs(answer["conversion_rate"] - ref_conversion_rate) > 0.03:
+        mismatches.append(f"conversion_rate {answer['conversion_rate']} vs reference {ref_conversion_rate:.4f}")
     if mismatches:
         return _fail("wrong-answer", "reported numbers outside tolerance of the reference query: " + "; ".join(mismatches))
 
     agent_values = _flatten_numeric(agent_body.get("results"))
-    reported_values = [answer["users_armed"], answer["users_fired"], answer["users_opened"]]
+    reported_values = [answer["users_created_reminder"], answer["users_confirmed_after"]]
     if not any(_within_tolerance(reported, agent_value, rel=0.05, abs_min=1) for reported in reported_values for agent_value in agent_values):
         return _fail(
             "wrong-answer",

@@ -44,8 +44,8 @@ REFERENCE_HOGQL = """
 SELECT
     sumIf(event_count, day_start < toDateTime('2026-07-12 00:00:00')) AS before_event_count,
     sumIf(event_count, day_start >= toDateTime('2026-07-12 00:00:00')) AS after_event_count,
-    avgIf(daily_users, day_start < toDateTime('2026-07-12 00:00:00')) AS before_dau_avg,
-    avgIf(daily_users, day_start >= toDateTime('2026-07-12 00:00:00')) AS after_dau_avg
+    sumIf(daily_users, day_start < toDateTime('2026-07-12 00:00:00')) / 7 AS before_dau_avg,
+    sumIf(daily_users, day_start >= toDateTime('2026-07-12 00:00:00')) / 7 AS after_dau_avg
 FROM (
     SELECT
         toStartOfDay(timestamp) AS day_start,

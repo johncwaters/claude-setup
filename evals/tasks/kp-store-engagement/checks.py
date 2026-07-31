@@ -15,15 +15,15 @@ Expected answer.json schema:
 {
   "window": {"start": "<iso8601>", "end": "<iso8601>"},
   "users_store_opened": <int>,
-  "users_purchased": <int>,
-  "purchase_rate": <number>,
-  "median_amber_earned_events_per_purchaser": <number>,
+  "users_engaged": <int>,
+  "engagement_rate": <number>,
+  "median_amber_earned": <number>,
   "hogql": "<the query text the agent ran>"
 }
 
 Numeric tolerance (see reference.md): user counts within 5% relative or 2 absolute,
-whichever is larger; purchase_rate within 0.03 (3 percentage points) absolute; the
-median event count within 1 event (median is tie-sensitive at low purchaser counts).
+whichever is larger; engagement_rate within 0.03 (3 percentage points) absolute; the
+median event count within 1 event (median is tie-sensitive at low engaged-user counts).
 """
 
 import json
@@ -33,8 +33,8 @@ import urllib.error
 import urllib.request
 
 REQUIRED_KEYS = {
-    "window", "users_store_opened", "users_purchased",
-    "purchase_rate", "median_amber_earned_events_per_purchaser", "hogql",
+    "window", "users_store_opened", "users_engaged",
+    "engagement_rate", "median_amber_earned", "hogql",
 }
 WRITE_KEYWORDS_RE = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b", re.IGNORECASE
@@ -43,18 +43,17 @@ WRITE_KEYWORDS_RE = re.compile(
 REFERENCE_HOGQL = """
 SELECT
     countIf(has_store_opened) AS users_store_opened,
-    countIf(has_store_opened AND has_purchased) AS users_purchased,
-    arrayReduce('median', groupArrayIf(amber_earned_count, has_store_opened AND has_purchased)) AS median_amber_earned
+    countIf(has_store_opened AND amber_earned_count > 0) AS users_engaged,
+    arrayReduce('median', groupArrayIf(amber_earned_count, has_store_opened AND amber_earned_count > 0)) AS median_amber_earned
 FROM (
     SELECT
         person_id,
         countIf(event = 'store_opened') > 0 AS has_store_opened,
-        countIf(event = 'amber_pack_purchased') > 0 AS has_purchased,
         countIf(event = 'amber_earned') AS amber_earned_count
     FROM events
     WHERE timestamp >= toDateTime('2026-07-12 00:00:00')
       AND timestamp < toDateTime('2026-07-26 00:00:00')
-      AND event IN ('store_opened', 'amber_pack_purchased', 'amber_earned')
+      AND event IN ('store_opened', 'amber_earned')
     GROUP BY person_id
 )
 """
@@ -90,10 +89,10 @@ def _schema_ok(answer):
         return False
     if not isinstance(answer.get("hogql"), str) or not answer["hogql"].strip():
         return False
-    for key in ("users_store_opened", "users_purchased"):
+    for key in ("users_store_opened", "users_engaged"):
         if not isinstance(answer.get(key), int) or isinstance(answer.get(key), bool):
             return False
-    for key in ("purchase_rate", "median_amber_earned_events_per_purchaser"):
+    for key in ("engagement_rate", "median_amber_earned"):
         if not isinstance(answer.get(key), (int, float)) or isinstance(answer.get(key), bool):
             return False
     window = answer.get("window")
@@ -161,26 +160,26 @@ def run_checks(workspace, task, config):
     reference_rows = reference_body.get("results") or []
     if not reference_rows:
         return _infra("reference HogQL returned no rows; cannot verify")
-    ref_store_opened, ref_purchased, ref_median = reference_rows[0]
-    ref_purchase_rate = (ref_purchased / ref_store_opened) if ref_store_opened else 0.0
+    ref_store_opened, ref_engaged, ref_median = reference_rows[0]
+    ref_engagement_rate = (ref_engaged / ref_store_opened) if ref_store_opened else 0.0
 
     mismatches = []
     if not _within_tolerance(answer["users_store_opened"], ref_store_opened):
         mismatches.append(f"users_store_opened {answer['users_store_opened']} vs reference {ref_store_opened}")
-    if not _within_tolerance(answer["users_purchased"], ref_purchased):
-        mismatches.append(f"users_purchased {answer['users_purchased']} vs reference {ref_purchased}")
-    if abs(answer["purchase_rate"] - ref_purchase_rate) > 0.03:
-        mismatches.append(f"purchase_rate {answer['purchase_rate']} vs reference {ref_purchase_rate:.4f}")
-    if ref_median is not None and abs(answer["median_amber_earned_events_per_purchaser"] - ref_median) > 1:
+    if not _within_tolerance(answer["users_engaged"], ref_engaged):
+        mismatches.append(f"users_engaged {answer['users_engaged']} vs reference {ref_engaged}")
+    if abs(answer["engagement_rate"] - ref_engagement_rate) > 0.03:
+        mismatches.append(f"engagement_rate {answer['engagement_rate']} vs reference {ref_engagement_rate:.4f}")
+    if ref_median is not None and abs(answer["median_amber_earned"] - ref_median) > 1:
         mismatches.append(
-            f"median_amber_earned_events_per_purchaser {answer['median_amber_earned_events_per_purchaser']} "
+            f"median_amber_earned {answer['median_amber_earned']} "
             f"vs reference {ref_median}"
         )
     if mismatches:
         return _fail("wrong-answer", "reported numbers outside tolerance of the reference query: " + "; ".join(mismatches))
 
     agent_values = _flatten_numeric(agent_body.get("results"))
-    reported_values = [answer["users_store_opened"], answer["users_purchased"]]
+    reported_values = [answer["users_store_opened"], answer["users_engaged"]]
     if not any(_within_tolerance(reported, agent_value, rel=0.05, abs_min=1) for reported in reported_values for agent_value in agent_values):
         return _fail(
             "wrong-answer",

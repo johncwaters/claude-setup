@@ -26,11 +26,11 @@ class CredentialGateOrderingTests(unittest.TestCase):
             if value is not None:
                 os.environ[name] = value
 
-    def test_kp_checkin_funnel_returns_check_infra_without_creds_even_with_no_answer_json(self):
+    def test_kp_reminder_funnel_returns_check_infra_without_creds_even_with_no_answer_json(self):
         self.assertFalse(os.path.isfile(os.path.join(self.workspace, "answer.json")))
-        checks = load_checks_module("kp-checkin-funnel")
+        checks = load_checks_module("kp-reminder-funnel")
 
-        result = checks.run_checks(self.workspace, {"id": "kp-checkin-funnel"}, {"posthog": {}})
+        result = checks.run_checks(self.workspace, {"id": "kp-reminder-funnel"}, {"posthog": {}})
 
         self.assertFalse(result["passed"])
         self.assertEqual(result["reason_code"], "check-infra")
@@ -57,7 +57,7 @@ class CredentialGateOrderingTests(unittest.TestCase):
         os.environ["EVALS_POSTHOG_PERSONAL_KEY"] = "test-key"
         os.environ["EVALS_TEST_CUSTOM_KEEPLINGS_ID"] = "12345"
         self.addCleanup(os.environ.pop, "EVALS_TEST_CUSTOM_KEEPLINGS_ID", None)
-        checks = load_checks_module("kp-checkin-funnel")
+        checks = load_checks_module("kp-reminder-funnel")
 
         creds = checks._read_env_creds({"posthog": {"keeplings_project_id_env": "EVALS_TEST_CUSTOM_KEEPLINGS_ID"}})
 

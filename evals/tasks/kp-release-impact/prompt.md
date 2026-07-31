@@ -20,4 +20,6 @@ workspace root, as:
 ```
 
 `before_dau_avg`/`after_dau_avg` are the average of the daily unique-user counts across
-each window (not a single window-wide unique count).
+each window: divide the sum of daily unique-user counts by the 7 calendar days of the
+window, counting days with no events as zero (not a single window-wide unique count, and
+not an average over only the days that had events).

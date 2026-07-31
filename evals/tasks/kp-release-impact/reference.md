@@ -16,8 +16,8 @@ The window stays entirely inside 1.0.0+16's own lifetime (1.0.0+17 didn't ship u
 SELECT
     sumIf(event_count, day_start < toDateTime('2026-07-12 00:00:00')) AS before_event_count,
     sumIf(event_count, day_start >= toDateTime('2026-07-12 00:00:00')) AS after_event_count,
-    avgIf(daily_users, day_start < toDateTime('2026-07-12 00:00:00')) AS before_dau_avg,
-    avgIf(daily_users, day_start >= toDateTime('2026-07-12 00:00:00')) AS after_dau_avg
+    sumIf(daily_users, day_start < toDateTime('2026-07-12 00:00:00')) / 7 AS before_dau_avg,
+    sumIf(daily_users, day_start >= toDateTime('2026-07-12 00:00:00')) / 7 AS after_dau_avg
 FROM (
     SELECT
         toStartOfDay(timestamp) AS day_start,
@@ -37,13 +37,19 @@ guidance (one person can carry multiple distinct_ids, which would overcount). Th
 in the reference query itself, since the window split already isolates before/after
 without needing the property.
 
+The DAU average divides by a fixed `7` (the calendar days in each window) rather than
+`count(day_start)` over the grouped subquery, because a day with zero events never
+produces a `day_start` row at all: dividing by the row count silently drops empty days
+from the denominator instead of counting them as zero, inflating the average.
+
 ## Verified answer
 
-**PENDING VERIFICATION** - no live PostHog credentials exist in this development
-environment, so this query has never actually been run against the keeplings project.
-The numbers above are the query design only, not a checked result. Do not treat any
-numeric answer as ground truth until this has been executed for real and this section
-is updated with the actual result and the date it was run.
+Executed 2026-07-31 against keeplings production: `before_event_count=809`,
+`after_event_count=520`, `before_dau_avg=8.714285714285714` (61 / 7),
+`after_dau_avg=6.857142857142857` (48 / 7). The before window's daily unique-user sum of
+61 came from only 6 of its 7 calendar days having any events at all; averaging over
+days-with-events instead of the fixed 7-day window gives 10.17, which is the wrong
+number this reference and the prompt now guard against explicitly.
 
 ## Tolerance
 

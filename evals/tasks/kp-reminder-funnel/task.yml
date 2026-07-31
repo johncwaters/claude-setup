@@ -1,4 +1,4 @@
-id: kp-checkin-funnel
+id: kp-reminder-funnel
 class: hogql-analysis
 mode: retrospective
 repo: null
@@ -7,6 +7,6 @@ prompt_file: prompt.md
 time_window:
   start: "2026-07-12T00:00:00Z"
   end: "2026-07-26T00:00:00Z"
-bundle: kp-checkin-funnel.md
+bundle: kp-reminder-funnel.md
 captured: "2026-07-30"
 reference: reference.md
