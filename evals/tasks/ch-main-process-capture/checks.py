@@ -189,5 +189,4 @@ def run_checks(workspace, task, config):
             "per-window loop; a crash with zero open windows still would not reach PostHog",
         )
 
-    return _pass("typecheck clean, main-process capture path found outside the window-broadcast loop: "
-                  "static acceptance surface passed")
+    return _pass("typecheck clean, main-process capture path found outside the window-broadcast loop")

@@ -196,5 +196,4 @@ def run_checks(workspace, task, config):
             f"(autoSyncCycle.ts / autoDelist.service.ts); changed files: {changed_files}",
         )
 
-    return _pass("typecheck clean, delist gating path now references a feature-flag call: "
-                  "static acceptance surface passed")
+    return _pass("typecheck clean, delist gating path now references a feature-flag call")

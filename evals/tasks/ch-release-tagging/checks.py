@@ -196,5 +196,4 @@ def run_checks(workspace, task, config):
             "app.getVersion()-style lookup; the task requires the real packaged version",
         )
 
-    return _pass("typecheck clean, release super properties registered from a dynamic version lookup: "
-                  "static acceptance surface passed")
+    return _pass("typecheck clean, release super properties registered from a dynamic version lookup")
