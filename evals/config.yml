@@ -2,13 +2,15 @@
 # docs and context conditions are configuration, not code (see docs/evals-plan.html).
 
 model: claude-sonnet-5              # pinned model for every regime; results are single-model claims
-max_turns: 30                       # headless `claude -p` turn cap per run
+max_turns: 50                       # headless `claude -p` turn cap per run; 30 floor-limited every ch- task
+                                     # in batch 1 (all runs exhausted the cap, most with zero files changed)
 trials_per_cell: 2                  # trials per (task, regime) cell; nightly raises this on headline_regimes first
 
 regimes: [none, llms-txt, mcp, bundle]     # full regime matrix (see runner/regimes.py)
 headline_regimes: [none, bundle]           # the core claim (baseline vs curated context); nightly n-raise targets these first
 
-runs_per_batch_cap: 40               # max claude invocations per `run.py` invocation; guards against a runaway batch
+runs_per_batch_cap: 60               # max claude invocations per `run.py` invocation; guards against a runaway batch
+                                      # while clearing the full 6x4x2 grid (48 trials)
 checks_timeout_secs: 600             # per-run checks.py subprocess timeout before scoring.py normalizes to check-infra;
                                       # budget: typecheck capped at 180s + event_poll_timeout_secs (300s) + slack, so a
                                       # ch- task's checks.py never blows this ceiling under its own internal timeouts

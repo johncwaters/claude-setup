@@ -24,6 +24,7 @@
 .credentials.json
 settings.local.json
 evals/.env
+evals/results/replays/
 *.bak*
 *.backup*
 *.tmp.*
