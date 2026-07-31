@@ -63,6 +63,9 @@ class Journal:
             latest[cell_key(row["task"], row["regime"], row["trial"])] = row
         return latest
 
-    def is_cell_completed(self, task, regime, trial):
-        row = self.latest_by_cell().get(cell_key(task, regime, trial))
+    def is_cell_completed(self, task, regime, trial, latest_by_cell=None):
+        # a batch's resume check calls this once per cell; passing a precomputed
+        # latest_by_cell (built once by the caller) keeps that O(n) instead of O(n^2)
+        latest_by_cell = self.latest_by_cell() if latest_by_cell is None else latest_by_cell
+        row = latest_by_cell.get(cell_key(task, regime, trial))
         return bool(row and row["status"] == "completed")

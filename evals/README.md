@@ -41,6 +41,11 @@ Results land in `results/journal.jsonl` (append-only, one JSON object per line, 
 by `(task, regime, trial)`) and `results/summary.json` (pass rate, mean cost, reason-code
 histogram per `(task, regime)`, written after each batch).
 
+`results/journal.jsonl` and `results/summary.json` are intentionally tracked in git, not
+gitignored: the Harness deliverable in `docs/evals-plan.html`'s "Deliverables" section is
+`evals/` "with task specs, runner, scorers, and results", so the published journal is part
+of the deliverable, not scratch output.
+
 ## Env vars
 
 | Var | Purpose |

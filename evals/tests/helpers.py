@@ -2,10 +2,13 @@
 compiled-commit/tests/helpers.py for the precedent). Only external LLM/HTTP calls get canned.
 """
 
+import importlib.util
 import os
 import shutil
 import subprocess
 import tempfile
+
+TASKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tasks")
 
 
 def run_git(repo, args, check=True):
@@ -43,3 +46,12 @@ def commit_file(repo, path, content, message="init"):
 def cleanup(*paths):
     for path in paths:
         shutil.rmtree(path, ignore_errors=True)
+
+
+def load_checks_module(task_id):
+    """Load a tasks/<task_id>/checks.py by path (it lives outside the runner package)."""
+    path = os.path.join(TASKS_DIR, task_id, "checks.py")
+    spec = importlib.util.spec_from_file_location(f"{task_id.replace('-', '_')}_checks", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module

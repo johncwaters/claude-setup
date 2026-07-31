@@ -5,22 +5,12 @@ node_modules linking, the renderer-SDK/wrong-api regex scans over real card-harb
 source) needs an actual card-harbor checkout and cannot be unit-tested from this repo.
 """
 
-import importlib.util
 import os
 import unittest
 
-from tests.helpers import cleanup, commit_file, make_repo
+from tests.helpers import cleanup, commit_file, load_checks_module, make_repo
 
-TASKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tasks")
 CH_TASK_IDS = ("ch-main-process-capture", "ch-flag-gated-rollout", "ch-release-tagging")
-
-
-def _load_checks_module(task_id):
-    path = os.path.join(TASKS_DIR, task_id, "checks.py")
-    spec = importlib.util.spec_from_file_location(f"{task_id.replace('-', '_')}_checks", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 class ChangedFilesIntentToAddTests(unittest.TestCase):
@@ -37,7 +27,7 @@ class ChangedFilesIntentToAddTests(unittest.TestCase):
             handle.write("export function broadcastMainProcessError() {}\n")
 
         for task_id in CH_TASK_IDS:
-            checks = _load_checks_module(task_id)
+            checks = load_checks_module(task_id)
             changed = checks._changed_files(self.repo, self.pinned_commit)
             self.assertIsNotNone(changed, f"{task_id}: git diff unexpectedly failed")
             self.assertIn("src/main/crashHandlers.ts", changed, f"{task_id} missed the untracked new file")
@@ -47,7 +37,7 @@ class ChangedFilesIntentToAddTests(unittest.TestCase):
             handle.write("export const x = 1;\n")
 
         for task_id in CH_TASK_IDS:
-            checks = _load_checks_module(task_id)
+            checks = load_checks_module(task_id)
             changed = checks._changed_files(self.repo, self.pinned_commit)
             self.assertIn("src/main/index.ts", changed, f"{task_id} missed the modified tracked file")
 

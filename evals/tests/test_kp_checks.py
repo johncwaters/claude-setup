@@ -5,22 +5,14 @@ loaded directly via importlib (same technique scoring.py's subprocess runner use
 rather than imported as a module.
 """
 
-import importlib.util
 import os
 import shutil
 import tempfile
 import unittest
 
-TASKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tasks")
+from tests.helpers import load_checks_module
+
 CREDENTIAL_ENV_VARS = ("EVALS_POSTHOG_PERSONAL_KEY", "EVALS_POSTHOG_KEEPLINGS_PROJECT_ID")
-
-
-def _load_checks_module(task_id):
-    path = os.path.join(TASKS_DIR, task_id, "checks.py")
-    spec = importlib.util.spec_from_file_location(f"{task_id.replace('-', '_')}_checks", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 class CredentialGateOrderingTests(unittest.TestCase):
@@ -36,7 +28,7 @@ class CredentialGateOrderingTests(unittest.TestCase):
 
     def test_kp_checkin_funnel_returns_check_infra_without_creds_even_with_no_answer_json(self):
         self.assertFalse(os.path.isfile(os.path.join(self.workspace, "answer.json")))
-        checks = _load_checks_module("kp-checkin-funnel")
+        checks = load_checks_module("kp-checkin-funnel")
 
         result = checks.run_checks(self.workspace, {"id": "kp-checkin-funnel"}, {"posthog": {}})
 
@@ -45,7 +37,7 @@ class CredentialGateOrderingTests(unittest.TestCase):
 
     def test_kp_release_impact_returns_check_infra_without_creds_even_with_no_answer_json(self):
         self.assertFalse(os.path.isfile(os.path.join(self.workspace, "answer.json")))
-        checks = _load_checks_module("kp-release-impact")
+        checks = load_checks_module("kp-release-impact")
 
         result = checks.run_checks(self.workspace, {"id": "kp-release-impact"}, {"posthog": {}})
 
@@ -54,7 +46,7 @@ class CredentialGateOrderingTests(unittest.TestCase):
 
     def test_kp_store_engagement_returns_check_infra_without_creds_even_with_no_answer_json(self):
         self.assertFalse(os.path.isfile(os.path.join(self.workspace, "answer.json")))
-        checks = _load_checks_module("kp-store-engagement")
+        checks = load_checks_module("kp-store-engagement")
 
         result = checks.run_checks(self.workspace, {"id": "kp-store-engagement"}, {"posthog": {}})
 
@@ -65,7 +57,7 @@ class CredentialGateOrderingTests(unittest.TestCase):
         os.environ["EVALS_POSTHOG_PERSONAL_KEY"] = "test-key"
         os.environ["EVALS_TEST_CUSTOM_KEEPLINGS_ID"] = "12345"
         self.addCleanup(os.environ.pop, "EVALS_TEST_CUSTOM_KEEPLINGS_ID", None)
-        checks = _load_checks_module("kp-checkin-funnel")
+        checks = load_checks_module("kp-checkin-funnel")
 
         creds = checks._read_env_creds({"posthog": {"keeplings_project_id_env": "EVALS_TEST_CUSTOM_KEEPLINGS_ID"}})
 

@@ -177,10 +177,6 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
 
         check_result = scoring.score_task(task["_dir"], workspace, task, config)
 
-        posthog_captured = posthog_capture.capture_eval_run_completed(
-            config, task["id"], regime, trial, check_result["passed"], check_result["reason_code"],
-            wall_secs, claude_result.num_turns, usage, config["model"], bundle_hash,
-        )
         status = "infra" if check_result["reason_code"] == "check-infra" else "completed"
         entry = JournalEntry(
             ts=datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -188,9 +184,10 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
             passed=check_result["passed"], reason_code=check_result["reason_code"],
             wall_secs=wall_secs, turns=claude_result.num_turns, usage=usage,
             model=config["model"], bundle_hash=bundle_hash,
-            snapshot_hashes=assembly.snapshot_hashes, posthog_captured=posthog_captured,
+            snapshot_hashes=assembly.snapshot_hashes, posthog_captured=False,
             detail=check_result.get("detail", ""),
         )
+        entry.posthog_captured = posthog_capture.capture_eval_run_completed(config, entry)
         journal.append(entry)
         return entry
     except Exception as exc:
@@ -281,11 +278,14 @@ def main(argv=None):
 
     evals_root = os.path.dirname(os.path.abspath(args.config))
     journal = Journal(os.path.join(args.results_dir, "journal.jsonl"))
+    # built once so the resume check below is O(1) per cell instead of re-reading the
+    # whole journal on every iteration (O(n^2) over a large batch)
+    latest_by_cell = journal.latest_by_cell() if not args.dry_run else {}
 
     invocation_count = 0
     batch_cap = config.get("runs_per_batch_cap")
     for task, regime, trial in iter_cells(tasks, regime_names, trials):
-        if not args.dry_run and journal.is_cell_completed(task["id"], regime, trial):
+        if not args.dry_run and journal.is_cell_completed(task["id"], regime, trial, latest_by_cell):
             continue
         if not args.dry_run and batch_cap and invocation_count >= batch_cap:
             print(f"runs_per_batch_cap ({batch_cap}) reached; stopping batch early")
@@ -301,7 +301,7 @@ def main(argv=None):
     summary = _summarize(journal, tasks, regime_names, trials)
     os.makedirs(args.results_dir, exist_ok=True)
     with open(os.path.join(args.results_dir, "summary.json"), "w", encoding="utf-8") as handle:
-        json.dump(summary, handle, indent=2)
+        handle.write(json.dumps(summary, indent=2) + "\n")
 
     return 0
 

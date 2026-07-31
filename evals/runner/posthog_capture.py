@@ -5,6 +5,7 @@ is enough for one event type. Telemetry never gates a run: an absent env key or 
 network fault is a silent no-op, and the caller records posthog_captured=False.
 """
 
+import dataclasses
 import json
 import os
 import urllib.error
@@ -18,19 +19,24 @@ def _project_api_key(config):
     return os.environ.get(env_name)
 
 
-def _build_event(api_key, task, regime, trial, passed, reason_code, wall_secs, turns, usage, model, bundle_hash):
+def _entry_fields(entry):
+    return entry if isinstance(entry, dict) else dataclasses.asdict(entry)
+
+
+def _build_event(api_key, entry):
+    fields = _entry_fields(entry)
     properties = {
-        "task": task,
-        "regime": regime,
-        "trial": trial,
-        "passed": passed,
-        "reason_code": reason_code,
-        "wall_secs": wall_secs,
-        "turns": turns,
-        "model": model,
-        "bundle_hash": bundle_hash,
+        "task": fields["task"],
+        "regime": fields["regime"],
+        "trial": fields["trial"],
+        "passed": fields["passed"],
+        "reason_code": fields["reason_code"],
+        "wall_secs": fields["wall_secs"],
+        "turns": fields["turns"],
+        "model": fields["model"],
+        "bundle_hash": fields["bundle_hash"],
     }
-    properties.update({f"usage_{key}": value for key, value in usage.items()})
+    properties.update({f"usage_{key}": value for key, value in fields["usage"].items()})
     return {
         "api_key": api_key,
         "batch": [{
@@ -41,14 +47,14 @@ def _build_event(api_key, task, regime, trial, passed, reason_code, wall_secs, t
     }
 
 
-def capture_eval_run_completed(config, task, regime, trial, passed, reason_code, wall_secs,
-                                turns, usage, model, bundle_hash):
+def capture_eval_run_completed(config, entry):
+    """entry: a JournalEntry (or an equivalent dict) describing the run just scored."""
     api_key = _project_api_key(config)
     if not api_key:
         return False
 
     host = config.get("posthog", {}).get("host", DEFAULT_HOST)
-    event = _build_event(api_key, task, regime, trial, passed, reason_code, wall_secs, turns, usage, model, bundle_hash)
+    event = _build_event(api_key, entry)
 
     request = urllib.request.Request(
         f"{host}/batch/",

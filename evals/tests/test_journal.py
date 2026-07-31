@@ -62,6 +62,14 @@ class JournalTests(unittest.TestCase):
         row = journal.read_all()[0]
         self.assertEqual(row["detail"], "")
 
+    def test_is_cell_completed_accepts_a_precomputed_latest_by_cell_map(self):
+        journal = Journal(self.journal_path)
+        journal.append(_make_entry("t1", "none", 1, "completed"))
+        latest_by_cell = journal.latest_by_cell()
+
+        self.assertTrue(journal.is_cell_completed("t1", "none", 1, latest_by_cell))
+        self.assertFalse(journal.is_cell_completed("t1", "none", 2, latest_by_cell))
+
     def test_detail_round_trips_through_journal(self):
         journal = Journal(self.journal_path)
         journal.append(_make_entry(
