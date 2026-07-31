@@ -23,6 +23,7 @@
 # Never sync these even if a rule above matches
 .credentials.json
 settings.local.json
+evals/.env
 *.bak*
 *.backup*
 *.tmp.*

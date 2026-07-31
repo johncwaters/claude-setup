@@ -23,7 +23,7 @@ from collections import Counter, defaultdict
 
 import yaml
 
-from runner import claude_cli, posthog_capture, regimes, scoring
+from runner import claude_cli, env_file, posthog_capture, regimes, scoring
 from runner.journal import Journal, JournalEntry
 
 EVALS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -280,6 +280,7 @@ def main(argv=None):
     trials = args.trials or config["trials_per_cell"]
 
     evals_root = os.path.dirname(os.path.abspath(args.config))
+    env_file.apply_env_file(os.path.join(evals_root, ".env"))
     journal = Journal(os.path.join(args.results_dir, "journal.jsonl"))
     # built once so the resume check below is O(1) per cell instead of re-reading the
     # whole journal on every iteration (O(n^2) over a large batch)

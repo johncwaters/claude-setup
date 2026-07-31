@@ -48,6 +48,10 @@ of the deliverable, not scratch output.
 
 ## Env vars
 
+Copy `evals/.env.example` to `evals/.env` and fill in real values; `run.py` and
+`capture.py` load it at startup. Machine env vars still work and always take precedence
+over `.env`. `evals/.env` is gitignored, never commit real credentials.
+
 | Var | Purpose |
 |---|---|
 | `EVALS_POSTHOG_PROJECT_KEY` | write key used to emit `eval_run_completed` events |

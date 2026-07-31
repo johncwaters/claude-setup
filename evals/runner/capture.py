@@ -16,6 +16,10 @@ import sys
 
 import yaml
 
+from runner import env_file
+
+EVALS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 TASK_CLASSES = ("install-instrumentation", "hogql-analysis", "error-tracking", "product-config")
 TASK_MODES = ("prospective", "retrospective")
 TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -86,7 +90,7 @@ def capture_task(tasks_dir, task_id, task_class, mode, prompt_file, repo=None):
 
 
 def build_arg_parser():
-    default_tasks_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tasks")
+    default_tasks_dir = os.path.join(EVALS_ROOT, "tasks")
     parser = argparse.ArgumentParser(description="Snapshot a real completed task into evals/tasks/.")
     parser.add_argument("--id", required=True, dest="task_id")
     parser.add_argument("--class", required=True, dest="task_class", choices=TASK_CLASSES)
@@ -98,6 +102,7 @@ def build_arg_parser():
 
 
 def main(argv=None):
+    env_file.apply_env_file(os.path.join(EVALS_ROOT, ".env"))
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     task_dir = capture_task(args.tasks_dir, args.task_id, args.task_class, args.mode, args.prompt_file, args.repo)
