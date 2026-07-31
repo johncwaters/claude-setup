@@ -1,0 +1,31 @@
+# Eval harness config: regimes, model, trial counts, and budget caps live here so target
+# docs and context conditions are configuration, not code (see docs/evals-plan.html).
+
+model: claude-sonnet-5              # pinned model for every regime; results are single-model claims
+max_turns: 30                       # headless `claude -p` turn cap per run
+trials_per_cell: 2                  # trials per (task, regime) cell; nightly raises this on headline_regimes first
+
+regimes: [none, llms-txt, mcp, bundle]     # full regime matrix (see runner/regimes.py)
+headline_regimes: [none, bundle]           # the core claim (baseline vs curated context); nightly n-raise targets these first
+
+runs_per_batch_cap: 40               # max claude invocations per `run.py` invocation; guards against a runaway batch
+checks_timeout_secs: 600             # per-run checks.py subprocess timeout before scoring.py normalizes to check-infra;
+                                      # budget: typecheck capped at 180s + event_poll_timeout_secs (300s) + slack, so a
+                                      # ch- task's checks.py never blows this ceiling under its own internal timeouts
+event_poll_timeout_secs: 300         # ch- checks.py's own internal PostHog scratch-project poll deadline; kept separate
+                                      # from checks_timeout_secs so the poll can never collide with the subprocess ceiling
+                                      # that wraps it; PostHog ingestion has no SLA, normal lag is low minutes
+
+token_budget:
+  max_gross_tokens_per_run: 500000   # gross = input + cache_creation + cache_read + output (see runner/run.py)
+
+posthog:
+  host: https://us.i.posthog.com
+  project_api_key_env: EVALS_POSTHOG_PROJECT_KEY         # write key used to emit eval_run_completed events
+  personal_api_key_env: EVALS_POSTHOG_PERSONAL_KEY       # read access for dashboards; also the mcp regime's auth token
+  scratch_project_id_env: EVALS_POSTHOG_SCRATCH_PROJECT_ID   # prospective-task writes and mcp-regime writes land only here
+  keeplings_project_id_env: EVALS_POSTHOG_KEEPLINGS_PROJECT_ID   # kp- checks' HogQL query target; keeplings production
+  mcp_url: https://mcp.posthog.com/mcp
+  mcp_token_env: EVALS_POSTHOG_PERSONAL_KEY              # env var read for the mcp regime's Authorization header
+
+bundles_dir: bundles                 # hand-built context bundles and llms.txt snapshots live under here

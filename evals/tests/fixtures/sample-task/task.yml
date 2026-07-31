@@ -1,0 +1,10 @@
+id: sample-task
+class: hogql-analysis
+mode: retrospective
+repo: null
+pinned_commit: null
+prompt_file: prompt.md
+time_window: null
+bundle: null
+captured: "2026-07-30"
+reference: reference.md

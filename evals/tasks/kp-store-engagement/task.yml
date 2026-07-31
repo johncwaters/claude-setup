@@ -1,0 +1,12 @@
+id: kp-store-engagement
+class: hogql-analysis
+mode: retrospective
+repo: null
+pinned_commit: null
+prompt_file: prompt.md
+time_window:
+  start: "2026-07-12T00:00:00Z"
+  end: "2026-07-26T00:00:00Z"
+bundle: kp-store-engagement.md
+captured: "2026-07-30"
+reference: reference.md

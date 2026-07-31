@@ -1,0 +1,14 @@
+{
+  "kp-release-impact::bundle": {
+    "task": "kp-release-impact",
+    "regime": "bundle",
+    "scored_trials": 0,
+    "infra_trials": 1,
+    "total_trials": 1,
+    "pass_rate": null,
+    "mean_cost_usd": null,
+    "reason_code_histogram": {
+      "check-infra": 1
+    }
+  }
+}
