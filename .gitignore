@@ -35,9 +35,9 @@ __pycache__/
 /sessions/
 /tasks/
 /teams/
-cache/
-backups/
-file-history/
+/cache/
+/backups/
+/file-history/
 shell-snapshots/
 session-env/
 paste-cache/
