@@ -26,6 +26,7 @@ Numeric tolerance (see reference.md): counts within 5% relative or 2 absolute, w
 is larger; dau averages within 5% relative or 0.5 absolute, whichever is larger.
 """
 
+import datetime
 import json
 import os
 import re
@@ -40,20 +41,26 @@ WRITE_KEYWORDS_RE = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b", re.IGNORECASE
 )
 
-REFERENCE_HOGQL = """
+WINDOW_START = datetime.datetime(2026, 7, 5)
+ROLLOUT_SPLIT = datetime.datetime(2026, 7, 12)
+WINDOW_END = datetime.datetime(2026, 7, 19)
+BEFORE_CALENDAR_DAYS = (ROLLOUT_SPLIT - WINDOW_START).days
+AFTER_CALENDAR_DAYS = (WINDOW_END - ROLLOUT_SPLIT).days
+
+REFERENCE_HOGQL = f"""
 SELECT
-    sumIf(event_count, day_start < toDateTime('2026-07-12 00:00:00')) AS before_event_count,
-    sumIf(event_count, day_start >= toDateTime('2026-07-12 00:00:00')) AS after_event_count,
-    sumIf(daily_users, day_start < toDateTime('2026-07-12 00:00:00')) / 7 AS before_dau_avg,
-    sumIf(daily_users, day_start >= toDateTime('2026-07-12 00:00:00')) / 7 AS after_dau_avg
+    sumIf(event_count, day_start < toDateTime('{ROLLOUT_SPLIT:%Y-%m-%d %H:%M:%S}')) AS before_event_count,
+    sumIf(event_count, day_start >= toDateTime('{ROLLOUT_SPLIT:%Y-%m-%d %H:%M:%S}')) AS after_event_count,
+    sumIf(daily_users, day_start < toDateTime('{ROLLOUT_SPLIT:%Y-%m-%d %H:%M:%S}')) / {BEFORE_CALENDAR_DAYS} AS before_dau_avg,
+    sumIf(daily_users, day_start >= toDateTime('{ROLLOUT_SPLIT:%Y-%m-%d %H:%M:%S}')) / {AFTER_CALENDAR_DAYS} AS after_dau_avg
 FROM (
     SELECT
         toStartOfDay(timestamp) AS day_start,
         count() AS event_count,
         uniq(person_id) AS daily_users
     FROM events
-    WHERE timestamp >= toDateTime('2026-07-05 00:00:00')
-      AND timestamp < toDateTime('2026-07-19 00:00:00')
+    WHERE timestamp >= toDateTime('{WINDOW_START:%Y-%m-%d %H:%M:%S}')
+      AND timestamp < toDateTime('{WINDOW_END:%Y-%m-%d %H:%M:%S}')
     GROUP BY day_start
 )
 """
