@@ -17,7 +17,6 @@ the packaged app's real version (which fails the task's explicit "not a hardcode
 string" requirement just as surely as not registering anything).
 """
 
-import json
 import os
 import re
 import subprocess
@@ -27,8 +26,6 @@ APP_VERSION_KEY_RE = re.compile(r"\$app_version|app_version", re.IGNORECASE)
 APP_BUILD_KEY_RE = re.compile(r"\$app_build|app_build", re.IGNORECASE)
 HARDCODED_SEMVER_RE = re.compile(r"""['"]\d+\.\d+\.\d+(?:\+\d+)?['"]""")
 GET_VERSION_RE = re.compile(r"getVersion\s*\(|getAppVersion")
-
-EVENT_POLL_TIMEOUT_SECS_DEFAULT = 300
 
 
 def _fail(reason_code, detail):
@@ -161,49 +158,6 @@ def _run_typecheck(workspace):
     return proc.returncode, (proc.stdout + "\n" + proc.stderr)[-4000:]
 
 
-def _poll_scratch_project_for_event(config, event_name, timeout_secs):
-    """Separated so it is trivially skippable when scratch-project credentials are absent."""
-    import time
-    import urllib.error
-    import urllib.request
-
-    posthog_config = config.get("posthog", {})
-    personal_key = os.environ.get(posthog_config.get("personal_api_key_env", "EVALS_POSTHOG_PERSONAL_KEY"))
-    project_id = os.environ.get(posthog_config.get("scratch_project_id_env", "EVALS_POSTHOG_SCRATCH_PROJECT_ID"))
-    if not personal_key or not project_id:
-        return None
-
-    host = posthog_config.get("host", "https://us.i.posthog.com")
-    query = {
-        "query": {
-            "kind": "HogQLQuery",
-            "query": (
-                f"SELECT count() FROM events WHERE event = '{event_name}' "
-                "AND properties.$app_version IS NOT NULL "
-                "AND timestamp > now() - INTERVAL 1 HOUR"
-            ),
-        }
-    }
-    deadline = time.monotonic() + timeout_secs
-    while time.monotonic() < deadline:
-        request = urllib.request.Request(
-            f"{host}/api/projects/{project_id}/query/",
-            data=json.dumps(query).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {personal_key}"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                body = json.loads(response.read())
-                count = (body.get("results") or [[0]])[0][0]
-                if count and count > 0:
-                    return True
-        except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-            pass
-        time.sleep(15)
-    return False
-
-
 def run_checks(workspace, task, config):
     pinned_commit = task.get("pinned_commit")
     repo_root = task.get("repo") or workspace
@@ -242,11 +196,5 @@ def run_checks(workspace, task, config):
             "app.getVersion()-style lookup; the task requires the real packaged version",
         )
 
-    timeout_secs = config.get("event_poll_timeout_secs", EVENT_POLL_TIMEOUT_SECS_DEFAULT)
-    poll_result = _poll_scratch_project_for_event(config, "app_launched", timeout_secs)
-    if poll_result is None:
-        return _pass("typecheck clean, release super properties registered from a dynamic version lookup; "
-                      "PostHog scratch-project credentials absent, event poll skipped")
-    if poll_result is False:
-        return _fail("missing-events", "expected event with $app_version did not appear in the scratch project within the poll timeout")
-    return _pass("typecheck clean, release tagging verified, event observed in scratch project with $app_version set")
+    return _pass("typecheck clean, release super properties registered from a dynamic version lookup: "
+                  "static acceptance surface passed")

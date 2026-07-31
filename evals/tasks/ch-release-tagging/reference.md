@@ -27,9 +27,17 @@ preload/IPC boundary (`src/preload/index.ts`, `src/shared/ipc/*`) rather than im
      lookup must exist, and no line that also mentions an app-version key may contain a
      bare hardcoded semver literal (`"X.Y.Z"` or `"X.Y.Z+N"`), satisfying the prompt's
      explicit "not a string typed in by hand" requirement.
-4. **missing-events** (live, skippable): polls the scratch project for an event carrying
-   a non-null `$app_version`. **No live credentials in this environment**; every run so
-   far has only exercised the credential-absent branch.
+4. **Live event poll: removed from trial grading on 2026-07-31.** `checks.py` used to
+   poll the scratch project for an event carrying a non-null `$app_version` after the
+   static checks passed. It was authored before any scratch-project credentials existed,
+   and this reference originally documented it as skippable/never-executed. Once
+   credentials were configured for batches 1-2, the poll started running on every
+   trial, but it can never pass during a trial: no task prompt asks the agent to run the
+   app or emit events, the harness never executes the app after scoring starts, and the
+   app under test isn't configured to send to the scratch project. The result was
+   static-passing trials getting mis-scored as `missing-events` after burning the full
+   300s poll timeout. End-to-end event validation for this task now happens manually,
+   outside the harness, once the real integration lands.
 
 ## Known blind spots
 

@@ -17,11 +17,9 @@ next since a task that doesn't compile can't have wired anything correctly. The 
 acceptance scan runs last and is the only check with no dedicated reason code in the
 harness vocabulary for "the acceptance surface is simply absent" (as opposed to
 hallucinated or non-compiling); it is reported as "missing-events" on the theory that an
-unwired flag never actually gates or emits anything, which is the same failure the live
-event poll would eventually surface with real credentials.
+unwired flag never actually gates or emits anything.
 """
 
-import json
 import os
 import re
 import subprocess
@@ -41,8 +39,6 @@ FLAG_TOKEN_RE = re.compile(
 
 REACT_IMPORT_RE = re.compile(r"import\s+(?:type\s+)?\{([^}]+)\}\s*from\s*['\"]@posthog/react['\"]")
 POSTHOG_CALL_RE = re.compile(r"\bposthog\??\.(\w+)\(")
-
-EVENT_POLL_TIMEOUT_SECS_DEFAULT = 300
 
 
 def _fail(reason_code, detail):
@@ -161,52 +157,6 @@ def _run_typecheck(workspace):
     return proc.returncode, (proc.stdout + "\n" + proc.stderr)[-4000:]
 
 
-def _poll_scratch_project_for_event(config, event_name, timeout_secs):
-    """Separated so it is trivially skippable when scratch-project credentials are absent.
-
-    Kept deliberately simple (a bounded existence poll, not a property-shape check) since
-    this task's reference implementation has not landed yet; see reference.md.
-    """
-    import time
-    import urllib.error
-    import urllib.request
-
-    posthog_config = config.get("posthog", {})
-    personal_key = os.environ.get(posthog_config.get("personal_api_key_env", "EVALS_POSTHOG_PERSONAL_KEY"))
-    project_id = os.environ.get(posthog_config.get("scratch_project_id_env", "EVALS_POSTHOG_SCRATCH_PROJECT_ID"))
-    if not personal_key or not project_id:
-        return None  # no creds: caller skips this check entirely
-
-    host = posthog_config.get("host", "https://us.i.posthog.com")
-    query = {
-        "query": {
-            "kind": "HogQLQuery",
-            "query": (
-                f"SELECT count() FROM events WHERE event = '{event_name}' "
-                "AND timestamp > now() - INTERVAL 1 HOUR"
-            ),
-        }
-    }
-    deadline = time.monotonic() + timeout_secs
-    while time.monotonic() < deadline:
-        request = urllib.request.Request(
-            f"{host}/api/projects/{project_id}/query/",
-            data=json.dumps(query).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {personal_key}"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                body = json.loads(response.read())
-                count = (body.get("results") or [[0]])[0][0]
-                if count and count > 0:
-                    return True
-        except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-            pass
-        time.sleep(15)
-    return False
-
-
 def run_checks(workspace, task, config):
     pinned_commit = task.get("pinned_commit")
     repo_root = task.get("repo") or workspace
@@ -246,11 +196,5 @@ def run_checks(workspace, task, config):
             f"(autoSyncCycle.ts / autoDelist.service.ts); changed files: {changed_files}",
         )
 
-    timeout_secs = config.get("event_poll_timeout_secs", EVENT_POLL_TIMEOUT_SECS_DEFAULT)
-    poll_result = _poll_scratch_project_for_event(config, "automation_started", timeout_secs)
-    if poll_result is None:
-        return _pass("typecheck clean, delist gating path now references a feature-flag call; "
-                      "PostHog scratch-project credentials absent, event poll skipped")
-    if poll_result is False:
-        return _fail("missing-events", "expected event did not appear in the scratch project within the poll timeout")
-    return _pass("typecheck clean, feature-flag gate wired into the delist path, event observed in scratch project")
+    return _pass("typecheck clean, delist gating path now references a feature-flag call: "
+                  "static acceptance surface passed")

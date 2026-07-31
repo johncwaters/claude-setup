@@ -16,7 +16,7 @@ import sys
 REASON_CODES = ("pass", "wrong-answer", "build-fail", "wrong-api", "missing-events", "check-infra")
 
 DEFAULT_TIMEOUT_SECS = 600  # fallback only; config.yml's checks_timeout_secs is the real budget
-                            # (typecheck capped at 180s + event_poll_timeout_secs 300s + slack)
+                            # (typecheck capped at 180s + slack)
 
 _SUBPROCESS_RUNNER = """
 import importlib.util

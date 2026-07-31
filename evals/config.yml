@@ -12,11 +12,8 @@ headline_regimes: [none, bundle]           # the core claim (baseline vs curated
 runs_per_batch_cap: 60               # max claude invocations per `run.py` invocation; guards against a runaway batch
                                       # while clearing the full 6x4x2 grid (48 trials)
 checks_timeout_secs: 600             # per-run checks.py subprocess timeout before scoring.py normalizes to check-infra;
-                                      # budget: typecheck capped at 180s + event_poll_timeout_secs (300s) + slack, so a
-                                      # ch- task's checks.py never blows this ceiling under its own internal timeouts
-event_poll_timeout_secs: 300         # ch- checks.py's own internal PostHog scratch-project poll deadline; kept separate
-                                      # from checks_timeout_secs so the poll can never collide with the subprocess ceiling
-                                      # that wraps it; PostHog ingestion has no SLA, normal lag is low minutes
+                                      # budget: typecheck capped at 180s + slack, so a ch- task's checks.py never blows
+                                      # this ceiling under its own internal timeouts
 
 token_budget:
   max_noncached_tokens_per_run: 500000   # noncached = input + cache_creation + output (see runner/run.py);

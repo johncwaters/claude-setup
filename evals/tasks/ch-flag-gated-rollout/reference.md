@@ -34,12 +34,17 @@ least once.
    under `src/main/services/` whose path mentions "delist", must be touched, AND its
    added lines must reference a real flag-evaluation identifier
    (`isFeatureEnabled`, `getFeatureFlag`, `useFeatureFlagEnabled`, etc.).
-4. **missing-events** (live, skippable): with
-   `EVALS_POSTHOG_PROJECT_KEY`/`EVALS_POSTHOG_SCRATCH_PROJECT_ID`/`EVALS_POSTHOG_PERSONAL_KEY`
-   set, polls the scratch project for the `automation_started` event as a coarse signal
-   the instrumented path still runs end to end. **No live credentials exist in this
-   environment**, so this stage has never actually executed; it is exercised only via
-   `poll_result is None` (credential-absent) in every run so far.
+4. **Live event poll: removed from trial grading on 2026-07-31.** `checks.py` used to
+   poll the scratch project for the `automation_started` event after the static checks
+   passed. It was authored before any scratch-project credentials existed, and this
+   reference originally documented it as skippable/never-executed. Once credentials
+   were configured for batches 1-2, the poll started running on every trial, but it can
+   never pass during a trial: no task prompt asks the agent to run the app or emit
+   events, the harness never executes the app after scoring starts, and the app under
+   test isn't configured to send to the scratch project. The result was static-passing
+   trials getting mis-scored as `missing-events` after burning the full 300s poll
+   timeout. End-to-end event validation for this task now happens manually, outside the
+   harness, once the real integration lands.
 
 ## Known blind spots (documented, not silently ignored)
 
