@@ -18,6 +18,7 @@
 !skills/**
 !setup/**
 !compiled-commit/**
+!evals/**
 
 # Never sync these even if a rule above matches
 .credentials.json
@@ -29,11 +30,11 @@ __pycache__/
 *.py[cod]
 
 # Runtime/state dirs (blocked by * already, listed for clarity)
-projects/
-plugins/
-sessions/
-tasks/
-teams/
+/projects/
+/plugins/
+/sessions/
+/tasks/
+/teams/
 cache/
 backups/
 file-history/
