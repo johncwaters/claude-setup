@@ -6,9 +6,10 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 2.20544685,
+    "mean_cost_usd": 2.4637845,
     "reason_code_histogram": {
-      "missing-events": 2
+      "build-fail": 1,
+      "missing-events": 1
     }
   },
   "ch-flag-gated-rollout::llms-txt": {
@@ -17,11 +18,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.5,
-    "mean_cost_usd": 5.47942125,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 5.472066,
     "reason_code_histogram": {
-      "pass": 1,
-      "missing-events": 1
+      "missing-events": 2
     }
   },
   "ch-flag-gated-rollout::mcp": {
@@ -30,11 +30,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.5,
-    "mean_cost_usd": 2.1537684000000006,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 2.255502,
     "reason_code_histogram": {
-      "pass": 1,
-      "missing-events": 1
+      "build-fail": 2
     }
   },
   "ch-flag-gated-rollout::bundle": {
@@ -43,11 +42,11 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 2.1469963499999998,
+    "pass_rate": 0.5,
+    "mean_cost_usd": 2.286539849999999,
     "reason_code_histogram": {
-      "build-fail": 1,
-      "missing-events": 1
+      "missing-events": 1,
+      "pass": 1
     }
   },
   "ch-main-process-capture::none": {
@@ -56,11 +55,11 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 1.7181169500000002,
+    "pass_rate": 0.5,
+    "mean_cost_usd": 1.8071234999999999,
     "reason_code_histogram": {
-      "build-fail": 1,
-      "missing-events": 1
+      "missing-events": 1,
+      "pass": 1
     }
   },
   "ch-main-process-capture::llms-txt": {
@@ -69,11 +68,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.5,
-    "mean_cost_usd": 5.081293700000002,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 5.00561045,
     "reason_code_histogram": {
-      "build-fail": 1,
-      "pass": 1
+      "build-fail": 2
     }
   },
   "ch-main-process-capture::mcp": {
@@ -83,9 +81,9 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.9959762000000003,
+    "mean_cost_usd": 1.5937482000000003,
     "reason_code_histogram": {
-      "build-fail": 2
+      "missing-events": 2
     }
   },
   "ch-main-process-capture::bundle": {
@@ -94,10 +92,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 2.3464237499999996,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 2.2603725,
     "reason_code_histogram": {
-      "build-fail": 2
+      "pass": 2
     }
   },
   "ch-release-tagging::none": {
@@ -107,7 +105,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 1.0,
-    "mean_cost_usd": 2.0474809499999997,
+    "mean_cost_usd": 1.7743764000000004,
     "reason_code_histogram": {
       "pass": 2
     }
@@ -119,7 +117,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 1.0,
-    "mean_cost_usd": 4.647273950000001,
+    "mean_cost_usd": 4.9112849,
     "reason_code_histogram": {
       "pass": 2
     }
@@ -131,7 +129,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 1.0,
-    "mean_cost_usd": 1.7246496,
+    "mean_cost_usd": 1.71762315,
     "reason_code_histogram": {
       "pass": 2
     }
@@ -143,7 +141,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 1.0,
-    "mean_cost_usd": 1.7527325999999999,
+    "mean_cost_usd": 1.9152352500000005,
     "reason_code_histogram": {
       "pass": 2
     }
@@ -155,7 +153,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.16714455,
+    "mean_cost_usd": 0.34458944999999996,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -167,7 +165,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.1969952,
+    "mean_cost_usd": 1.9507892999999998,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -178,10 +176,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 0.30518294999999995,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 1.0099652999999997,
     "reason_code_histogram": {
-      "wrong-answer": 2
+      "pass": 2
     }
   },
   "kp-release-impact::bundle": {
@@ -190,11 +188,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.5,
-    "mean_cost_usd": 0.4016259,
+    "pass_rate": 0.0,
+    "mean_cost_usd": 0.30700545,
     "reason_code_histogram": {
-      "wrong-answer": 1,
-      "pass": 1
+      "wrong-answer": 2
     }
   },
   "kp-reminder-funnel::none": {
@@ -204,7 +201,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.24104565,
+    "mean_cost_usd": 0.48088005000000006,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -216,7 +213,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.36240575,
+    "mean_cost_usd": 1.6457590500000001,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -228,7 +225,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.1959084,
+    "mean_cost_usd": 0.63756945,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -240,7 +237,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.32662305,
+    "mean_cost_usd": 0.40066620000000003,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -252,7 +249,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.10707465,
+    "mean_cost_usd": 0.3412155,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -264,7 +261,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 1.2219174,
+    "mean_cost_usd": 1.4775131999999997,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
@@ -275,10 +272,10 @@
     "scored_trials": 2,
     "infra_trials": 0,
     "total_trials": 2,
-    "pass_rate": 0.0,
-    "mean_cost_usd": 0.21968685,
+    "pass_rate": 1.0,
+    "mean_cost_usd": 0.550314,
     "reason_code_histogram": {
-      "wrong-answer": 2
+      "pass": 2
     }
   },
   "kp-store-engagement::bundle": {
@@ -288,7 +285,7 @@
     "infra_trials": 0,
     "total_trials": 2,
     "pass_rate": 0.0,
-    "mean_cost_usd": 0.21756720000000002,
+    "mean_cost_usd": 0.35096550000000004,
     "reason_code_histogram": {
       "wrong-answer": 2
     }
