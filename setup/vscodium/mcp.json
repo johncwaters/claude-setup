@@ -4,7 +4,7 @@
       "type": "http",
       "url": "https://mcp.posthog.com/mcp",
       "headers": {
-        "Authorization": "Bearer undefined"
+        "Authorization": "Bearer {{POSTHOG_PERSONAL_API_KEY}}"
       }
     }
   }

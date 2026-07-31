@@ -2,11 +2,21 @@
 
 Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus VSCodium, glissa, git, Windows Terminal, and npm global tools.
 
+The interesting homegrown pieces:
+
+- `compiled-commit/`: a deterministic commit workflow compiled from a prompt into a Python runner with typed outcomes, plus its own eval bench (`bench/`) with recorded fixtures, an LLM judge, and scored results comparing the compiled runner against historical prompt-driven commits
+- `hooks/`: file-format guard and AGENTS.md sync hooks
+- `hud/`: custom status line
+- `skills/code-review`, `skills/release`: multi-lane review workflow and an evidence-gated release runner with a deterministic profile linter
+- `setup/`: one-command idempotent machine bootstrap (see below)
+
+Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
+
 ## What is tracked
 
 - `CLAUDE.md`: global instructions (routing, delegation, style rules)
 - `settings.json`: model, permissions, hooks, enabled plugins
-- `skills/`: custom skills (impeccable, ai-slop-cleaner, code-review, release); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
+- `skills/`: homegrown skills (code-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer)
 - `commands/`: custom slash commands (commit, seo-audit)
 - `hooks/`: file-format guard hook (validate-file)
@@ -25,7 +35,7 @@ Everything else in `~/.claude` (credentials, history, sessions, caches, plugins)
 
 ## Setup on a new machine: one command
 
-Paste into PowerShell (only prereq is winget, which ships with Windows 11). A browser window opens once for GitHub sign-in when git first touches the private repo:
+Paste into PowerShell (only prereq is winget, which ships with Windows 11). A browser window opens once for GitHub sign-in the first time git needs push access:
 
 ```powershell
 winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements; $env:Path=[Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')+';'+$env:Path; $d="$env:USERPROFILE\.claude"; New-Item -ItemType Directory -Force $d | Out-Null; git -C $d init -b master; git -C $d config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C $d config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C $d fetch origin; git -C $d checkout -f -B master origin/master; powershell -ExecutionPolicy Bypass -File "$d\setup\install.ps1"
