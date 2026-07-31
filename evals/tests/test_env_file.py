@@ -5,21 +5,41 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
-from runner import env_file, run as run_module
+from runner import capture, env_file, run as run_module
 
 
-class LoadEnvFileTests(unittest.TestCase):
+class _WritesEnvFile(unittest.TestCase):
+    """Provides a temp .env path and a helper to write its contents."""
+
     def setUp(self):
+        super().setUp()
         self.tmp_dir = tempfile.mkdtemp(prefix="evals-env-file-test-")
         self.env_path = os.path.join(self.tmp_dir, ".env")
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
+        super().tearDown()
 
     def _write(self, content):
         with open(self.env_path, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
 
+
+class _RestoresEnviron(unittest.TestCase):
+    """Snapshots os.environ in setUp and removes any keys a test added, so tests never
+    leak env vars into later tests in the same process."""
+
+    def setUp(self):
+        super().setUp()
+        self._preexisting_env_keys = set(os.environ.keys())
+
+    def tearDown(self):
+        for key in set(os.environ.keys()) - self._preexisting_env_keys:
+            del os.environ[key]
+        super().tearDown()
+
+
+class LoadEnvFileTests(_WritesEnvFile):
     def test_missing_file_returns_empty_dict(self):
         self.assertEqual(env_file.load_env_file(os.path.join(self.tmp_dir, "nope.env")), {})
 
@@ -35,6 +55,10 @@ class LoadEnvFileTests(unittest.TestCase):
         self._write('FOO="bar\'\n')
         self.assertEqual(env_file.load_env_file(self.env_path), {"FOO": '"bar\''})
 
+    def test_lone_quote_character_value_is_left_intact(self):
+        self._write('FOO="\nBAR=\'\n')
+        self.assertEqual(env_file.load_env_file(self.env_path), {"FOO": '"', "BAR": "'"})
+
     def test_lines_without_equals_are_ignored(self):
         self._write("FOO=bar\nthis line has no equals sign\nBAZ=qux\n")
         self.assertEqual(env_file.load_env_file(self.env_path), {"FOO": "bar", "BAZ": "qux"})
@@ -44,21 +68,7 @@ class LoadEnvFileTests(unittest.TestCase):
         self.assertEqual(env_file.load_env_file(self.env_path), {"FOO": "bar"})
 
 
-class ApplyEnvFileTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp(prefix="evals-env-file-apply-test-")
-        self.env_path = os.path.join(self.tmp_dir, ".env")
-        self._preexisting_keys = set(os.environ.keys())
-
-    def tearDown(self):
-        for key in set(os.environ.keys()) - self._preexisting_keys:
-            del os.environ[key]
-        shutil.rmtree(self.tmp_dir, ignore_errors=True)
-
-    def _write(self, content):
-        with open(self.env_path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(content)
-
+class ApplyEnvFileTests(_RestoresEnviron, _WritesEnvFile):
     def test_missing_file_is_silent_no_op(self):
         applied_keys = env_file.apply_env_file(os.path.join(self.tmp_dir, "nope.env"))
         self.assertEqual(applied_keys, [])
@@ -77,10 +87,11 @@ class ApplyEnvFileTests(unittest.TestCase):
         self.assertEqual(os.environ["EVALS_ENV_FILE_TEST_EXISTING_KEY"], "from-machine")
 
 
-class RunStartupAppliesEnvFileTests(unittest.TestCase):
+class RunStartupAppliesEnvFileTests(_RestoresEnviron):
     FIXTURE_TASK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sample-task")
 
     def setUp(self):
+        super().setUp()
         self.tmp_root = tempfile.mkdtemp(prefix="evals-run-env-file-test-")
         self.tasks_dir = os.path.join(self.tmp_root, "tasks")
         os.makedirs(self.tasks_dir)
@@ -102,12 +113,9 @@ class RunStartupAppliesEnvFileTests(unittest.TestCase):
         with open(os.path.join(self.tmp_root, ".env"), "w", encoding="utf-8", newline="\n") as handle:
             handle.write("EVALS_RUN_STARTUP_ENV_FILE_TEST_KEY=applied-at-startup\n")
 
-        self._preexisting_keys = set(os.environ.keys())
-
     def tearDown(self):
-        for key in set(os.environ.keys()) - self._preexisting_keys:
-            del os.environ[key]
         shutil.rmtree(self.tmp_root, ignore_errors=True)
+        super().tearDown()
 
     def test_dry_run_applies_env_file_from_evals_root_not_cwd(self):
         other_cwd = tempfile.mkdtemp(prefix="evals-run-env-file-other-cwd-")
@@ -128,6 +136,49 @@ class RunStartupAppliesEnvFileTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(os.environ.get("EVALS_RUN_STARTUP_ENV_FILE_TEST_KEY"), "applied-at-startup")
+
+
+class CaptureStartupAppliesEnvFileTests(_RestoresEnviron):
+    def setUp(self):
+        super().setUp()
+        self.tmp_root = tempfile.mkdtemp(prefix="evals-capture-env-file-test-")
+        self.tasks_dir = os.path.join(self.tmp_root, "tasks")
+        os.makedirs(self.tasks_dir)
+        self.prompt_file = os.path.join(self.tmp_root, "prompt.md")
+        with open(self.prompt_file, "w", encoding="utf-8") as handle:
+            handle.write("Wire up renderer capture.\n")
+        with open(os.path.join(self.tmp_root, ".env"), "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("EVALS_CAPTURE_STARTUP_ENV_FILE_TEST_KEY=applied-at-startup\n")
+
+        # capture.py has no --config flag: its evals_root is the fixed EVALS_ROOT module
+        # constant, so pointing it at a temp .env means swapping that constant for the
+        # test rather than touching the real repo's evals/.env.
+        self._original_evals_root = capture.EVALS_ROOT
+        capture.EVALS_ROOT = self.tmp_root
+
+    def tearDown(self):
+        capture.EVALS_ROOT = self._original_evals_root
+        shutil.rmtree(self.tmp_root, ignore_errors=True)
+        super().tearDown()
+
+    def test_main_applies_env_file_from_evals_root_not_cwd(self):
+        other_cwd = tempfile.mkdtemp(prefix="evals-capture-env-file-other-cwd-")
+        original_cwd = os.getcwd()
+        os.chdir(other_cwd)
+        try:
+            exit_code = capture.main([
+                "--id", "env-file-startup-task",
+                "--class", "hogql-analysis",
+                "--mode", "retrospective",
+                "--prompt-file", self.prompt_file,
+                "--tasks-dir", self.tasks_dir,
+            ])
+        finally:
+            os.chdir(original_cwd)
+            shutil.rmtree(other_cwd, ignore_errors=True)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(os.environ.get("EVALS_CAPTURE_STARTUP_ENV_FILE_TEST_KEY"), "applied-at-startup")
 
 
 if __name__ == "__main__":
