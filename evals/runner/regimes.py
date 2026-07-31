@@ -56,14 +56,8 @@ _private_mcp_config_root = None
 def _mcp_config_root():
     """Private parent for token-bearing configs, kept out of the workspaces' own directory.
 
-    This is defence in depth, not a boundary. Passing a secret through a file the agent's
-    process can open means a determined agent with filesystem read can read the raw key
-    during its own mcp cell, whatever the path; nesting only takes it off the obvious `..`
-    walk out of the workspace. What the layout does buy is the other three regimes: combined
-    with per-cell deletion, no token file exists on disk at all while a none/llms-txt/bundle
-    cell runs. The key itself is the real control, scoped query-read-only and project-pinned
-    via the Authorization and x-posthog-* headers, so reading it grants no more than the
-    session already had.
+    Defence in depth, not a boundary; see README "Credentials" for what this layout does
+    and does not guarantee.
     """
     global _private_mcp_config_root
     if _private_mcp_config_root and os.path.isdir(_private_mcp_config_root):
