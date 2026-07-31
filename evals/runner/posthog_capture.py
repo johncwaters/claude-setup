@@ -19,12 +19,8 @@ def _project_api_key(config):
     return os.environ.get(env_name)
 
 
-def _entry_fields(entry):
-    return entry if isinstance(entry, dict) else dataclasses.asdict(entry)
-
-
 def _build_event(api_key, entry):
-    fields = _entry_fields(entry)
+    fields = dataclasses.asdict(entry)
     properties = {
         "task": fields["task"],
         "regime": fields["regime"],
@@ -48,7 +44,7 @@ def _build_event(api_key, entry):
 
 
 def capture_eval_run_completed(config, entry):
-    """entry: a JournalEntry (or an equivalent dict) describing the run just scored."""
+    """entry: the JournalEntry describing the run just scored."""
     api_key = _project_api_key(config)
     if not api_key:
         return False

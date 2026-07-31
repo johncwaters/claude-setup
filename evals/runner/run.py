@@ -8,6 +8,7 @@ prints the plan without invoking claude, so regime wiring can be checked with no
 """
 
 import argparse
+import dataclasses
 import datetime
 import json
 import os
@@ -187,7 +188,9 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
             snapshot_hashes=assembly.snapshot_hashes, posthog_captured=False,
             detail=check_result.get("detail", ""),
         )
-        entry.posthog_captured = posthog_capture.capture_eval_run_completed(config, entry)
+        entry = dataclasses.replace(
+            entry, posthog_captured=posthog_capture.capture_eval_run_completed(config, entry)
+        )
         journal.append(entry)
         return entry
     except Exception as exc:

@@ -71,34 +71,6 @@ class PosthogCaptureTests(unittest.TestCase):
         self.assertEqual(event["properties"]["bundle_hash"], "abc123")
         self.assertEqual(event["properties"]["usage_cost_usd"], 0.1)
 
-    def test_payload_shape_accepts_a_plain_dict_entry_too(self):
-        os.environ["EVALS_TEST_PROJECT_KEY"] = "test-key"
-        captured_request = {}
-
-        class FakeResponse:
-            status = 200
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-        def fake_urlopen(request, timeout=10):
-            captured_request["body"] = json.loads(request.data)
-            return FakeResponse()
-
-        entry = {
-            "task": "t1", "regime": "none", "trial": 1, "passed": True, "reason_code": "pass",
-            "wall_secs": 1.0, "turns": 1, "model": "claude-sonnet-5", "bundle_hash": None,
-            "usage": {"gross": 1, "noncached": 1, "output": 1, "cache_read": 0, "cost_usd": 0.0},
-        }
-        with mock.patch("runner.posthog_capture.urllib.request.urlopen", fake_urlopen):
-            captured = posthog_capture.capture_eval_run_completed(self.config, entry)
-
-        self.assertTrue(captured)
-        self.assertEqual(captured_request["body"]["batch"][0]["properties"]["task"], "t1")
-
     def test_network_failure_returns_false_without_raising(self):
         os.environ["EVALS_TEST_PROJECT_KEY"] = "test-key"
 
