@@ -9,8 +9,6 @@ from runner import capture, env_file, run as run_module
 
 
 class _WritesEnvFile(unittest.TestCase):
-    """Provides a temp .env path and a helper to write its contents."""
-
     def setUp(self):
         super().setUp()
         self.tmp_dir = tempfile.mkdtemp(prefix="evals-env-file-test-")
@@ -26,8 +24,7 @@ class _WritesEnvFile(unittest.TestCase):
 
 
 class _RestoresEnviron(unittest.TestCase):
-    """Snapshots os.environ in setUp and removes any keys a test added, so tests never
-    leak env vars into later tests in the same process."""
+    """Keeps env vars a test sets from leaking into later tests in the same process."""
 
     def setUp(self):
         super().setUp()
