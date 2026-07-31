@@ -97,7 +97,7 @@
 <header>
   <h1>Agent-Docs Eval Harness for PostHog</h1>
   <div class="subtitle">Measure how well coding agents complete real PostHog tasks under different context regimes, publish the findings, keep the suite running nightly.</div>
-  <div class="meta">Plan drafted 2026-07-30. Lives at <code>evals/</code> in this repo. Application project for the PostHog Context Engineer role.</div>
+  <div class="meta">Plan drafted 2026-07-30, fast-track revision same day. Lives at <code>evals/</code> in this repo. Application project for the PostHog Context Engineer role.</div>
 </header>
 
 <section>
@@ -194,26 +194,26 @@
 </section>
 
 <section>
-  <h2>Phases</h2>
+  <h2>Fast track (one week to live, then rolling)</h2>
   <div class="phase">
-    <h3>P1: Skeleton (2-3 evenings)</h3>
-    <div class="when">Runner + first 3 card-harbor integration slices + none/llms-txt regimes</div>
-    <p>Prove the loop end to end: worktree workspace, headless spawn, event-arrival check, journal, one PostHog event per run. The card-harbor integration slices double as the first prospective captures. Exit: 3 real tasks scored under 2 regimes, results reproducible.</p>
+    <h3>Days 0-1: Intake first</h3>
+    <div class="when"><code>evals capture</code> command + first 6 real tasks</div>
+    <p>Capture comes before the runner because daily task volume is the asset: snapshot 3 card-harbor integration slices (prospective) and 3 keeplings analytics questions with verified answers (retrospective). From here, every day of normal product work adds tasks at near-zero cost.</p>
   </div>
   <div class="phase">
-    <h3>P2: Full matrix (1-2 weeks, paced by real work)</h3>
-    <div class="when">~12 captured tasks, all 4 regimes, 2 trials each</div>
-    <p>Add MCP regime, build the context bundles (the real work), capture keeplings retrospective tasks with verified answers, finish card-harbor prospective slices, ship the <code>evals capture</code> command. Exit: full matrix (~96 runs) complete with token accounting.</p>
+    <h3>Days 2-3: Runner core</h3>
+    <div class="when">Worktree spawn, checks, journal, PostHog events; score under none + bundle</div>
+    <p>Prove the loop end to end on the captured tasks with the two regimes that carry the core claim (baseline vs curated context). Exit: 6 real tasks scored, reproducible.</p>
   </div>
   <div class="phase">
-    <h3>P3: Live system (2-3 evenings)</h3>
-    <div class="when">Dashboards + nightly schedule</div>
-    <p>PostHog dashboards, Windows scheduled task running a nightly subset (1 trial, cheapest model tier that still discriminates), failure alerting via PostHog. Exit: score drop on doc drift is visible without manual runs.</p>
+    <h3>Days 4-5: Full regimes + nightly</h3>
+    <div class="when">llms-txt and mcp regimes; scheduled nightly batches begin</div>
+    <p>Nightly batches fill the matrix while usage limits are idle, with rate-limit backoff and journal resume. Exit: matrix filling unattended, failure alerting via PostHog.</p>
   </div>
   <div class="phase">
-    <h3>P4: Publish (1 week, overlaps P3)</h3>
-    <div class="when">Writeup + upstream findings</div>
-    <p>Analysis writeup with data, per-gap doc findings filed upstream, README polish, application submitted linking repo + writeup + live dashboard snapshot.</p>
+    <h3>Days 6-7: Dashboards + writeup draft</h3>
+    <div class="when">Then rolling: capture daily, nightly runs accumulate, writeup hardens</div>
+    <p>Dashboards from the first complete matrix, writeup drafted against real numbers, doc-gap findings filed upstream as they surface. Submission gate: nightly trend live for a week (the rolling week after fast-track, not extra calendar time).</p>
   </div>
 </section>
 
@@ -225,7 +225,7 @@
       <tr><td><span class="risk">Usage-limit exhaustion</span></td><td>Runs ride the Claude subscription (headless CLI with subscription login, no API key set), so the constraint is rate limits, not dollars. Caps in config are runs-per-batch and tokens; runner backs off and resumes on rate-limit errors via the journal. Nightly batches run while the limit is otherwise idle. <code>total_cost_usd</code> is still recorded and reported as API-equivalent pricing, labeled as such in the writeup.</td></tr>
       <tr><td><span class="risk">Flaky scoring</span></td><td>No LLM judges anywhere in the pass/fail path. Ground truth is API-verified state or a human-verified answer over a pinned time window. 2 trials per cell; disagreement is itself reported data, not noise to hide.</td></tr>
       <tr><td><span class="risk">PostHog free-tier limits</span></td><td>Event volume is tiny (hundreds/month). Scratch capture project for prospective tasks resets per batch; keeplings production data is read-only to the harness.</td></tr>
-      <tr><td><span class="risk">Real tasks arrive slower than a synthetic suite</span></td><td>Accepted: the suite grows at the pace of real product work, and the capture loop makes that free. If the matrix is short at submission time, publish with the honest n and say so; a smaller real suite beats a larger invented one.</td></tr>
+      <tr><td><span class="risk">Suite bloat from high task volume</span></td><td>Daily work produces more captures than the matrix needs. The submission matrix is pinned at ~12 representative tasks across the four classes; further captures queue as regression rows for the nightly subset, not matrix growth. Every capture beyond the pin is logged, not silently dropped.</td></tr>
       <tr><td><span class="risk">Product data in public results</span></td><td>Published journals and results contain aggregates and pass/fail only; raw keeplings analytics stay in PostHog. Scrub pass runs before tracking results.</td></tr>
       <tr><td><span class="risk">llms.txt or docs change mid-experiment</span></td><td>Regime inputs are snapshotted per batch with content hashes; every result row records which snapshot it ran against.</td></tr>
       <tr><td><span class="risk">Agent nondeterminism inflating claims</span></td><td>Report confidence honestly: small-n caveats in the writeup, per-cell trial counts shown, raw journals published.</td></tr>
