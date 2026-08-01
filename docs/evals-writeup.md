@@ -124,6 +124,8 @@ below.
 | kp-store-engagement | ffff | ffff | PPPP | ffff |
 | **Passes / 24** | **6** | **6** | **12** | **9** |
 
+![Pass rate heatmap, task by regime](img/pass-rate-heatmap.png)
+
 ![Pass rate by regime](img/pass-rate-by-regime.png)
 
 ![Pass rate by task](img/pass-rate-by-task.png)
