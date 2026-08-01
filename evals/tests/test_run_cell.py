@@ -71,9 +71,112 @@ class CellLoopExceptionHandlingTests(unittest.TestCase):
 
         with open(os.path.join(self.results_dir, "summary.json"), encoding="utf-8") as handle:
             summary = json.load(handle)
-        self.assertEqual(summary["sample-task::none"]["scored_trials"], 1)
-        self.assertEqual(summary["sample-task::bundle"]["scored_trials"], 0)
-        self.assertEqual(summary["sample-task::bundle"]["infra_trials"], 1)
+        model_summary = summary["claude-sonnet-5"]
+        self.assertEqual(model_summary["sample-task::none"]["scored_trials"], 1)
+        self.assertEqual(model_summary["sample-task::bundle"]["scored_trials"], 0)
+        self.assertEqual(model_summary["sample-task::bundle"]["infra_trials"], 1)
+
+
+class ModelOverrideTests(unittest.TestCase):
+    """A second eval model (--model claude-opus-5) must run its own full grid: every cell is
+    incomplete regardless of any completed row already journaled under a different model.
+    """
+
+    def setUp(self):
+        self.tmp_root = tempfile.mkdtemp(prefix="evals-model-override-test-")
+        self.tasks_dir = os.path.join(self.tmp_root, "tasks")
+        os.makedirs(self.tasks_dir)
+        shutil.copytree(FIXTURE_TASK_DIR, os.path.join(self.tasks_dir, "sample-task"))
+
+        self.bundles_dir = os.path.join(self.tmp_root, "bundles")
+        os.makedirs(os.path.join(self.bundles_dir, "snapshots"))
+        self.results_dir = os.path.join(self.tmp_root, "results")
+        os.makedirs(self.results_dir)
+
+        self.config_path = os.path.join(self.tmp_root, "config.yml")
+        with open(self.config_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "model: claude-sonnet-5\n"
+                "max_turns: 5\n"
+                "trials_per_cell: 1\n"
+                "regimes: [none]\n"
+                f"bundles_dir: {self.bundles_dir}\n"
+            )
+
+        self.replay_dir = os.path.join(self.tmp_root, "fixtures")
+        os.makedirs(self.replay_dir)
+        with open(os.path.join(self.replay_dir, "sample-task_none_1.json"), "w", encoding="utf-8") as handle:
+            json.dump({
+                "num_turns": 1, "total_cost_usd": 0.01,
+                "usage": {"input_tokens": 10, "cache_creation_input_tokens": 0,
+                          "cache_read_input_tokens": 0, "output_tokens": 5},
+                "result": "4",
+            }, handle)
+
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+        journal.append(JournalEntry(
+            ts="2026-07-30T00:00:00+00:00", task="sample-task", regime="none", trial=1,
+            status="completed", passed=True, reason_code="pass", wall_secs=1.0, turns=1,
+            usage={"gross": 100, "noncached": 100, "output": 10, "cache_read": 0, "cost_usd": 0.01},
+            model="claude-sonnet-5", bundle_hash=None, snapshot_hashes={}, posthog_captured=False,
+        ))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_root, ignore_errors=True)
+
+    def test_opus_override_reruns_a_cell_already_completed_under_sonnet(self):
+        exit_code = run_module.main([
+            "--tasks-dir", self.tasks_dir,
+            "--config", self.config_path,
+            "--results-dir", self.results_dir,
+            "--replay-dir", self.replay_dir,
+            "--model", "claude-opus-5",
+        ])
+
+        self.assertEqual(exit_code, 0)
+
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+        rows_by_model = {row["model"]: row for row in journal.read_all()}
+        self.assertIn("claude-opus-5", rows_by_model)
+        self.assertEqual(rows_by_model["claude-opus-5"]["status"], "completed")
+
+        with open(os.path.join(self.results_dir, "summary.json"), encoding="utf-8") as handle:
+            summary = json.load(handle)
+        self.assertIn("claude-opus-5", summary)
+        self.assertNotIn("claude-sonnet-5", summary)
+        self.assertEqual(summary["claude-opus-5"]["sample-task::none"]["scored_trials"], 1)
+
+    def test_model_override_reaches_the_claude_cli_invocation(self):
+        captured_models = []
+        real_run = run_module.claude_cli.run
+
+        def recording_run(*args, **kwargs):
+            captured_models.append(kwargs.get("model"))
+            return real_run(*args, **kwargs)
+
+        with mock.patch.object(run_module.claude_cli, "run", recording_run):
+            run_module.main([
+                "--tasks-dir", self.tasks_dir,
+                "--config", self.config_path,
+                "--results-dir", self.results_dir,
+                "--replay-dir", self.replay_dir,
+                "--model", "claude-opus-5",
+            ])
+
+        self.assertEqual(captured_models, ["claude-opus-5"])
+
+    def test_sonnet_rerun_still_skips_the_previously_completed_cell(self):
+        exit_code = run_module.main([
+            "--tasks-dir", self.tasks_dir,
+            "--config", self.config_path,
+            "--results-dir", self.results_dir,
+            "--replay-dir", self.replay_dir,
+        ])
+
+        self.assertEqual(exit_code, 0)
+
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+        self.assertEqual(len(journal.read_all()), 1)  # no new row appended; the sonnet cell was skipped
 
 
 class TokenBudgetTests(unittest.TestCase):
@@ -253,12 +356,13 @@ class SummarizeScopingTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-    def _append(self, journal, task, regime, status="completed", passed=True, reason_code="pass"):
+    def _append(self, journal, task, regime, status="completed", passed=True, reason_code="pass",
+                model="claude-sonnet-5"):
         journal.append(JournalEntry(
             ts="2026-07-30T00:00:00+00:00", task=task, regime=regime, trial=1,
             status=status, passed=passed, reason_code=reason_code, wall_secs=1.0, turns=1,
             usage={"gross": 100, "noncached": 100, "output": 10, "cache_read": 0, "cost_usd": 0.01},
-            model="claude-sonnet-5", bundle_hash=None, snapshot_hashes={}, posthog_captured=False,
+            model=model, bundle_hash=None, snapshot_hashes={}, posthog_captured=False,
         ))
 
     def test_summarize_only_rolls_up_cells_selected_in_the_current_batch(self):
@@ -266,11 +370,12 @@ class SummarizeScopingTests(unittest.TestCase):
         self._append(journal, "sample-task", "none")
         self._append(journal, "other-task", "none", passed=False, reason_code="wrong-answer")
 
-        summary = run_module._summarize(journal, [{"id": "sample-task"}], ["none"], 1)
+        summary = run_module._summarize(journal, [{"id": "sample-task"}], ["none"], 1, "claude-sonnet-5")
 
-        self.assertIn("sample-task::none", summary)
-        self.assertNotIn("other-task::none", summary)
-        cell = summary["sample-task::none"]
+        self.assertIn("claude-sonnet-5", summary)
+        self.assertIn("sample-task::none", summary["claude-sonnet-5"])
+        self.assertNotIn("other-task::none", summary["claude-sonnet-5"])
+        cell = summary["claude-sonnet-5"]["sample-task::none"]
         self.assertEqual(cell["scored_trials"], 1)
         self.assertEqual(cell["infra_trials"], 0)
         self.assertEqual(cell["total_trials"], 1)
@@ -280,12 +385,29 @@ class SummarizeScopingTests(unittest.TestCase):
         journal = Journal(self.journal_path)
         self._append(journal, "sample-task", "bundle", status="infra", passed=False, reason_code="check-infra")
 
-        summary = run_module._summarize(journal, [{"id": "sample-task"}], ["bundle"], 1)
+        summary = run_module._summarize(journal, [{"id": "sample-task"}], ["bundle"], 1, "claude-sonnet-5")
 
-        cell = summary["sample-task::bundle"]
+        cell = summary["claude-sonnet-5"]["sample-task::bundle"]
         self.assertEqual(cell["scored_trials"], 0)
         self.assertEqual(cell["infra_trials"], 1)
         self.assertEqual(cell["total_trials"], 1)
+
+    def test_summarize_scopes_to_the_selected_model_only(self):
+        # a --model claude-opus-5 batch must not have its selected_cells match sonnet's
+        # historical rows for the same (task, regime, trial), even though iter_cells
+        # only yields the requested model
+        journal = Journal(self.journal_path)
+        self._append(journal, "sample-task", "none", model="claude-sonnet-5")
+        self._append(journal, "sample-task", "none", model="claude-opus-5", passed=False,
+                      reason_code="wrong-answer")
+
+        summary = run_module._summarize(journal, [{"id": "sample-task"}], ["none"], 1, "claude-opus-5")
+
+        self.assertNotIn("claude-sonnet-5", summary)
+        self.assertIn("claude-opus-5", summary)
+        cell = summary["claude-opus-5"]["sample-task::none"]
+        self.assertEqual(cell["scored_trials"], 1)
+        self.assertFalse(cell["pass_rate"])
 
 
 if __name__ == "__main__":

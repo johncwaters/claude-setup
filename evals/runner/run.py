@@ -233,32 +233,36 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
             _teardown_workspace(workspace, worktree_info)
 
 
-def iter_cells(tasks, regime_names, trials):
+def iter_cells(tasks, regime_names, trials, model):
     for task in tasks:
         for regime in regime_names:
             for trial in range(1, trials + 1):
-                yield task, regime, trial
+                yield task, regime, trial, model
 
 
-def _summarize(journal, tasks, regime_names, trials):
+def _summarize(journal, tasks, regime_names, trials, model):
     # scoped to the cells this invocation actually selected, so a summary.json from a
     # `--tasks`/`--regimes` subset run never picks up unrelated historical journal rows
-    selected_cells = {(task["id"], regime, trial) for task, regime, trial in iter_cells(tasks, regime_names, trials)}
+    selected_cells = {
+        (task["id"], regime, trial, model)
+        for task, regime, trial, model in iter_cells(tasks, regime_names, trials, model)
+    }
 
     cells = defaultdict(list)
     for key, row in journal.latest_by_cell().items():
         if key not in selected_cells:
             continue
-        cells[(row["task"], row["regime"])].append(row)
+        cells[(row["model"], row["task"], row["regime"])].append(row)
 
-    summary = {}
-    for (task, regime), rows in cells.items():
+    summary_by_model = defaultdict(dict)
+    for (row_model, task, regime), rows in cells.items():
         scored = [row for row in rows if row["status"] == "completed"]
         infra = [row for row in rows if row["status"] == "infra"]
         pass_count = sum(1 for row in scored if row["passed"])
-        summary[f"{task}::{regime}"] = {
+        summary_by_model[row_model][f"{task}::{regime}"] = {
             "task": task,
             "regime": regime,
+            "model": row_model,
             "scored_trials": len(scored),
             "infra_trials": len(infra),
             "total_trials": len(rows),
@@ -266,7 +270,7 @@ def _summarize(journal, tasks, regime_names, trials):
             "mean_cost_usd": (sum(row["usage"]["cost_usd"] for row in scored) / len(scored)) if scored else None,
             "reason_code_histogram": dict(Counter(row["reason_code"] for row in rows)),
         }
-    return summary
+    return dict(summary_by_model)
 
 
 def build_arg_parser():
@@ -277,6 +281,7 @@ def build_arg_parser():
                          help="run config's headline_regimes instead of the full regime set; "
                               "ignored if --regimes is also given")
     parser.add_argument("--trials", type=int, default=None)
+    parser.add_argument("--model", default=None, help="overrides config's model for this invocation")
     parser.add_argument("--replay-dir", default=None)
     parser.add_argument("--record", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -306,6 +311,9 @@ def main(argv=None):
     else:
         regime_names = config["regimes"]
     trials = args.trials or config["trials_per_cell"]
+    if args.model:
+        config["model"] = args.model
+    model = config["model"]
 
     evals_root = os.path.dirname(os.path.abspath(args.config))
     env_file.apply_env_file(os.path.join(evals_root, ".env"))
@@ -316,8 +324,8 @@ def main(argv=None):
 
     invocation_count = 0
     batch_cap = config.get("runs_per_batch_cap")
-    for task, regime, trial in iter_cells(tasks, regime_names, trials):
-        if not args.dry_run and journal.is_cell_completed(task["id"], regime, trial, latest_by_cell):
+    for task, regime, trial, cell_model in iter_cells(tasks, regime_names, trials, model):
+        if not args.dry_run and journal.is_cell_completed(task["id"], regime, trial, cell_model, latest_by_cell):
             continue
         if not args.dry_run and batch_cap and invocation_count >= batch_cap:
             print(f"runs_per_batch_cap ({batch_cap}) reached; stopping batch early")
@@ -330,7 +338,7 @@ def main(argv=None):
         print("dry run complete: no claude invocations made")
         return 0
 
-    summary = _summarize(journal, tasks, regime_names, trials)
+    summary = _summarize(journal, tasks, regime_names, trials, model)
     os.makedirs(args.results_dir, exist_ok=True)
     with open(os.path.join(args.results_dir, "summary.json"), "w", encoding="utf-8") as handle:
         handle.write(json.dumps(summary, indent=2) + "\n")

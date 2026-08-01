@@ -7,12 +7,12 @@ import unittest
 from runner.journal import Journal, JournalEntry
 
 
-def _make_entry(task, regime, trial, status, passed=True, reason_code="pass", detail=""):
+def _make_entry(task, regime, trial, status, passed=True, reason_code="pass", detail="", model="claude-sonnet-5"):
     return JournalEntry(
         ts="2026-07-30T00:00:00+00:00", task=task, regime=regime, trial=trial,
         status=status, passed=passed, reason_code=reason_code, wall_secs=1.0,
         turns=1, usage={"gross": 100, "noncached": 100, "output": 10, "cache_read": 0, "cost_usd": 0.01},
-        model="claude-sonnet-5", bundle_hash=None, snapshot_hashes={}, posthog_captured=False,
+        model=model, bundle_hash=None, snapshot_hashes={}, posthog_captured=False,
         detail=detail,
     )
 
@@ -38,19 +38,25 @@ class JournalTests(unittest.TestCase):
     def test_completed_cell_is_skipped_on_resume(self):
         journal = Journal(self.journal_path)
         journal.append(_make_entry("t1", "none", 1, "completed"))
-        self.assertTrue(journal.is_cell_completed("t1", "none", 1))
-        self.assertFalse(journal.is_cell_completed("t1", "none", 2))
+        self.assertTrue(journal.is_cell_completed("t1", "none", 1, "claude-sonnet-5"))
+        self.assertFalse(journal.is_cell_completed("t1", "none", 2, "claude-sonnet-5"))
 
     def test_infra_cell_is_not_marked_completed_so_it_reruns(self):
         journal = Journal(self.journal_path)
         journal.append(_make_entry("t1", "bundle", 1, "infra", passed=False, reason_code="check-infra"))
-        self.assertFalse(journal.is_cell_completed("t1", "bundle", 1))
+        self.assertFalse(journal.is_cell_completed("t1", "bundle", 1, "claude-sonnet-5"))
 
     def test_latest_line_for_a_cell_wins_on_resume(self):
         journal = Journal(self.journal_path)
         journal.append(_make_entry("t1", "none", 1, "infra", passed=False, reason_code="check-infra"))
         journal.append(_make_entry("t1", "none", 1, "completed"))
-        self.assertTrue(journal.is_cell_completed("t1", "none", 1))
+        self.assertTrue(journal.is_cell_completed("t1", "none", 1, "claude-sonnet-5"))
+
+    def test_a_completed_cell_under_a_different_model_is_not_completed(self):
+        journal = Journal(self.journal_path)
+        journal.append(_make_entry("t1", "none", 1, "completed", model="claude-sonnet-5"))
+        self.assertFalse(journal.is_cell_completed("t1", "none", 1, "claude-opus-5"))
+        self.assertTrue(journal.is_cell_completed("t1", "none", 1, "claude-sonnet-5"))
 
     def test_read_all_on_missing_file_returns_empty_list(self):
         journal = Journal(os.path.join(self.tmp_dir, "does-not-exist.jsonl"))
@@ -67,8 +73,8 @@ class JournalTests(unittest.TestCase):
         journal.append(_make_entry("t1", "none", 1, "completed"))
         latest_by_cell = journal.latest_by_cell()
 
-        self.assertTrue(journal.is_cell_completed("t1", "none", 1, latest_by_cell))
-        self.assertFalse(journal.is_cell_completed("t1", "none", 2, latest_by_cell))
+        self.assertTrue(journal.is_cell_completed("t1", "none", 1, "claude-sonnet-5", latest_by_cell))
+        self.assertFalse(journal.is_cell_completed("t1", "none", 2, "claude-sonnet-5", latest_by_cell))
 
     def test_detail_round_trips_through_journal(self):
         journal = Journal(self.journal_path)

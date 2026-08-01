@@ -32,14 +32,18 @@ python -m runner.run --regimes none,bundle --trials 2
 python -m runner.run --dry-run                         # assemble everything, print the plan, invoke nothing
 python -m runner.run --replay-dir path/to/fixtures      # replay canned claude responses instead of live calls
 python -m runner.run --replay-dir path/to/fixtures --record   # live run, but also write fixtures for later replay
+python -m runner.run --model claude-opus-5 --trials 2          # override config.yml's model for this batch
 ```
 
 `--dry-run` never touches the journal or invokes claude; use it to check regime wiring
 (context assembly, disallowed tools, bundle/snapshot hashes) for free.
 
 Results land in `results/journal.jsonl` (append-only, one JSON object per line, resumable
-by `(task, regime, trial)`) and `results/summary.json` (pass rate, mean cost, reason-code
-histogram per `(task, regime)`, written after each batch).
+by `(task, regime, trial, model)`) and `results/summary.json` (pass rate, mean cost,
+reason-code histogram per `(task, regime)`, grouped under a top-level model key, written
+after each batch). `--model` overrides `config.yml`'s `model` for the invocation; resume
+treats each model as its own grid, so a `--model claude-opus-5` batch reruns every cell
+even when the same `(task, regime, trial)` is already completed under a different model.
 
 `results/journal.jsonl` and `results/summary.json` are intentionally tracked in git, not
 gitignored: the Harness deliverable in `docs/evals-plan.html`'s "Deliverables" section is

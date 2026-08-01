@@ -1,4 +1,4 @@
-"""Append-only run journal: one JSON object per line, resumable by (task, regime, trial).
+"""Append-only run journal: one JSON object per line, resumable by (task, regime, trial, model).
 
 Cell status vocabulary: "completed" cells are skipped on resume, "infra" cells (harness-side
 faults, not agent or docs failures) always rerun. The latest line for a cell wins.
@@ -32,8 +32,8 @@ class JournalEntry:
         return json.dumps(asdict(self))
 
 
-def cell_key(task, regime, trial):
-    return (task, regime, trial)
+def cell_key(task, regime, trial, model):
+    return (task, regime, trial, model)
 
 
 class Journal:
@@ -60,12 +60,12 @@ class Journal:
     def latest_by_cell(self):
         latest = {}
         for row in self.read_all():
-            latest[cell_key(row["task"], row["regime"], row["trial"])] = row
+            latest[cell_key(row["task"], row["regime"], row["trial"], row["model"])] = row
         return latest
 
-    def is_cell_completed(self, task, regime, trial, latest_by_cell=None):
+    def is_cell_completed(self, task, regime, trial, model, latest_by_cell=None):
         # a batch's resume check calls this once per cell; passing a precomputed
         # latest_by_cell (built once by the caller) keeps that O(n) instead of O(n^2)
         latest_by_cell = self.latest_by_cell() if latest_by_cell is None else latest_by_cell
-        row = latest_by_cell.get(cell_key(task, regime, trial))
+        row = latest_by_cell.get(cell_key(task, regime, trial, model))
         return bool(row and row["status"] == "completed")
