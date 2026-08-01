@@ -20,9 +20,8 @@ who did two events in any order instead of in the required sequence, a per-user
 could find. Hand-built bundles carried the hardest coding task and produced the only
 pass on it in any regime. `llms-txt`, PostHog's own agent-facing doc index, underperformed
 even the no-context baseline on raw pass count while costing roughly 2.8x more per run
-than `none`. All of this is n=2 per cell: it powers floor-finding and directional sweeps, not
-statistically significant regime comparisons, and a higher-n batch is running as this is
-written.
+than `none`. All of this is n=2 per cell: it powers floor-finding and directional
+sweeps, not statistically significant regime comparisons (see Limitations).
 
 ## Why this eval
 
@@ -90,9 +89,8 @@ floors (a regime that never solves a task class) and run directional sweeps acro
 four regimes at once; it is not enough to call a mid-range regime difference
 statistically significant. A two-proportion test at alpha 0.05 and power 0.90 needs
 roughly 100 trials per cell to distinguish a 90% pass rate from an 80% one, and
-considerably more when both rates sit near 50%. A batch raising n to 4 is running now;
-every table below is structured so re-running at higher n only changes cell values, not
-shape.
+considerably more when both rates sit near 50%. Every table below is structured so
+re-running at higher n only changes cell values, not shape.
 
 ## Results
 
@@ -133,9 +131,9 @@ regime with zero passes has no defined cost-per-success):
 
 `ch-` tasks (Electron/TypeScript) averaged 51.25 turns per run across all regimes
 (23 of 24 runs finished at or above the 50-turn cap; the CLI's reported turn count runs
-one past the configured cap), and accounted for $66.93 of the $85.92 total cost across 170 of
-196.9 wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and resolved in
-26.8 minutes total. The coding tasks are the expensive half of this suite regardless of
+one past the configured cap), and accounted for $66.93 of the $85.92 total cost across
+170 of the 197 total wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and
+resolved in 27 minutes total. The coding tasks are the expensive half of this suite regardless of
 context regime.
 
 ## Findings
