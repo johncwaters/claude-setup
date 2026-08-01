@@ -110,6 +110,8 @@ answer a `kp-` task with real production data it should never have had. Both gap
 (MCP wiring, credential isolation) were fixed before the first valid batch; see "Methods hardening"
 below.
 
+![Passes by regime in each independent batch](img/passes-by-regime-per-batch.png)
+
 **Pass/fail grid** (P = pass, f = fail, four trials per cell, in trial order):
 
 | Task | none | llms-txt | mcp | bundle |
@@ -122,6 +124,10 @@ below.
 | kp-store-engagement | ffff | ffff | PPPP | ffff |
 | **Passes / 24** | **6** | **6** | **12** | **9** |
 
+![Pass rate by regime](img/pass-rate-by-regime.png)
+
+![Pass rate by task](img/pass-rate-by-task.png)
+
 **Cost per success by regime** (total regime cost divided by passes in that regime; a
 regime with zero passes has no defined cost-per-success):
 
@@ -132,12 +138,18 @@ regime with zero passes has no defined cost-per-success):
 | mcp | 12/24 | $31.20 | $1.30 | $2.60 |
 | bundle | 9/24 | $29.52 | $1.23 | $3.28 |
 
+![Cost per success by regime](img/cost-per-success-by-regime.png)
+
 `ch-` tasks (Electron/TypeScript) averaged 50.75 turns per run across all regimes
 (45 of 48 runs finished at or above the 50-turn cap; the CLI's reported turn count runs
 one past the configured cap), and accounted for $132.88 of the $171.72 overall cost and
 323 of the 382 wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and
 finished in 59 minutes. The coding tasks are the expensive half of this suite regardless of
 context regime.
+
+![Average turns per task against the 50-turn cap](img/average-turns-per-task.png)
+
+![Failure reason breakdown across the 63 failing trials](img/failure-reasons.png)
 
 ## Findings
 
@@ -260,6 +272,15 @@ The parts of this harness that took the most iteration to get right, and why:
 - **Cost is API-equivalent, not actual spend.** These runs used a Claude subscription;
   `cost_usd` figures are reported using API-equivalent per-token pricing for
   comparability across regimes, not as money that changed hands.
+
+## Results dashboard
+
+Every trial fires an `eval_run_completed` event into a PostHog project as it is scored,
+so the results section of this study lives in PostHog itself: a dashboard with pass
+rate by regime, pass rate by task, cost per success by regime, failure-reason
+breakdown, average turns per task, and per-batch pass stability, each tile a HogQL
+insight over the captured events, filtered to the valid batches. The charts embedded
+throughout this writeup are captures of that dashboard's tiles.
 
 ## Reproduction
 
