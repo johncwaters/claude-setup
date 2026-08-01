@@ -96,7 +96,7 @@
 
 <header>
   <h1>Agent-Docs Eval Harness for PostHog</h1>
-  <div class="subtitle">Measure how well coding agents complete real PostHog tasks under different context regimes, publish the findings, keep the suite running nightly.</div>
+  <div class="subtitle">Measure how well coding agents complete real PostHog tasks under different context regimes, publish the findings, raise n with on-demand batch reruns.</div>
   <div class="meta">Plan drafted 2026-07-30. Lives at <code>evals/</code> in this repo. Application project for the PostHog Context Engineer role. No timeline: steps complete in order, at working pace.</div>
 </header>
 
@@ -116,7 +116,7 @@
       <li><b>Data</b>: every run captured as PostHog events and LLM traces in a personal PostHog project; dashboards are the results section.</li>
       <li><b>Writeup</b>: which context regime wins per task class, where docs fail agents, token cost per success, with failure examples. Published as a page in <code>docs/</code> plus a blog-style post.</li>
       <li><b>Upstream contributions</b>: doc-gap findings filed as issues or PRs against posthog.com docs.</li>
-      <li><b>Regression gate</b>: nightly scheduled run so doc drift shows up as a score drop, not a one-time snapshot.</li>
+      <li><b>Regression gate</b>: on-demand batch reruns (journal resume makes them cheap) so doc drift shows up as a score drop between batches, not a one-time snapshot.</li>
     </ul>
   </div>
 </section>
@@ -200,7 +200,7 @@
       <li>Hallucination flags: checks record wrong-API usage distinctly from build failures (e.g. invented SDK method vs missing env var)</li>
       <li>A distinct <code>check-infra</code> failure code for harness-side faults (ingestion poll timeout, API errors, rate limits): these rows are excluded from regime pass rates and rerun, so infrastructure lag never counts against a regime</li>
     </ul>
-    <p>Dashboards: pass rate by regime, pass rate by task class, cost per success, failure reason breakdown, nightly trend line. Built in the same PostHog project, linked from the writeup.</p>
+    <p>Dashboards: pass rate by regime, pass rate by task class, cost per success, failure reason breakdown, per-batch trend line. Built in the same PostHog project, linked from the writeup.</p>
   </div>
 </section>
 
@@ -217,14 +217,14 @@
     <p>Prove the loop end to end on the captured tasks with the two regimes that carry the core claim (baseline vs curated context). Exit: 6 real tasks scored, reproducible.</p>
   </div>
   <div class="phase">
-    <h3>3. Full regimes + nightly</h3>
-    <div class="when">llms-txt and mcp regimes; scheduled nightly batches begin</div>
-    <p>Nightly batches fill the matrix while usage limits are idle, with rate-limit backoff and journal resume. Exit: matrix filling unattended, failure alerting via PostHog.</p>
+    <h3>3. Full regimes + on-demand batches</h3>
+    <div class="when">llms-txt and mcp regimes; detached batch runs fill the matrix</div>
+    <p>Fast-tracked: batches launch on demand (detached from the session) rather than on a nightly schedule, with rate-limit backoff and journal resume. Repeat batches raise n per cell by appending trials to the same journal. Exit: full matrix filled at n&ge;4.</p>
   </div>
   <div class="phase">
     <h3>4. Dashboards + writeup</h3>
-    <div class="when">Then rolling: capture daily, nightly runs accumulate, writeup hardens</div>
-    <p>Dashboards from the first complete matrix, writeup drafted against real numbers, doc-gap findings filed upstream as they surface. Submission gate: at least a week of accumulated nightly trend before applying, running in the background while later steps proceed.</p>
+    <div class="when">Then rolling: capture daily, batches accumulate on demand, writeup hardens</div>
+    <p>Dashboards from the first complete matrix, writeup drafted against real numbers, doc-gap findings filed upstream as they surface. Submission gate (fast-tracked): full matrix at n&ge;4 with stable pass rates across two independent batches, replacing the original week-of-nightly-trend requirement.</p>
   </div>
 </section>
 
@@ -233,14 +233,14 @@
   <div class="card tablewrap">
     <table>
       <tr><th>Risk</th><th>Mitigation</th></tr>
-      <tr><td><span class="risk">Usage-limit exhaustion</span></td><td>Runs ride the Claude subscription (headless CLI with subscription login, no API key set), so the constraint is rate limits, not dollars. Caps in config are runs-per-batch and tokens; runner backs off and resumes on rate-limit errors via the journal. Nightly batches run while the limit is otherwise idle. <code>total_cost_usd</code> is still recorded and reported as API-equivalent pricing, labeled as such in the writeup.</td></tr>
+      <tr><td><span class="risk">Usage-limit exhaustion</span></td><td>Runs ride the Claude subscription (headless CLI with subscription login, no API key set), so the constraint is rate limits, not dollars. Caps in config are runs-per-batch and tokens; runner backs off and resumes on rate-limit errors via the journal. Batches run on demand while the limit is otherwise idle. <code>total_cost_usd</code> is still recorded and reported as API-equivalent pricing, labeled as such in the writeup.</td></tr>
       <tr><td><span class="risk">Bundle answer leakage</span></td><td>Blinding protocol (see Context regimes): bundles sourced from public docs only, content-hashed and frozen before the first scored run, prospective bundles authored before the reference implementation lands, and any post-freeze edit discards prior rows for that cell.</td></tr>
-      <tr><td><span class="risk">Flaky scoring</span></td><td>No LLM judges anywhere in the pass/fail path. Ground truth is API-verified state or a human-verified answer over a pinned time window. 2 trials per cell to prove the loop; nightly batches then raise n on the headline cells (<code>none</code>, <code>bundle</code>) first, since idle nightly capacity is free. Disagreement between trials is itself reported data, not noise to hide.</td></tr>
+      <tr><td><span class="risk">Flaky scoring</span></td><td>No LLM judges anywhere in the pass/fail path. Ground truth is API-verified state or a human-verified answer over a pinned time window. 2 trials per cell to prove the loop; follow-up batches then raise n, headline cells (<code>none</code>, <code>bundle</code>) first. Disagreement between trials is itself reported data, not noise to hide.</td></tr>
       <tr><td><span class="risk">PostHog free-tier limits</span></td><td>Event volume is tiny (hundreds/month). Scratch capture project for prospective tasks resets per batch; keeplings production data is read-only to the harness.</td></tr>
-      <tr><td><span class="risk">Suite bloat from high task volume</span></td><td>Daily work produces more captures than the matrix needs. The submission matrix is pinned at ~12 representative tasks across the four classes; further captures queue as regression rows for the nightly subset, not matrix growth. Every capture beyond the pin is logged, not silently dropped.</td></tr>
+      <tr><td><span class="risk">Suite bloat from high task volume</span></td><td>Daily work produces more captures than the matrix needs. The submission matrix is pinned at ~12 representative tasks across the four classes; further captures queue as regression rows for later batches, not matrix growth. Every capture beyond the pin is logged, not silently dropped.</td></tr>
       <tr><td><span class="risk">Product data in public results</span></td><td>Published journals and results contain aggregates and pass/fail only; raw keeplings analytics stay in PostHog. Scrub pass runs before tracking results.</td></tr>
       <tr><td><span class="risk">llms.txt or docs change mid-experiment</span></td><td>Regime inputs are snapshotted per batch with content hashes; every result row records which snapshot it ran against. The pages the <code>llms-txt</code> regime fetches by following index links are live by design; the index snapshot hash plus run timestamp bound that drift.</td></tr>
-      <tr><td><span class="risk">Agent nondeterminism inflating claims</span></td><td>Pass rates reported with Wilson score intervals and per-cell n shown; detecting a 10-point pass-rate difference with a two-proportion test at alpha 0.05 and power 0.90 needs roughly 100 trials per cell when comparing 90% against 80%, and several hundred when both rates sit near 50%, so nightly accumulation targets the headline cells first and the writeup frames smaller-n comparisons as directional. Raw journals published.</td></tr>
+      <tr><td><span class="risk">Agent nondeterminism inflating claims</span></td><td>Pass rates reported with Wilson score intervals and per-cell n shown; detecting a 10-point pass-rate difference with a two-proportion test at alpha 0.05 and power 0.90 needs roughly 100 trials per cell when comparing 90% against 80%, and several hundred when both rates sit near 50%, so batch accumulation targets the headline cells first and the writeup frames smaller-n comparisons as directional. Raw journals published.</td></tr>
       <tr><td><span class="risk">Secrets in a public repo</span></td><td>API keys via env only; <code>evals/</code> inherits repo .gitignore discipline; journals scrubbed of keys before tracking results.</td></tr>
     </table>
   </div>
@@ -251,7 +251,7 @@
   <div class="card">
     <ul>
       <li class="done">Full matrix over the captured real-task suite complete, with published journals and token accounting</li>
-      <li class="done">Nightly run live for at least a week before application submission, trend visible in dashboard</li>
+      <li class="done">Full matrix at n&ge;4 with pass rates stable across two independent batches (fast-tracked from the original week-of-nightly-runs gate), trend visible in dashboard</li>
       <li class="done">Writeup published: regime comparison, failure taxonomy, at least 3 concrete doc-gap findings filed upstream</li>
       <li class="done">Repo public, harness reproducible by a stranger with their own keys (README-verified)</li>
       <li class="done">Zero secrets, zero work references (re-run the pre-publication scan before submission)</li>
