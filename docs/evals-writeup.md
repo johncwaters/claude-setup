@@ -9,19 +9,21 @@ I built a harness that runs a headless Claude Code agent (`claude -p`, model
 `claude-sonnet-5`) against six real tasks drawn from two of my own shipping products,
 under four context regimes: no context beyond the prompt, PostHog's public `llms.txt`
 plus scoped web fetch, a live read-only PostHog MCP connection, and hand-authored
-context bundles sourced from public PostHog docs. This writeup reports the first fully
-valid batch: 48 trials (6 tasks x 4 regimes x 2 trials), zero infrastructure failures,
-16 passes overall. Live data access through MCP was the only regime that ever solved
-the two winnable analytics tasks (4/4 across both), and it is also the regime that
-produced the sharpest documentation gap this eval surfaced: both MCP trials on a
-funnel-conversion task independently computed the same wrong number by counting users
+context bundles sourced from public PostHog docs. This writeup reports the two fully
+valid batches to date: 96 trials (6 tasks x 4 regimes x 4 trials), zero infrastructure
+failures, 33 passes overall. Live data access through MCP was the only regime that ever
+solved the two winnable analytics tasks (7 of 8 trials; the single miss failed to
+produce an answer file rather than reporting a wrong number), and it is also the regime
+that produced the sharpest documentation gap this eval surfaced: all four MCP trials on
+a funnel-conversion task independently computed the same wrong number by counting users
 who did two events in any order instead of in the required sequence, a per-user
 "did A then B" HogQL pattern that PostHog's docs do not show worked out anywhere I
-could find. Hand-built bundles carried the hardest coding task and produced the only
-pass on it in any regime. `llms-txt`, PostHog's own agent-facing doc index, underperformed
-even the no-context baseline on raw pass count while costing roughly 2.8x more per run
-than `none`. All of this is n=2 per cell: it powers floor-finding and directional
-sweeps, not statistically significant regime comparisons (see Limitations).
+could find. Hand-built bundles swept the Electron main-process crash-capture task (4/4)
+that no other regime solved more than twice. `llms-txt`, PostHog's own agent-facing doc
+index, matched the no-context baseline on raw pass count (6 each of 24) while costing
+roughly 2.9x more per run than `none`. All of this is n=4 per cell: it powers
+floor-finding and directional sweeps, not statistically significant regime comparisons
+(see Limitations).
 
 ## Why this eval
 
@@ -82,9 +84,10 @@ a static acceptance surface (typecheck, diff-scan for the right call, hallucinat
 scan); `kp-` tasks are graded against a HogQL reference query run against real keeplings
 data, with numeric tolerances stated per task. A `check-infra` reason code is reserved
 for harness-side faults (timeouts, API errors) and is excluded from pass rates; this
-batch recorded zero.
+valid batches recorded zero.
 
-**n.** Two trials per `(task, regime)` cell, 48 trials total. This is enough to find
+**n.** Four trials per `(task, regime)` cell, 96 trials total, run as two 48-trial
+batches. This is enough to find
 floors (a regime that never solves a task class) and run directional sweeps across all
 four regimes at once; it is not enough to call a mid-range regime difference
 statistically significant. A two-proportion test at alpha 0.05 and power 0.90 needs
@@ -94,8 +97,9 @@ re-running at higher n only changes cell values, not shape.
 
 ## Results
 
-This is the first batch with zero infrastructure failures: 48/48 trials scored, none
-excluded, 196.9 minutes of total wall time, $85.92 in token cost at API-equivalent
+Both valid batches ran with zero infrastructure failures: 96/96 trials scored, none
+excluded (16 passes in the first 48-trial batch, 17 in the second, a stable rate),
+381.6 minutes of total wall time, $171.72 in token cost at API-equivalent
 pricing (these runs actually rode a Claude subscription, not metered API billing; cost
 is reported for comparability, not as money spent). Two prior batches are excluded from
 these findings: an earlier batch established baseline floors before regimes were fully
@@ -104,83 +108,88 @@ wired (`ch-` tasks exhausted the turn cap, and a `bundle` trial fabricated plaus
 actually connecting (a configuration gap since fixed) and, separately, let the agent
 subprocess inherit live credential environment variables, which let one `bundle` trial
 answer a `kp-` task with real production data it should never have had. Both gaps
-(MCP wiring, credential isolation) were fixed before this batch; see "Methods hardening"
+(MCP wiring, credential isolation) were fixed before the first valid batch; see "Methods hardening"
 below.
 
-**Pass/fail grid** (P = pass, f = fail, two trials per cell, in trial order):
+**Pass/fail grid** (P = pass, f = fail, four trials per cell, in trial order):
 
 | Task | none | llms-txt | mcp | bundle |
 |---|---|---|---|---|
-| ch-release-tagging | PP | PP | PP | PP |
-| ch-main-process-capture | fP | ff | ff | PP |
-| ch-flag-gated-rollout | ff | ff | ff | fP |
-| kp-release-impact | ff | ff | PP | ff |
-| kp-reminder-funnel | ff | ff | ff | ff |
-| kp-store-engagement | ff | ff | PP | ff |
-| **Passes / 12** | **3** | **2** | **6** | **5** |
+| ch-release-tagging | PPPP | PPPP | PPPP | PPPP |
+| ch-main-process-capture | fPfP | ffPf | ffff | PPPP |
+| ch-flag-gated-rollout | ffff | ffPf | fffP | fPff |
+| kp-release-impact | ffff | ffff | PPPf | ffff |
+| kp-reminder-funnel | ffff | ffff | ffff | ffff |
+| kp-store-engagement | ffff | ffff | PPPP | ffff |
+| **Passes / 24** | **6** | **6** | **12** | **9** |
 
 **Cost per success by regime** (total regime cost divided by passes in that regime; a
 regime with zero passes has no defined cost-per-success):
 
 | Regime | Passes | Total cost | Mean cost/run | Cost per success |
 |---|---|---|---|---|
-| none | 3/12 | $14.42 | $1.20 | $4.81 |
-| llms-txt | 2/12 | $40.93 | $3.41 | $20.46 |
-| mcp | 6/12 | $15.53 | $1.29 | $2.59 |
-| bundle | 5/12 | $15.04 | $1.25 | $3.01 |
+| none | 6/24 | $28.73 | $1.20 | $4.79 |
+| llms-txt | 6/24 | $82.27 | $3.43 | $13.71 |
+| mcp | 12/24 | $31.20 | $1.30 | $2.60 |
+| bundle | 9/24 | $29.52 | $1.23 | $3.28 |
 
-`ch-` tasks (Electron/TypeScript) averaged 51.25 turns per run across all regimes
-(23 of 24 runs finished at or above the 50-turn cap; the CLI's reported turn count runs
-one past the configured cap), and accounted for $66.93 of the $85.92 overall cost and
-170 of the 197 wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and
-finished in 27 minutes. The coding tasks are the expensive half of this suite regardless of
+`ch-` tasks (Electron/TypeScript) averaged 50.75 turns per run across all regimes
+(45 of 48 runs finished at or above the 50-turn cap; the CLI's reported turn count runs
+one past the configured cap), and accounted for $132.88 of the $171.72 overall cost and
+323 of the 382 wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and
+finished in 59 minutes. The coding tasks are the expensive half of this suite regardless of
 context regime.
 
 ## Findings
 
-**1. Live data access is necessary and sufficient for the two winnable analytics tasks;
-nothing else even gets close.** `kp-release-impact` and `kp-store-engagement` both went
-2/2 under `mcp` and 0/2 under every other regime, no exceptions. Ground truth for
+**1. Live data access is necessary, and almost always sufficient, for the two winnable
+analytics tasks; nothing else even gets close.** `kp-store-engagement` went 4/4 under
+`mcp`; `kp-release-impact` went 3/4, with the single miss failing the `answer.json`
+shape gate rather than reporting a wrong number. Every other regime went 0/4 on both,
+no exceptions. Ground truth for
 `kp-release-impact`: 809 events / 8.71 average DAU in the week before release 1.0.0+16,
 520 events / 6.86 average DAU the week after. Ground truth for `kp-store-engagement`: of
 users who opened the store in the two-week window, 100% (6 of 6) also earned amber, with
 a median of 10.5 `amber_earned` events among them. Without a live connection to query
 against, an agent has no way to produce these numbers regardless of how much PostHog
-documentation it has memorized or been handed; all 12 non-`mcp` trials on these two tasks
+documentation it has memorized or been handed; all 24 non-`mcp` trials on these two tasks
 failed at the `answer.json` shape gate (missing, invalid, or schema-mismatched), rather
 than producing a well-formed wrong number.
 
-**2. The sharpest finding in this batch is an MCP failure, not an MCP success.** On
-`kp-reminder-funnel`, both `mcp` trials independently computed a conversion rate of 0.5,
-against a true rate of 0.1667 (1 of 6 users). Both landed on the identical wrong number
+**2. The sharpest finding in this eval is an MCP failure, not an MCP success.** On
+`kp-reminder-funnel`, all four `mcp` trials across both batches independently computed a
+conversion rate of 0.5, against a true rate of 0.1667 (1 of 6 users). All four landed on
+the identical wrong number
 by the identical wrong method: counting users who fired both `reminder_created` and
 `habit_confirmed` anywhere in the window (3 of 6), instead of users whose first
 `habit_confirmed` came at or after their first `reminder_created` (1 of 6) as the prompt
 explicitly asked ("do this per-user, not per-event... ask whether they have a
 `habit_confirmed` at or after that first creation"). This is a per-user event-sequencing
 error: "did A and B" instead of "did A then B." I could not find a worked "sequential
-funnel with correct event ordering" HogQL example on PostHog's public docs; two
+funnel with correct event ordering" HogQL example on PostHog's public docs; four
 independent trials converging on the same shortcut is a concrete signal that the
 docs (or the MCP tool's own guidance) don't make the correct pattern obvious. This is
 the doc gap most worth PostHog's attention: it reproduces reliably, and it is exactly
 the kind of thing better agent-facing documentation would fix rather than a smarter
 model.
 
-**3. Hand-built bundles carried the hardest coding task, and produced the only pass on
-it in any regime.** `ch-flag-gated-rollout` (bridge a PostHog feature flag, evaluated
-only in the renderer, into a decision made entirely in Electron's main process, safely
-defaulting to off) failed in all four regimes' first trial and in every `none`/`llms-txt`/`mcp`
-trial; the single pass in the whole task came from `bundle`'s second trial. `bundle`
-also went 2/2 on `ch-main-process-capture` (route Electron main-process crashes to
-PostHog directly, again a main-process/renderer boundary problem), where every other
-regime managed at most one pass. Public PostHog docs don't cover Electron main-process
-integration patterns at all; the bundles for these two tasks had to synthesize a
-solution by composing renderer-side flag/error APIs with an Electron
-preload/IPC bridge, which is exactly the kind of task-specific composition that curated
-context engineering, not a generic doc index, is suited to provide.
+**3. Hand-built bundles swept the Electron crash-capture task; the flag-rollout task is
+just hard.** `bundle` went 4/4 on `ch-main-process-capture` (route Electron main-process
+crashes to PostHog directly, a main-process/renderer boundary problem), where `none`
+managed 2/4, `llms-txt` 1/4, and `mcp` 0/4. Public PostHog docs don't cover Electron
+main-process integration patterns at all; the bundle for this task had to synthesize a
+solution by composing renderer-side error APIs with an Electron preload/IPC bridge,
+which is exactly the kind of task-specific composition that curated context engineering,
+not a generic doc index, is suited to provide. `ch-flag-gated-rollout` (bridge a feature
+flag evaluated in the renderer into a main-process decision, safely defaulting to off)
+tells a soberer story: at n=2 it looked bundle-favored, with the task's only pass coming
+from `bundle`; at n=4 it sits at 0/4 for `none` and 1/4 for each other regime, which
+reads as occasional passes in a uniformly hard task, not a regime effect. Doubling n
+dissolved an apparent finding, which is itself the argument for raising n further before
+claiming anything mid-range.
 
 **4. Post-isolation, agents without data access decline `kp-` tasks honestly instead of
-guessing.** Every `bundle` trial on all three `kp-` tasks in this batch either failed to
+guessing.** Every `bundle` trial on all three `kp-` tasks in both valid batches either failed to
 produce a valid `answer.json` or produced one flagged `wrong-answer`. Two earlier
 failure modes are both gone. In the first batch, one `bundle` trial confidently
 fabricated plausible-looking `kp-` numbers, and only the reference check against live
@@ -192,13 +201,14 @@ same direction: context that describes the data without connecting to it is not 
 it is a fabrication risk, and a live reference check is the only guard in this harness
 that catches either failure.
 
-**5. `llms-txt`, PostHog's own agent-facing doc index, underperformed the no-context
-baseline on raw passes while costing far more in tokens.** `llms-txt` passed 2/12
-against `none`'s 3/12, and its mean cost per run ($3.41) was roughly 2.8x `none`'s
-($1.20) and its cost per success ($20.46) was more than 4x any other regime's. The
+**5. `llms-txt`, PostHog's own agent-facing doc index, bought no more passes than the
+no-context baseline while costing far more in tokens.** `llms-txt` and `none` both
+passed 6/24, but `llms-txt`'s mean cost per run ($3.43) was roughly 2.9x `none`'s
+($1.20) and its cost per success ($13.71) was the worst of any regime, close to 3x
+`none`'s $4.79. The
 snapshot is a ~330 KB flat link index of doc URLs, not indexed or summarized content;
 an agent has to spend turns and tokens crawling it via `WebFetch` before it can act, and
-in this batch that crawling overhead did not translate into task-relevant depth. This
+in these batches that crawling overhead did not translate into task-relevant depth. This
 reads as a design problem with the artifact, not with the model: a link index optimized
 for a human skimming titles is a worse fit for an agent than either no context at all
 or a small task-scoped bundle.
@@ -209,7 +219,7 @@ The parts of this harness that took the most iteration to get right, and why:
 
 | Problem | Fix |
 |---|---|
-| Multi-turn runs re-read cached context every turn, so gross token counts inflate 20-50x over real spend (measured in this batch: 30.6x gross-to-noncached overall) | Budget guard caps *noncached* tokens per run (input + cache-creation + output), excluding cache reads, so the cap tracks real spend instead of turn count |
+| Multi-turn runs re-read cached context every turn, so gross token counts inflate 20-50x over real spend (measured across both valid batches: 30.5x gross-to-noncached overall) | Budget guard caps *noncached* tokens per run (input + cache-creation + output), excluding cache reads, so the cap tracks real spend instead of turn count |
 | Headless `claude -p` would silently skip connecting to the PostHog MCP server | Server entry must declare `"type": "http"`, and must be named something other than `posthog` (Claude Code caches a needs-auth verdict per server name, so colliding with a developer's own OAuth-based `posthog` server skips auth entirely); every run also passes `--strict-mcp-config` so no ambient user-scoped MCP server leaks into any regime |
 | A `none`/`llms-txt`/`bundle` run must never be able to query live PostHog with harness credentials | All `EVALS_POSTHOG_*` environment variables are stripped from the agent subprocess's environment in every regime; the `mcp` regime's token instead travels through a generated config file written outside the workspace and deleted in the cell's teardown, never as an inherited env var |
 | The `mcp` regime must not be able to touch keeplings production data destructively, or leak into the wrong project | Personal API key is scoped read-only; every task pins the MCP session to one project via header (`kp-` tasks pin to keeplings production for read-only queries, `ch-` tasks pin to a scratch project); a missing token or project-id env var fails the cell outright as `check-infra` rather than running unauthenticated or unpinned |
@@ -221,7 +231,7 @@ The parts of this harness that took the most iteration to get right, and why:
    query than counting users who did them in a required order, and the difference is
    easy to get wrong even with live schema access. A canonical example (ideally
    reachable from the MCP server's own tool descriptions, not just static docs) would
-   likely have prevented both failing trials from converging on the same shortcut.
+   likely have prevented all four failing trials from converging on the same shortcut.
 2. **Electron / desktop main-process integration guidance.** Card-harbor's tasks exposed
    a real gap: PostHog's JS SDK docs are written renderer/browser-first, and nothing
    public covers bridging flag evaluation or error capture across an Electron
@@ -229,18 +239,18 @@ The parts of this harness that took the most iteration to get right, and why:
    just card-harbor; any Electron app using PostHog hits the same renderer-only
    assumption.
 3. **What `llms.txt` should become.** As a flat link index, `llms-txt` cost more tokens
-   per run than any other regime and produced fewer passes than giving an agent nothing
-   at all. A version with even lightweight per-page summaries, or task-class-scoped
+   per run than any other regime and produced no more passes than giving an agent
+   nothing at all. A version with even lightweight per-page summaries, or task-class-scoped
    sub-indexes, would let an agent judge relevance before spending a `WebFetch` turn on
-   each candidate page, which is the actual bottleneck this batch's cost data points at.
+   each candidate page, which is the actual bottleneck the cost data above points at.
 
 ## Limitations
 
-- **n=2 per cell.** This batch powers floor-finding (does a regime ever solve a task
-  class) and directional sweeps across all four regimes; it does not power a
-  statistically significant claim about a mid-range regime difference. A batch raising
-  n to 4 is running as this is written, and the numbers above will be refreshed; the
-  tables are structured so a higher-n rerun only changes cell values.
+- **n=4 per cell.** Two batches power floor-finding (does a regime ever solve a task
+  class) and directional sweeps across all four regimes; they do not power a
+  statistically significant claim about a mid-range regime difference, and finding 3
+  shows concretely how an apparent n=2 effect dissolved at n=4. The tables are
+  structured so a higher-n rerun only changes cell values.
 - **Single model.** Every trial ran `claude-sonnet-5`; nothing here is a claim about
   context regimes generalizing across models.
 - **Six tasks.** Three coding tasks on one app, three analytics tasks on another. The
@@ -256,7 +266,7 @@ The parts of this harness that took the most iteration to get right, and why:
 ## Reproduction
 
 Full harness: `evals/README.md`. Raw data behind every number in this writeup:
-`evals/results/journal.jsonl` (append-only, one row per trial, trials 1-2 only used
-here) and `evals/results/summary.json` (per-cell roll-up). Task definitions, prompts,
+`evals/results/journal.jsonl` (append-only, one row per trial) and
+`evals/results/summary.json` (per-cell roll-up). Task definitions, prompts,
 and references: `evals/tasks/*/`. Full design rationale and risk analysis:
 `docs/evals-plan.html`.
