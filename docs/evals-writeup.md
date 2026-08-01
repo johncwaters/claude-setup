@@ -131,9 +131,9 @@ regime with zero passes has no defined cost-per-success):
 
 `ch-` tasks (Electron/TypeScript) averaged 51.25 turns per run across all regimes
 (23 of 24 runs finished at or above the 50-turn cap; the CLI's reported turn count runs
-one past the configured cap), and accounted for $66.93 of the $85.92 total cost across
-170 of the 197 total wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and
-resolved in 27 minutes total. The coding tasks are the expensive half of this suite regardless of
+one past the configured cap), and accounted for $66.93 of the $85.92 overall cost and
+170 of the 197 wall-minutes; `kp-` tasks (HogQL analysis) averaged 12.5 turns and
+finished in 27 minutes. The coding tasks are the expensive half of this suite regardless of
 context regime.
 
 ## Findings
