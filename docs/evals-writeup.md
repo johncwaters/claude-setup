@@ -92,14 +92,13 @@ floors (a regime that never solves a task class) and run directional sweeps acro
 four regimes at once; it is not enough to call a mid-range regime difference
 statistically significant. A two-proportion test at alpha 0.05 and power 0.90 needs
 roughly 100 trials per cell to distinguish a 90% pass rate from an 80% one, and
-considerably more when both rates sit near 50%. Every table below is structured so
-re-running at higher n only changes cell values, not shape.
+considerably more when both rates sit near 50%.
 
 ## Results
 
 Both valid batches ran with zero infrastructure failures: 96/96 trials scored, none
 excluded (16 passes in the first 48-trial batch, 17 in the second, a stable rate),
-381.6 minutes of total wall time, $171.72 in token cost at API-equivalent
+382 minutes of total wall time, $171.72 in token cost at API-equivalent
 pricing (these runs actually rode a Claude subscription, not metered API billing; cost
 is reported for comparability, not as money spent). Two prior batches are excluded from
 these findings: an earlier batch established baseline floors before regimes were fully
@@ -249,8 +248,7 @@ The parts of this harness that took the most iteration to get right, and why:
 - **n=4 per cell.** Two batches power floor-finding (does a regime ever solve a task
   class) and directional sweeps across all four regimes; they do not power a
   statistically significant claim about a mid-range regime difference, and finding 3
-  shows concretely how an apparent n=2 effect dissolved at n=4. The tables are
-  structured so a higher-n rerun only changes cell values.
+  shows concretely how an apparent n=2 effect dissolved at n=4.
 - **Single model.** Every trial ran `claude-sonnet-5`; nothing here is a claim about
   context regimes generalizing across models.
 - **Six tasks.** Three coding tasks on one app, three analytics tasks on another. The
