@@ -348,6 +348,75 @@ class McpConfigLifecycleTests(unittest.TestCase):
         self.assertIn("Bearer <redacted>", printed.getvalue())
 
 
+class RecordDefaultReplayDirTests(unittest.TestCase):
+    """--record with no --replay-dir must still land fixtures somewhere, not silently no-op."""
+
+    def setUp(self):
+        self.tmp_root = tempfile.mkdtemp(prefix="evals-record-default-test-")
+        self.tasks_dir = os.path.join(self.tmp_root, "tasks")
+        os.makedirs(self.tasks_dir)
+        shutil.copytree(FIXTURE_TASK_DIR, os.path.join(self.tasks_dir, "sample-task"))
+
+        self.bundles_dir = os.path.join(self.tmp_root, "bundles")
+        os.makedirs(os.path.join(self.bundles_dir, "snapshots"))
+        self.results_dir = os.path.join(self.tmp_root, "results")
+
+        self.config_path = os.path.join(self.tmp_root, "config.yml")
+        with open(self.config_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "model: claude-sonnet-5\n"
+                "max_turns: 5\n"
+                "trials_per_cell: 1\n"
+                "regimes: [none]\n"
+                f"bundles_dir: {self.bundles_dir}\n"
+            )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_root, ignore_errors=True)
+
+    def test_record_without_replay_dir_writes_fixture_under_results_dir_replays(self):
+        fake_raw = {
+            "num_turns": 1, "total_cost_usd": 0.01,
+            "usage": {"input_tokens": 10, "cache_creation_input_tokens": 0,
+                      "cache_read_input_tokens": 0, "output_tokens": 5},
+            "result": "4",
+        }
+        with mock.patch.object(run_module.claude_cli, "_invoke_live", return_value=fake_raw):
+            exit_code = run_module.main([
+                "--tasks-dir", self.tasks_dir,
+                "--config", self.config_path,
+                "--results-dir", self.results_dir,
+                "--record",
+            ])
+
+        self.assertEqual(exit_code, 0)
+        fixture_path = os.path.join(self.results_dir, "replays", "sample-task_none_1.json")
+        self.assertTrue(os.path.isfile(fixture_path))
+        with open(fixture_path, encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle), fake_raw)
+
+    def test_explicit_replay_dir_still_overrides_the_default(self):
+        explicit_replay_dir = os.path.join(self.tmp_root, "explicit-replays")
+        fake_raw = {
+            "num_turns": 1, "total_cost_usd": 0.01,
+            "usage": {"input_tokens": 10, "cache_creation_input_tokens": 0,
+                      "cache_read_input_tokens": 0, "output_tokens": 5},
+            "result": "4",
+        }
+        with mock.patch.object(run_module.claude_cli, "_invoke_live", return_value=fake_raw):
+            exit_code = run_module.main([
+                "--tasks-dir", self.tasks_dir,
+                "--config", self.config_path,
+                "--results-dir", self.results_dir,
+                "--record",
+                "--replay-dir", explicit_replay_dir,
+            ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(os.path.isfile(os.path.join(explicit_replay_dir, "sample-task_none_1.json")))
+        self.assertFalse(os.path.isdir(os.path.join(self.results_dir, "replays")))
+
+
 class SummarizeScopingTests(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="evals-summarize-test-")

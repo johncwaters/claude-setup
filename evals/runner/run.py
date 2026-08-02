@@ -315,6 +315,9 @@ def main(argv=None):
         config["model"] = args.model
     model = config["model"]
 
+    if args.record and not args.replay_dir:
+        args.replay_dir = os.path.join(args.results_dir, "replays")
+
     evals_root = os.path.dirname(os.path.abspath(args.config))
     env_file.apply_env_file(os.path.join(evals_root, ".env"))
     journal = Journal(os.path.join(args.results_dir, "journal.jsonl"))
