@@ -203,7 +203,7 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
 
         check_result = scoring.score_task(
             task["_dir"], workspace, task, config,
-            turns=claude_result.num_turns, max_turns=config["max_turns"],
+            turns=claude_result.num_turns, max_turns=config.get("max_turns"),
         )
 
         status = "infra" if check_result["reason_code"] == "check-infra" else "completed"

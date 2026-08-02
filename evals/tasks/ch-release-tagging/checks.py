@@ -27,7 +27,8 @@ APP_BUILD_KEY_RE = re.compile(r"\$app_build|app_build", re.IGNORECASE)
 HARDCODED_SEMVER_RE = re.compile(r"""['"]\d+\.\d+\.\d+(?:\+\d+)?['"]""")
 GET_VERSION_RE = re.compile(r"getVersion\s*\(|getAppVersion")
 IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
-SYMBOL_DECLARATION_RE_TEMPLATE = r"\b(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|const|let|var)\s+{name}\b"
+FUNCTION_DECLARATION_RE_TEMPLATE = r"\b(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+{name}\s*\("
+VALUE_DECLARATION_RE_TEMPLATE = r"\b(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+{name}\b"
 TEST_PATH_SEGMENT_RE = re.compile(r"(?:^|/)(?:__tests__|test|tests)(?:/|$)")
 TEST_FILENAME_RE = re.compile(r"\.(?:test|spec)\.[^/.]+$")
 
@@ -110,46 +111,95 @@ def _check_wrong_api(repo_root, added_lines_by_file):
     return offenders
 
 
-def _extract_balanced_call_args(text, open_paren_index):
-    """Return the text between a call's parens, given the index of its opening '('."""
+def _index_after_balanced_parens(text, open_paren_index):
+    """Index just past the ')' that closes the '(' at open_paren_index, or None if the
+    diff's added lines cut off before it closes."""
     depth = 0
-    args_start = None
     for index in range(open_paren_index, len(text)):
         char = text[index]
         if char == "(":
             depth += 1
-            if depth == 1:
-                args_start = index + 1
             continue
         if char == ")":
             depth -= 1
             if depth == 0:
-                return text[args_start:index]
-    return text[args_start:] if args_start is not None else ""
+                return index + 1
+    return None
 
 
-def _register_call_arg_symbols(text):
-    """Leading identifier of each register(...) call's first argument, when it isn't an
+def _extract_balanced_call_args(text, open_paren_index):
+    """Return the text between a call's parens, given the index of its opening '('."""
+    close_index = _index_after_balanced_parens(text, open_paren_index)
+    if close_index is None:
+        return text[open_paren_index + 1:]
+    return text[open_paren_index + 1:close_index - 1]
+
+
+def _extract_value_or_block(text, start_index):
+    """From just after a declaration's name (and, for a function, its parameter list),
+    capture the value that follows: a balanced {...} block if one starts before a
+    top-level ';', else the bare expression up to that ';'.
+    """
+    index = start_index
+    while index < len(text) and text[index] not in "{;":
+        index += 1
+    if index >= len(text):
+        return text[start_index:]
+    if text[index] == ";":
+        return text[start_index:index]
+    depth = 0
+    block_start = index
+    for i in range(index, len(text)):
+        char = text[i]
+        if char == "{":
+            depth += 1
+            continue
+        if char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[block_start:i + 1]
+    return text[block_start:]
+
+
+def _extract_declaration_block(text, symbol):
+    """The body of a `function <symbol>(...) { ... }` or the initializer of a
+    `const/let/var <symbol> = ...` declaration for `symbol`, scoped so a release key
+    appearing elsewhere in the same file (an unrelated capture call, say) can't
+    false-positive a symbol whose own definition doesn't carry it.
+    """
+    function_match = re.search(FUNCTION_DECLARATION_RE_TEMPLATE.format(name=re.escape(symbol)), text)
+    if function_match:
+        params_open_paren_index = function_match.end() - 1
+        params_close_index = _index_after_balanced_parens(text, params_open_paren_index)
+        if params_close_index is None:
+            return None
+        return _extract_value_or_block(text, params_close_index)
+
+    value_match = re.search(VALUE_DECLARATION_RE_TEMPLATE.format(name=re.escape(symbol)), text)
+    if value_match:
+        return _extract_value_or_block(text, value_match.end())
+
+    return None
+
+
+def _register_call_arg_symbol(text, register_match):
+    """Leading identifier of a register(...) call's first argument, when it isn't an
     object literal (e.g. `register(releaseSuperProperties)` or `register(toAppIdentity())`).
     """
-    symbols = []
-    for match in REGISTER_CALL_RE.finditer(text):
-        args_text = _extract_balanced_call_args(text, match.end() - 1).strip()
-        args_text = re.sub(r"^await\s+", "", args_text)
-        if not args_text or args_text.startswith("{"):
-            continue
-        identifier_match = IDENTIFIER_RE.match(args_text)
-        if identifier_match:
-            symbols.append(identifier_match.group(0))
-    return symbols
+    args_text = _extract_balanced_call_args(text, register_match.end() - 1).strip()
+    args_text = re.sub(r"^await\s+", "", args_text)
+    if not args_text or args_text.startswith("{"):
+        return None
+    identifier_match = IDENTIFIER_RE.match(args_text)
+    return identifier_match.group(0) if identifier_match else None
 
 
 def _symbol_definition_covers_release_properties(symbol, added_lines_by_file):
-    declaration_re = re.compile(SYMBOL_DECLARATION_RE_TEMPLATE.format(name=re.escape(symbol)))
     for text in added_lines_by_file.values():
-        if not declaration_re.search(text):
+        declaration_block = _extract_declaration_block(text, symbol)
+        if declaration_block is None:
             continue
-        if APP_VERSION_KEY_RE.search(text) or APP_BUILD_KEY_RE.search(text):
+        if APP_VERSION_KEY_RE.search(declaration_block) or APP_BUILD_KEY_RE.search(declaration_block):
             return True
     return False
 
@@ -165,11 +215,15 @@ def _register_call_covers_release_properties(added_lines_by_file):
     """
     referenced_symbols = []
     for text in added_lines_by_file.values():
-        if not REGISTER_CALL_RE.search(text):
+        register_matches = list(REGISTER_CALL_RE.finditer(text))
+        if not register_matches:
             continue
         if APP_VERSION_KEY_RE.search(text) or APP_BUILD_KEY_RE.search(text):
             return True
-        referenced_symbols.extend(_register_call_arg_symbols(text))
+        for register_match in register_matches:
+            symbol = _register_call_arg_symbol(text, register_match)
+            if symbol:
+                referenced_symbols.append(symbol)
 
     return any(
         _symbol_definition_covers_release_properties(symbol, added_lines_by_file)

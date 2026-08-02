@@ -1,14 +1,13 @@
-"""Unit tests for the two ch-release-tagging static-acceptance fixes:
+"""Unit tests for ch-release-tagging's static acceptance surface.
 
-1. _register_call_covers_release_properties must resolve one indirection hop, so a
-   register(...) call that passes an imported symbol (the super-properties object built
-   in its own module) still counts, not just an inline object literal.
-2. _version_source_is_dynamic must ignore hardcoded semver literals inside test files,
-   since a unit test's fixture value (`register` called with a literal in an assertion)
-   is not the production hardcoding the task's "not typed in by hand" rule targets.
+_register_call_covers_release_properties accepts a register(...) call whose release
+properties are inline, or one indirection hop away (an imported symbol whose own
+definition, scoped to just that declaration, carries $app_version/$app_build).
+_version_source_is_dynamic requires a real app.getVersion()-style lookup and rejects
+hardcoded semver literals, but only in production files: a test file's fixture literal
+doesn't count as the hand-typed version the task's acceptance surface is guarding against.
 """
 
-import os
 import unittest
 
 from tests.helpers import load_checks_module, write_file
@@ -70,6 +69,25 @@ class RegisterCallCoversReleasePropertiesTests(unittest.TestCase):
                 "posthog.register(unrelatedConfig);\n"
             ),
             "src/renderer/src/config.ts": "export const unrelatedConfig = { debug: true };\n",
+        }
+
+        self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
+    def test_release_keys_elsewhere_in_the_defining_file_do_not_leak_into_an_unrelated_symbol(self):
+        # buildTelemetryContext's own body has no release keys; the file also happens to
+        # have an unrelated capture call that does. The symbol's own definition, not the
+        # whole file, decides the outcome, so this must still fail.
+        added_lines_by_file = {
+            "src/renderer/src/main.tsx": (
+                "import { buildTelemetryContext } from './telemetry';\n"
+                "posthog.register(buildTelemetryContext());\n"
+            ),
+            "src/renderer/src/telemetry.ts": (
+                "export function buildTelemetryContext() {\n"
+                "  return { locale: getLocale() };\n"
+                "}\n"
+                "posthog.capture('debug_info', { $app_version: '9.9.9' });\n"
+            ),
         }
 
         self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
