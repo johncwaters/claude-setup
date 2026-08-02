@@ -1,0 +1,110 @@
+{
+  "claude-sonnet-5": {
+    "ch-flag-gated-rollout::none": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 3.500409300000001,
+      "reason_code_histogram": {
+        "pass": 1,
+        "missing-events": 1
+      }
+    },
+    "ch-flag-gated-rollout::llms-txt": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 8.218352650000002,
+      "reason_code_histogram": {
+        "missing-events": 1,
+        "pass": 1
+      }
+    },
+    "ch-flag-gated-rollout::mcp": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 4.906062600000001,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-flag-gated-rollout::bundle": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 2.72225565,
+      "reason_code_histogram": {
+        "missing-events": 2
+      }
+    },
+    "ch-main-process-capture::none": {
+      "task": "ch-main-process-capture",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 4.19159445,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::llms-txt": {
+      "task": "ch-main-process-capture",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 9.479516099999996,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::mcp": {
+      "task": "ch-main-process-capture",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 4.041839700000001,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::bundle": {
+      "task": "ch-main-process-capture",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 2.8943197499999993,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    }
+  }
+}
