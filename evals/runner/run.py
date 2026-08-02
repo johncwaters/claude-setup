@@ -201,7 +201,10 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
             journal.append(entry)
             return entry
 
-        check_result = scoring.score_task(task["_dir"], workspace, task, config)
+        check_result = scoring.score_task(
+            task["_dir"], workspace, task, config,
+            turns=claude_result.num_turns, max_turns=config["max_turns"],
+        )
 
         status = "infra" if check_result["reason_code"] == "check-infra" else "completed"
         entry = JournalEntry(

@@ -26,6 +26,10 @@ APP_VERSION_KEY_RE = re.compile(r"\$app_version|app_version", re.IGNORECASE)
 APP_BUILD_KEY_RE = re.compile(r"\$app_build|app_build", re.IGNORECASE)
 HARDCODED_SEMVER_RE = re.compile(r"""['"]\d+\.\d+\.\d+(?:\+\d+)?['"]""")
 GET_VERSION_RE = re.compile(r"getVersion\s*\(|getAppVersion")
+IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+SYMBOL_DECLARATION_RE_TEMPLATE = r"\b(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|const|let|var)\s+{name}\b"
+TEST_PATH_SEGMENT_RE = re.compile(r"(?:^|/)(?:__tests__|test|tests)(?:/|$)")
+TEST_FILENAME_RE = re.compile(r"\.(?:test|spec)\.[^/.]+$")
 
 
 def _fail(reason_code, detail):
@@ -106,13 +110,76 @@ def _check_wrong_api(repo_root, added_lines_by_file):
     return offenders
 
 
+def _extract_balanced_call_args(text, open_paren_index):
+    """Return the text between a call's parens, given the index of its opening '('."""
+    depth = 0
+    args_start = None
+    for index in range(open_paren_index, len(text)):
+        char = text[index]
+        if char == "(":
+            depth += 1
+            if depth == 1:
+                args_start = index + 1
+            continue
+        if char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[args_start:index]
+    return text[args_start:] if args_start is not None else ""
+
+
+def _register_call_arg_symbols(text):
+    """Leading identifier of each register(...) call's first argument, when it isn't an
+    object literal (e.g. `register(releaseSuperProperties)` or `register(toAppIdentity())`).
+    """
+    symbols = []
+    for match in REGISTER_CALL_RE.finditer(text):
+        args_text = _extract_balanced_call_args(text, match.end() - 1).strip()
+        args_text = re.sub(r"^await\s+", "", args_text)
+        if not args_text or args_text.startswith("{"):
+            continue
+        identifier_match = IDENTIFIER_RE.match(args_text)
+        if identifier_match:
+            symbols.append(identifier_match.group(0))
+    return symbols
+
+
+def _symbol_definition_covers_release_properties(symbol, added_lines_by_file):
+    declaration_re = re.compile(SYMBOL_DECLARATION_RE_TEMPLATE.format(name=re.escape(symbol)))
+    for text in added_lines_by_file.values():
+        if not declaration_re.search(text):
+            continue
+        if APP_VERSION_KEY_RE.search(text) or APP_BUILD_KEY_RE.search(text):
+            return True
+    return False
+
+
 def _register_call_covers_release_properties(added_lines_by_file):
+    """A register(...) call tagging $app_version/$app_build, inline or one hop away.
+
+    Most implementations pass an object literal straight into register(...) in the same
+    file. Some extract the super-properties object into its own module (an appIdentity.ts
+    exporting a builder function, or a telemetryRelease.ts exporting a constant) and
+    register the imported symbol instead; that symbol's definition can land in any changed
+    file, so a single indirection hop is resolved across the whole diff before failing.
+    """
+    referenced_symbols = []
     for text in added_lines_by_file.values():
         if not REGISTER_CALL_RE.search(text):
             continue
         if APP_VERSION_KEY_RE.search(text) or APP_BUILD_KEY_RE.search(text):
             return True
-    return False
+        referenced_symbols.extend(_register_call_arg_symbols(text))
+
+    return any(
+        _symbol_definition_covers_release_properties(symbol, added_lines_by_file)
+        for symbol in referenced_symbols
+    )
+
+
+def _is_test_file(file_path):
+    normalized = file_path.replace("\\", "/")
+    return bool(TEST_PATH_SEGMENT_RE.search(normalized) or TEST_FILENAME_RE.search(normalized))
 
 
 def _version_source_is_dynamic(workspace, changed_files):
@@ -120,11 +187,17 @@ def _version_source_is_dynamic(workspace, changed_files):
 
     Both checked across the full post-edit file contents (not just the diff) since the
     lookup and the register call may land in different files (main process reads
-    app.getVersion(), bridges it over IPC, renderer registers it).
+    app.getVersion(), bridges it over IPC, renderer registers it). Test files are excluded
+    from both scans: a unit test asserting `register` was called with a literal fixture
+    version (e.g. `{ $app_version: '0.9.7' }`) is not the hardcoded string the task's
+    "not typed in by hand" requirement is guarding against, since it doesn't feed the
+    real registration.
     """
     has_dynamic_lookup = False
     has_hardcoded_literal_near_version_key = False
     for file_path in changed_files:
+        if _is_test_file(file_path):
+            continue
         text = _read_text(os.path.join(workspace, file_path))
         if GET_VERSION_RE.search(text):
             has_dynamic_lookup = True

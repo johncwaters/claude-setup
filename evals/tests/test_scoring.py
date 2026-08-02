@@ -74,6 +74,52 @@ class ScoringTests(unittest.TestCase):
         result = scoring.score_task(task_dir, self.workspace, {"id": "t"}, {}, timeout_secs=1)
         self.assertEqual(result["reason_code"], "check-infra")
 
+    def test_turn_capped_run_relabels_build_fail_and_preserves_original_detail(self):
+        task_dir = self._write_checks("""
+            def run_checks(workspace, task, config):
+                return {"passed": False, "reason_code": "build-fail", "detail": "npm run typecheck failed"}
+        """)
+        result = scoring.score_task(
+            task_dir, self.workspace, {"id": "t"}, {}, turns=30, max_turns=30,
+        )
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["reason_code"], "turn-capped")
+        self.assertIn("build-fail", result["detail"])
+        self.assertIn("npm run typecheck failed", result["detail"])
+
+    def test_turn_capped_run_relabels_missing_events_when_turns_exceed_max(self):
+        task_dir = self._write_checks("""
+            def run_checks(workspace, task, config):
+                return {"passed": False, "reason_code": "missing-events", "detail": "no register call found"}
+        """)
+        result = scoring.score_task(
+            task_dir, self.workspace, {"id": "t"}, {}, turns=35, max_turns=30,
+        )
+        self.assertEqual(result["reason_code"], "turn-capped")
+
+    def test_build_fail_under_the_turn_cap_is_not_relabeled(self):
+        task_dir = self._write_checks("""
+            def run_checks(workspace, task, config):
+                return {"passed": False, "reason_code": "build-fail", "detail": "npm run typecheck failed"}
+        """)
+        result = scoring.score_task(
+            task_dir, self.workspace, {"id": "t"}, {}, turns=5, max_turns=30,
+        )
+        self.assertEqual(result["reason_code"], "build-fail")
+
+    def test_wrong_answer_at_the_turn_cap_is_not_relabeled(self):
+        # turn-capped only ever stands in for build-fail/missing-events: a genuine
+        # wrong-answer verdict means checks.py ran to completion and judged the result,
+        # which is not a turn-budget artifact regardless of how many turns it took.
+        task_dir = self._write_checks("""
+            def run_checks(workspace, task, config):
+                return {"passed": False, "reason_code": "wrong-answer", "detail": "expected 4, got 5"}
+        """)
+        result = scoring.score_task(
+            task_dir, self.workspace, {"id": "t"}, {}, turns=30, max_turns=30,
+        )
+        self.assertEqual(result["reason_code"], "wrong-answer")
+
     def test_config_checks_timeout_secs_flows_through_as_the_subprocess_deadline(self):
         # config-plumbing: checks_timeout_secs from config.yml (not scoring.py's own
         # fallback default) must be the value actually enforced on the subprocess,
