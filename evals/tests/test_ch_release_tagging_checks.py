@@ -92,6 +92,88 @@ class RegisterCallCoversReleasePropertiesTests(unittest.TestCase):
 
         self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
 
+    def test_destructured_parameter_arrow_function_body_with_release_keys_passes(self):
+        # the destructuring brace `({ appVersion, buildNumber })` sits before the real
+        # body; the body itself, not the destructuring pattern, must be what's inspected.
+        added_lines_by_file = {
+            "src/shared/appIdentity.ts": (
+                "export const buildReleaseProperties = ({ appVersion, buildNumber }) => {\n"
+                "  return { $app_version: appVersion, $app_build: buildNumber };\n"
+                "};\n"
+            ),
+            "src/renderer/src/main.tsx": (
+                "import { buildReleaseProperties } from '../../shared/appIdentity';\n"
+                "posthog.register(buildReleaseProperties(getReleaseInfo()));\n"
+            ),
+        }
+
+        self.assertTrue(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
+    def test_plain_paren_arrow_function_body_with_release_keys_passes(self):
+        added_lines_by_file = {
+            "src/shared/appIdentity.ts": (
+                "export const buildReleaseProperties = (appVersion) => ({ $app_version: appVersion });\n"
+            ),
+            "src/renderer/src/main.tsx": (
+                "import { buildReleaseProperties } from '../../shared/appIdentity';\n"
+                "posthog.register(buildReleaseProperties(getAppVersion()));\n"
+            ),
+        }
+
+        self.assertTrue(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
+    def test_arrow_function_body_without_keys_fails_despite_key_like_params_or_elsewhere_text(self):
+        # the destructured param names and an unrelated capture call both contain
+        # key-shaped text; only the arrow function's own real body should be inspected,
+        # and that body has no release keys, so this must fail.
+        added_lines_by_file = {
+            "src/shared/appIdentity.ts": (
+                "export const buildReleaseProperties = ({ app_version, app_build }) => {\n"
+                "  return { locale: getLocale() };\n"
+                "};\n"
+                "posthog.capture('debug_info', { $app_version: '9.9.9' });\n"
+            ),
+            "src/renderer/src/main.tsx": (
+                "import { buildReleaseProperties } from '../../shared/appIdentity';\n"
+                "posthog.register(buildReleaseProperties(getReleaseInfo()));\n"
+            ),
+        }
+
+        self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
+    def test_generic_function_declaration_with_release_keys_passes(self):
+        added_lines_by_file = {
+            "src/shared/appIdentity.ts": (
+                "export function toAppIdentitySuperProperties<T extends ReleaseInfo>(source: T) {\n"
+                "  return { $app_version: source.version, $app_build: source.build };\n"
+                "}\n"
+            ),
+            "src/renderer/src/main.tsx": (
+                "import { toAppIdentitySuperProperties } from '../../shared/appIdentity';\n"
+                "posthog.register(toAppIdentitySuperProperties(getReleaseInfo()));\n"
+            ),
+        }
+
+        self.assertTrue(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
+    def test_overload_signature_followed_by_real_implementation_passes(self):
+        # the first match is a body-less TS overload signature; the check must keep
+        # looking for a later match with a real '{' implementation instead of stopping.
+        added_lines_by_file = {
+            "src/shared/appIdentity.ts": (
+                "export function toAppIdentitySuperProperties(source: ReleaseInfo): SuperProperties;\n"
+                "export function toAppIdentitySuperProperties(source: ReleaseInfo) {\n"
+                "  return { $app_version: source.version, $app_build: source.build };\n"
+                "}\n"
+            ),
+            "src/renderer/src/main.tsx": (
+                "import { toAppIdentitySuperProperties } from '../../shared/appIdentity';\n"
+                "posthog.register(toAppIdentitySuperProperties(getReleaseInfo()));\n"
+            ),
+        }
+
+        self.assertTrue(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
 
 class VersionSourceIsDynamicTests(unittest.TestCase):
     def setUp(self):
