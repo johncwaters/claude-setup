@@ -230,7 +230,8 @@ def _extract_declaration_block(text, symbol):
     if value_match:
         equals_end_index = _index_after_assignment_equals(text, value_match.end())
         if equals_end_index is None:
-            return _extract_value_or_block(text, value_match.end())
+            # `let x;` with no inline initializer: nothing to credit this symbol with.
+            return None
         arrow_body = _extract_arrow_function_body(text, equals_end_index)
         if arrow_body is not None:
             return arrow_body

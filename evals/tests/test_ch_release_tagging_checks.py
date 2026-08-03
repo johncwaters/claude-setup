@@ -158,6 +158,23 @@ class RegisterCallCoversReleasePropertiesTests(unittest.TestCase):
 
         self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
 
+    def test_async_destructured_parameter_arrow_function_body_with_release_keys_passes(self):
+        # `async` sits before the destructuring params; it must be skipped along with
+        # the params themselves so the real (also async) body is what gets inspected.
+        added_lines_by_file = {
+            "src/shared/appIdentity.ts": (
+                "export const buildReleaseProperties = async ({ appVersion, buildNumber }) => {\n"
+                "  return { $app_version: appVersion, $app_build: buildNumber };\n"
+                "};\n"
+            ),
+            "src/renderer/src/main.tsx": (
+                "import { buildReleaseProperties } from '../../shared/appIdentity';\n"
+                "posthog.register(await buildReleaseProperties(getReleaseInfo()));\n"
+            ),
+        }
+
+        self.assertTrue(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
     def test_generic_function_declaration_with_release_keys_passes(self):
         added_lines_by_file = {
             "src/shared/appIdentity.ts": (
