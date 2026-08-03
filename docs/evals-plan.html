@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evals Plan: Agent-Docs Eval Harness for PostHog</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --text: #1a1f2b;
+    --muted: #5b6474;
+    --accent: #1f6feb;
+    --border: #e2e6ee;
+    --tag-bg: #eef1f6;
+    --good: #1a7f37;
+    --warn: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218;
+      --card: #171c26;
+      --text: #e6e9f0;
+      --muted: #9aa4b5;
+      --accent: #539bf5;
+      --border: #2a3140;
+      --tag-bg: #222938;
+      --good: #4ac26b;
+      --warn: #d4a72c;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    padding: 2rem 1rem 4rem;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { margin-bottom: 2rem; }
+  header h1 { font-size: 1.8rem; letter-spacing: -0.02em; }
+  header .subtitle { color: var(--muted); margin-top: 0.3rem; }
+  header .meta { color: var(--muted); font-size: 0.82rem; margin-top: 0.5rem; }
+  section { margin-bottom: 2.2rem; }
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+  h3 { font-size: 1rem; margin-bottom: 0.3rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    margin-bottom: 0.9rem;
+  }
+  .card p + p, .card ul + p, .card p + ul { margin-top: 0.6rem; }
+  ul { padding-left: 1.2rem; }
+  li + li { margin-top: 0.3rem; }
+  code {
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    font-size: 0.85em;
+    font-family: "Cascadia Code", Consolas, monospace;
+  }
+  pre {
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    font-family: "Cascadia Code", Consolas, monospace;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .tablewrap { overflow-x: auto; }
+  .phase { border-left: 3px solid var(--accent); padding-left: 1rem; margin-bottom: 1.1rem; }
+  .phase .when { color: var(--muted); font-size: 0.8rem; }
+  .risk { color: var(--warn); font-weight: 600; }
+  .done { color: var(--good); font-weight: 600; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Agent-Docs Eval Harness for PostHog</h1>
+  <div class="subtitle">Measure how well coding agents complete real PostHog tasks under different context regimes, publish the findings, raise n with on-demand batch reruns.</div>
+  <div class="meta">Plan drafted 2026-07-30. Lives at <code>evals/</code> in this repo. Application project for the PostHog Context Engineer role. No timeline: steps complete in order, at working pace.</div>
+</header>
+
+<section>
+  <h2>Thesis</h2>
+  <div class="card">
+    <p>PostHog's Context Engineer role is about making a product legible to AI agents, not just humans. The honest way to evaluate that legibility is to hand real tasks to a real coding agent under controlled context conditions and score the outcomes programmatically. This harness does exactly that, instruments every run with PostHog's own LLM analytics, and turns the results into a public writeup plus upstream doc-fix PRs.</p>
+    <p>Constraints already decided: lives inside this repo at <code>evals/</code>, no always-on session telemetry (eval runs log to PostHog, daily Claude usage does not), no day-job content. Every eval task is real: sourced from actual work on my own shipping products (card-harbor, keeplings), never invented scenarios.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Deliverables</h2>
+  <div class="card">
+    <ul>
+      <li><b>Harness</b>: <code>evals/</code> with task specs, runner, scorers, and results. Reusable: target docs and regimes are config, not code.</li>
+      <li><b>Data</b>: every run captured as PostHog events and LLM traces in a personal PostHog project; dashboards are the results section.</li>
+      <li><b>Writeup</b>: which context regime wins per task class, where docs fail agents, token cost per success, with failure examples. Published as a page in <code>docs/</code> plus a blog-style post.</li>
+      <li><b>Upstream contributions</b>: doc-gap findings filed as issues or PRs against posthog.com docs.</li>
+      <li><b>Regression gate</b>: on-demand batch reruns (journal resume makes them cheap) so doc drift shows up as a score drop between batches, not a one-time snapshot.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Architecture</h2>
+  <div class="card">
+<pre><code>evals/
+  README.md              what this is, how to run, results summary
+  config.yml             regimes, models, trial counts, budget caps
+  tasks/
+    ch-renderer-capture/   task.yml + repo ref + pinned commit + checks.py
+    ch-error-sourcemaps/
+    kp-release-impact/
+    ...                    (ch- = card-harbor prospective, kp- = keeplings retrospective)
+  runner/
+    run.py               orchestrates: workspace -> agent -> checks -> record
+    regimes.py           context regime assembly (none, llms.txt, mcp, bundle)
+    scoring.py           invokes task checks, normalizes verdicts
+    posthog_capture.py   events + $ai_* trace ingestion
+    journal.py           typed per-run JSONL journal, resume support
+  bundles/               hand-built context bundles (the "context engineering")
+  results/               per-run JSON + roll-up summary (tracked)
+</code></pre>
+    <p><b>Run flow</b>: for each (task, regime, trial): create a throwaway git worktree of the task's repo at its pinned commit, assemble context per regime, spawn headless Claude Code (<code>claude -p --output-format json</code>, model and max-turns pinned from config, subscription auth), run the task's programmatic checks, write journal entry, emit PostHog events, discard the worktree. The runner is plain Python, no framework. Single-model scope: config pins one model, so results are claims about context regimes on that model, and the writeup states that scope explicitly rather than implying generality.</p>
+    <p><b>Precedent in this repo</b>: <code>compiled-commit/bench/</code> already does fixtures, judge, and scored results for the commit runner. Same discipline, second harness, and the journal/resume pattern is carried over.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Context regimes</h2>
+  <div class="card tablewrap">
+    <table>
+      <tr><th>Regime</th><th>What the agent gets</th><th>What it isolates</th></tr>
+      <tr><td><code>none</code></td><td>Task prompt only, web access off</td><td>Baseline: model training data alone</td></tr>
+      <tr><td><code>llms-txt</code></td><td>posthog.com llms.txt snapshot injected (verified: a ~330 KB link index of .md doc URLs; llms-full.txt 404s), plus WebFetch scoped to posthog.com only, since following the index's links is the file's designed use</td><td>Value of PostHog's existing agent-facing docs pathway</td></tr>
+      <tr><td><code>mcp</code></td><td>PostHog MCP server connected, no doc injection; the agent authenticates with a project-restricted personal API key carrying read-only scopes, plus the MCP server's documented <code>readonly</code> session flag and project-pin header, so keeplings production is read-only and writes land only in the scratch project</td><td>Value of live tool access vs static docs</td></tr>
+      <tr><td><code>bundle</code></td><td>Hand-built task-scoped context bundle from <code>bundles/</code></td><td>Ceiling: what curated context engineering buys</td></tr>
+    </table>
+    <p class="muted" style="margin-top:0.6rem">WebSearch is off in every regime. WebFetch is off everywhere except <code>llms-txt</code>, where it is domain-scoped to posthog.com because llms.txt is an index whose designed use is link-following; unrestricted browsing in any regime would collapse the comparison. One known constant: prospective worktrees carry the product repo's own CLAUDE.md/AGENTS.md into every regime, so <code>none</code> is a repo-context baseline, not zero-context; it is identical across regimes and stated as such in the writeup. The <code>bundle</code> regime is the actual context-engineering work product: token-budgeted, task-scoped extractions from PostHog docs. The writeup's core claim is the measured gap between <code>bundle</code> and the others.</p>
+  </div>
+  <div class="card">
+    <h3>Bundle blinding protocol</h3>
+    <p>The bundle-vs-rest gap is only credible if a bundle cannot encode the answer. Rules, enforced per task:</p>
+    <ul>
+      <li>Bundles are built exclusively from public PostHog docs. Never from the task's reference implementation, my landed code, or any agent run output.</li>
+      <li>For prospective card-harbor tasks, the bundle is authored and frozen before the reference implementation lands, so it cannot be answer-scoped even accidentally.</li>
+      <li>Every bundle is content-hashed and frozen before its first scored run; every result row records the hash it ran against.</li>
+      <li>No edits in response to observed results. A post-freeze edit creates a new bundle version, and all prior rows for that cell are discarded from the matrix, not mixed.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Task sourcing: real work only</h2>
+  <div class="card">
+    <p>Tasks come from two live products, both mine, both instrumented (or being instrumented) with PostHog. No synthetic scenarios; every task is something I actually needed done.</p>
+  </div>
+  <div class="card tablewrap">
+    <table>
+      <tr><th>Source</th><th>How tasks arise</th><th>Ground truth (programmatic, no LLM judge)</th></tr>
+      <tr><td><b>card-harbor</b> (Electron + React desktop app; PostHog deps present, integration in progress)</td><td>Prospective capture: each upcoming integration slice (renderer capture wiring, event taxonomy, error tracking with the existing sourcemap upload, feature flag for a rollout) is snapshotted as an eval task BEFORE I do it for real. Agents attempt it in throwaway worktrees under each regime; my landed implementation becomes the reference.</td><td>Expected events with expected properties arrive in a scratch PostHog project via API poll (default 5 minute timeout: PostHog publishes no ingestion SLA and normal lag is low single-digit minutes, so a timeout files as <code>check-infra</code>, never as agent failure); build passes; acceptance checks derived from the landed implementation</td></tr>
+      <tr><td><b>keeplings</b> (Flutter app, PostHog live in production behind explicit user consent; the repo's Astro marketing site carries no PostHog)</td><td>Retrospective capture: real analytics questions I actually asked (release impact, funnel drop-off, error triage, traffic sources), recorded with my verified answer at a pinned time window.</td><td>Agent's HogQL/insight output executed read-only against the real project over the pinned window must match the verified answer; any insights or flags the agent creates go to the scratch project and are checked for exact shape via API, so keeplings production stays untouched</td></tr>
+    </table>
+    <p class="muted" style="margin-top:0.6rem">Each task ships <code>checks.py</code> returning pass/fail plus failure reason codes. Target is still a ~12-task suite across install/instrumentation, HogQL/analysis, error tracking, and product config classes; the classes survive, the content is now sourced from real work.</p>
+  </div>
+  <div class="card">
+    <h3>Capture loop (the daily-workflow wiring)</h3>
+    <p>A small <code>evals capture</code> command snapshots a just-completed real task into <code>evals/tasks/</code>: the prompt as actually given, the repo commit before the work, the landed outcome, and generated check stubs to fill in. Completing real PostHog work on my products grows the eval suite as a side effect; the suite is a work log, not a test-authoring project. Retired tasks stay in the suite as regression rows since docs can break yesterday's answer.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Measurement and instrumentation</h2>
+  <div class="card">
+    <p>Per run, recorded to journal and PostHog:</p>
+    <ul>
+      <li><code>eval_run_completed</code> event: task, regime, trial, pass/fail, failure reason code, wall time, turns used</li>
+      <li>Token accounting from <code>claude -p</code> JSON usage (same accounting scheme as compiled-commit bench): gross, non-cached, output, cost USD</li>
+      <li>LLM trace via PostHog AI observability (<code>$ai_generation</code> family) so individual failures are inspectable in-product</li>
+      <li>Hallucination flags: checks record wrong-API usage distinctly from build failures (e.g. invented SDK method vs missing env var)</li>
+      <li>A distinct <code>check-infra</code> failure code for harness-side faults (ingestion poll timeout, API errors, rate limits): these rows are excluded from regime pass rates and rerun, so infrastructure lag never counts against a regime</li>
+    </ul>
+    <p>Dashboards: pass rate by regime, pass rate by task class, cost per success, failure reason breakdown, per-batch trend line. Built in the same PostHog project, linked from the writeup.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Build order</h2>
+  <div class="phase">
+    <h3>1. Intake first</h3>
+    <div class="when"><code>evals capture</code> command + first 6 real tasks</div>
+    <p>Capture comes before the runner because daily task volume is the asset: snapshot 3 card-harbor integration slices (prospective) and 3 keeplings analytics questions with verified answers (retrospective). From here, every day of normal product work adds tasks at near-zero cost. Critical path: a prospective task is scorable only after its reference implementation lands, so that half of the suite grows at product-work pace; retrospective keeplings tasks have no such gate and can fill in immediately.</p>
+  </div>
+  <div class="phase">
+    <h3>2. Runner core</h3>
+    <div class="when">Worktree spawn, checks, journal, PostHog events; score under none + bundle</div>
+    <p>Prove the loop end to end on the captured tasks with the two regimes that carry the core claim (baseline vs curated context). Exit: 6 real tasks scored, reproducible.</p>
+  </div>
+  <div class="phase">
+    <h3>3. Full regimes + on-demand batches</h3>
+    <div class="when">llms-txt and mcp regimes; detached batch runs fill the matrix</div>
+    <p>Fast-tracked: batches launch on demand (detached from the session) rather than on a nightly schedule, with rate-limit backoff and journal resume. Repeat batches raise n per cell by appending trials to the same journal. Exit: full matrix filled at n&ge;4.</p>
+  </div>
+  <div class="phase">
+    <h3>4. Dashboards + writeup</h3>
+    <div class="when">Then rolling: capture daily, batches accumulate on demand, writeup hardens</div>
+    <p>Dashboards from the first complete matrix, writeup drafted against real numbers, doc-gap findings filed upstream as they surface. Submission gate (fast-tracked): full matrix at n&ge;4 with stable pass rates across two independent batches, replacing the original week-of-nightly-trend requirement.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Budget and risk</h2>
+  <div class="card tablewrap">
+    <table>
+      <tr><th>Risk</th><th>Mitigation</th></tr>
+      <tr><td><span class="risk">Usage-limit exhaustion</span></td><td>Runs ride the Claude subscription (headless CLI with subscription login, no API key set), so the constraint is rate limits, not dollars. Caps in config are runs-per-batch and tokens; runner backs off and resumes on rate-limit errors via the journal. Batches run on demand while the limit is otherwise idle. <code>total_cost_usd</code> is still recorded and reported as API-equivalent pricing, labeled as such in the writeup.</td></tr>
+      <tr><td><span class="risk">Bundle answer leakage</span></td><td>Blinding protocol (see Context regimes): bundles sourced from public docs only, content-hashed and frozen before the first scored run, prospective bundles authored before the reference implementation lands, and any post-freeze edit discards prior rows for that cell.</td></tr>
+      <tr><td><span class="risk">Flaky scoring</span></td><td>No LLM judges anywhere in the pass/fail path. Ground truth is API-verified state or a human-verified answer over a pinned time window. 2 trials per cell to prove the loop; follow-up batches then raise n, headline cells (<code>none</code>, <code>bundle</code>) first. Disagreement between trials is itself reported data, not noise to hide.</td></tr>
+      <tr><td><span class="risk">PostHog free-tier limits</span></td><td>Event volume is tiny (hundreds/month). Scratch capture project for prospective tasks resets per batch; keeplings production data is read-only to the harness.</td></tr>
+      <tr><td><span class="risk">Suite bloat from high task volume</span></td><td>Daily work produces more captures than the matrix needs. The submission matrix is pinned at ~12 representative tasks across the four classes; further captures queue as regression rows for later batches, not matrix growth. Every capture beyond the pin is logged, not silently dropped.</td></tr>
+      <tr><td><span class="risk">Product data in public results</span></td><td>Published journals and results contain aggregates and pass/fail only; raw keeplings analytics stay in PostHog. Scrub pass runs before tracking results.</td></tr>
+      <tr><td><span class="risk">llms.txt or docs change mid-experiment</span></td><td>Regime inputs are snapshotted per batch with content hashes; every result row records which snapshot it ran against. The pages the <code>llms-txt</code> regime fetches by following index links are live by design; the index snapshot hash plus run timestamp bound that drift.</td></tr>
+      <tr><td><span class="risk">Agent nondeterminism inflating claims</span></td><td>Pass rates reported with Wilson score intervals and per-cell n shown; detecting a 10-point pass-rate difference with a two-proportion test at alpha 0.05 and power 0.90 needs roughly 100 trials per cell when comparing 90% against 80%, and several hundred when both rates sit near 50%, so batch accumulation targets the headline cells first and the writeup frames smaller-n comparisons as directional. Raw journals published.</td></tr>
+      <tr><td><span class="risk">Secrets in a public repo</span></td><td>API keys via env only; <code>evals/</code> inherits repo .gitignore discipline; journals scrubbed of keys before tracking results.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Definition of done</h2>
+  <div class="card">
+    <ul>
+      <li class="done">Full matrix over the captured real-task suite complete, with published journals and token accounting</li>
+      <li class="done">Full matrix at n&ge;4 with pass rates stable across two independent batches (fast-tracked from the original week-of-nightly-runs gate), trend visible in dashboard</li>
+      <li class="done">Writeup published: regime comparison, failure taxonomy, at least 3 concrete doc-gap findings filed upstream</li>
+      <li class="done">Repo public, harness reproducible by a stranger with their own keys (README-verified)</li>
+      <li class="done">Zero secrets, zero work references (re-run the pre-publication scan before submission)</li>
+    </ul>
+  </div>
+</section>
+
+<footer class="muted" style="font-size:0.78rem; border-top:1px solid var(--border); padding-top:0.8rem;">
+  Related: compiled-commit/bench (in-repo precedent), posthog-querying skill (HogQL reference for task authoring), PostHog MCP (mcp.posthog.com).
+</footer>
+
+</div>
+</body>
+</html>

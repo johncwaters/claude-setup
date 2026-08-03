@@ -1,0 +1,10 @@
+id: ch-main-process-capture
+class: error-tracking
+mode: prospective
+repo: C:/Users/johnw/Projects/card-harbor
+pinned_commit: 08bfc39aa61af7eb96b112d9d01a725771a22af3
+prompt_file: prompt.md
+time_window: null
+bundle: ch-main-process-capture.md
+captured: "2026-07-30"
+reference: reference.md

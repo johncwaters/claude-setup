@@ -6,6 +6,7 @@
 !.gitignore
 !.gitattributes
 !README.md
+!NOTICE.md
 !AGENTS.md
 !settings.base.json
 !agents/**
@@ -17,10 +18,13 @@
 !setup/**
 !compiled-commit/**
 !profiles/**
+!evals/**
 
 # Never sync these even if a rule above matches
 .credentials.json
 settings.local.json
+evals/.env
+evals/results/replays/
 *.bak*
 *.backup*
 *.tmp.*
@@ -32,14 +36,14 @@ commands/commit.md
 /.machine-profile
 
 # Runtime/state dirs (blocked by * already, listed for clarity)
-projects/
-plugins/
-sessions/
-tasks/
-teams/
-cache/
-backups/
-file-history/
+/projects/
+/plugins/
+/sessions/
+/tasks/
+/teams/
+/cache/
+/backups/
+/file-history/
 shell-snapshots/
 session-env/
 paste-cache/

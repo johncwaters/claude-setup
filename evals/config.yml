@@ -1,0 +1,40 @@
+# Eval harness config: regimes, model, trial counts, and budget caps live here so target
+# docs and context conditions are configuration, not code (see docs/evals-plan.html).
+
+model: claude-sonnet-5              # pinned model for every regime; results are single-model claims
+max_turns: 1000                     # effectively uncapped: the 2026-08-02 cap-100 sweep showed 39 of 40
+                                     # addressable ch- failures at cap 50 were turn starvation, so runs
+                                     # must finish on their own merits; run_timeout_secs is the wall bound
+run_timeout_secs: 5400              # per-run claude -p subprocess ceiling; at max_turns 1000 the old
+                                     # 1800s default would silently become the binding cap again
+trials_per_cell: 2                  # trials per (task, regime) cell; nightly raises this on headline_regimes first
+
+regimes: [none, llms-txt, mcp, bundle]     # full regime matrix (see runner/regimes.py)
+headline_regimes: [none, bundle]           # the core claim (baseline vs curated context); nightly n-raise targets these first
+
+runs_per_batch_cap: 60               # max claude invocations per `run.py` invocation; guards against a runaway batch
+                                      # while clearing the full 6x4x2 grid (48 trials)
+checks_timeout_secs: 600             # per-run checks.py subprocess timeout before scoring.py normalizes to check-infra;
+                                      # budget: typecheck capped at 180s + slack, so a ch- task's checks.py never blows
+                                      # this ceiling under its own internal timeouts
+
+token_budget:
+  max_noncached_tokens_per_run: 3000000  # noncached = input + cache_creation + output (see runner/run.py);
+                                          # cache reads are excluded because multi-turn runs re-read cached
+                                          # context every turn, so gross scales with turns, not real spend.
+                                          # Sized for max_turns 1000 so it stays a runaway backstop, not
+                                          # the effective cap
+
+posthog:
+  host: https://us.i.posthog.com
+  project_api_key_env: EVALS_POSTHOG_PROJECT_KEY         # write key used to emit eval_run_completed events
+  personal_api_key_env: EVALS_POSTHOG_PERSONAL_KEY       # read access for dashboards; also the mcp regime's auth token
+  scratch_project_id_env: EVALS_POSTHOG_SCRATCH_PROJECT_ID   # harness telemetry writes go through the project API key only;
+                                                              # agent MCP access is read-only in every regime, so nothing an
+                                                              # agent does writes anywhere. Doubles as the mcp regime's default
+                                                              # project pin for tasks with no posthog_project_id_env
+  keeplings_project_id_env: EVALS_POSTHOG_KEEPLINGS_PROJECT_ID   # kp- checks' HogQL query target; keeplings production
+  mcp_url: https://mcp.posthog.com/mcp
+  mcp_token_env: EVALS_POSTHOG_PERSONAL_KEY              # env var read for the mcp regime's Authorization header
+
+bundles_dir: bundles                 # hand-built context bundles and llms.txt snapshots live under here

@@ -1,0 +1,29 @@
+# Cap-1000 batch config: matches config.yml's generous-budget settings but with
+# PostHog capture disabled (project_api_key_env points at an unset var) so these
+# batches never blend into the dashboard's published cap-50 events. Fold the
+# dashboard onto cap-1000 data as a deliberate step, not as event pollution.
+
+model: claude-sonnet-5              # overridden per arm with --model
+max_turns: 1000
+run_timeout_secs: 5400
+trials_per_cell: 2
+
+regimes: [none, llms-txt, mcp, bundle]
+headline_regimes: [none, bundle]
+
+runs_per_batch_cap: 60
+checks_timeout_secs: 600
+
+token_budget:
+  max_noncached_tokens_per_run: 3000000
+
+posthog:
+  host: https://us.i.posthog.com
+  project_api_key_env: EVALS_POSTHOG_CAP1000_CAPTURE_DISABLED
+  personal_api_key_env: EVALS_POSTHOG_PERSONAL_KEY
+  scratch_project_id_env: EVALS_POSTHOG_SCRATCH_PROJECT_ID
+  keeplings_project_id_env: EVALS_POSTHOG_KEEPLINGS_PROJECT_ID
+  mcp_url: https://mcp.posthog.com/mcp
+  mcp_token_env: EVALS_POSTHOG_PERSONAL_KEY
+
+bundles_dir: bundles
