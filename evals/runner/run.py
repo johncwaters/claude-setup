@@ -141,13 +141,23 @@ def _print_plan(task, regime, trial, assembly, prompt):
     print(f"  prompt_chars={len(prompt)}")
 
 
-def _token_budget_exceeded_entry(task, regime, trial, wall_secs, turns, usage, model, bundle_hash,
-                                  snapshot_hashes, max_noncached_tokens):
+def _make_entry(task, regime, trial, status, passed, reason_code, wall_secs, turns, usage, model,
+                 bundle_hash, snapshot_hashes, detail):
     return JournalEntry(
         ts=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        task=task["id"], regime=regime, trial=trial, status="infra",
-        passed=False, reason_code="check-infra", wall_secs=wall_secs, turns=turns, usage=usage,
+        task=task["id"], regime=regime, trial=trial, status=status,
+        passed=passed, reason_code=reason_code, wall_secs=wall_secs, turns=turns, usage=usage,
         model=model, bundle_hash=bundle_hash, snapshot_hashes=snapshot_hashes, posthog_captured=False,
+        detail=detail,
+    )
+
+
+def _token_budget_exceeded_entry(task, regime, trial, wall_secs, turns, usage, model, bundle_hash,
+                                  snapshot_hashes, max_noncached_tokens):
+    return _make_entry(
+        task, regime, trial, status="infra", passed=False, reason_code="check-infra",
+        wall_secs=wall_secs, turns=turns, usage=usage, model=model, bundle_hash=bundle_hash,
+        snapshot_hashes=snapshot_hashes,
         detail=f"token-budget-exceeded: {usage['noncached']} > {max_noncached_tokens}",
     )
 
@@ -156,11 +166,10 @@ def _rate_limited_entry(task, regime, trial, wall_secs, turns, usage, model, bun
     # a zero-gross-token run means the CLI process never actually reached the model (a usage-limit
     # rejection is the observed cause); scoring an untouched workspace against checks.py would
     # misreport it as a genuine wrong-answer/build-fail, so it must never reach scoring at all
-    return JournalEntry(
-        ts=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        task=task["id"], regime=regime, trial=trial, status="error",
-        passed=None, reason_code="rate-limited", wall_secs=wall_secs, turns=turns, usage=usage,
-        model=model, bundle_hash=bundle_hash, snapshot_hashes=snapshot_hashes, posthog_captured=False,
+    return _make_entry(
+        task, regime, trial, status="error", passed=None, reason_code="rate-limited",
+        wall_secs=wall_secs, turns=turns, usage=usage, model=model, bundle_hash=bundle_hash,
+        snapshot_hashes=snapshot_hashes,
         detail="claude invocation returned zero gross tokens (usage-limit or auth rejection); not scored",
     )
 
@@ -206,6 +215,9 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
         }
         bundle_hash = assembly.snapshot_hashes.get("bundle")
 
+        # reachable only after claude_cli.run() returns without raising, before checks.py runs,
+        # so zero gross tokens here can only mean the subprocess/model call itself never landed
+        # (rate limit, auth, network) -- never a downstream build/docs/checks failure
         if usage["gross"] == 0:
             entry = _rate_limited_entry(
                 task, regime, trial, wall_secs, claude_result.num_turns, usage, config["model"],
