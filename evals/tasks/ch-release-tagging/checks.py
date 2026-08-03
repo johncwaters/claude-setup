@@ -27,6 +27,7 @@ APP_BUILD_KEY_RE = re.compile(r"\$app_build|app_build", re.IGNORECASE)
 HARDCODED_SEMVER_RE = re.compile(r"""['"]\d+\.\d+\.\d+(?:\+\d+)?['"]""")
 GET_VERSION_RE = re.compile(r"getVersion\s*\(|getAppVersion")
 IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+# the generic group cannot span nested angle brackets (function f<T extends Map<K, V>>)
 FUNCTION_DECLARATION_RE_TEMPLATE = (
     r"\b(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+{name}\s*(?:<[^>]*>)?\s*\("
 )
@@ -197,7 +198,13 @@ def _extract_arrow_function_body(text, expression_start_index):
 
 
 def _index_after_assignment_equals(text, start_index):
-    match = ASSIGNMENT_EQUALS_RE.search(text, start_index)
+    """Bounded at the declaration's own statement: a `let x;` with the real assignment
+    in a later statement must not match some other statement's '='.
+    """
+    statement_end_index = text.find(";", start_index)
+    if statement_end_index == -1:
+        statement_end_index = len(text)
+    match = ASSIGNMENT_EQUALS_RE.search(text, start_index, statement_end_index)
     return match.end() if match else None
 
 

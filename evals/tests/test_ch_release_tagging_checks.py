@@ -73,6 +73,23 @@ class RegisterCallCoversReleasePropertiesTests(unittest.TestCase):
 
         self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
 
+    def test_deferred_assignment_after_bare_let_declaration_is_not_credited(self):
+        # the '=' search is bounded to the declaration's own statement, so a bare
+        # `let x;` must not borrow a later statement's assignment (or its keys).
+        added_lines_by_file = {
+            "src/renderer/src/main.tsx": (
+                "import { releaseProperties } from './telemetry';\n"
+                "posthog.register(releaseProperties);\n"
+            ),
+            "src/renderer/src/telemetry.ts": (
+                "export let releaseProperties;\n"
+                "const unrelatedDefaults = { locale: 'en' };\n"
+                "releaseProperties = { $app_version: version, $app_build: build };\n"
+            ),
+        }
+
+        self.assertFalse(CHECKS._register_call_covers_release_properties(added_lines_by_file))
+
     def test_release_keys_elsewhere_in_the_defining_file_do_not_leak_into_an_unrelated_symbol(self):
         # buildTelemetryContext's own body has no release keys; the file also happens to
         # have an unrelated capture call that does. The symbol's own definition, not the
