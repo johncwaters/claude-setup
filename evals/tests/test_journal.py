@@ -46,6 +46,11 @@ class JournalTests(unittest.TestCase):
         journal.append(_make_entry("t1", "bundle", 1, "infra", passed=False, reason_code="check-infra"))
         self.assertFalse(journal.is_cell_completed("t1", "bundle", 1, "claude-sonnet-5"))
 
+    def test_rate_limited_error_cell_is_not_marked_completed_so_it_reruns(self):
+        journal = Journal(self.journal_path)
+        journal.append(_make_entry("t1", "none", 1, "error", passed=None, reason_code="rate-limited"))
+        self.assertFalse(journal.is_cell_completed("t1", "none", 1, "claude-sonnet-5"))
+
     def test_latest_line_for_a_cell_wins_on_resume(self):
         journal = Journal(self.journal_path)
         journal.append(_make_entry("t1", "none", 1, "infra", passed=False, reason_code="check-infra"))

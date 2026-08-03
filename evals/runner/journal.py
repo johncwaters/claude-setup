@@ -1,7 +1,8 @@
 """Append-only run journal: one JSON object per line, resumable by (task, regime, trial, model).
 
-Cell status vocabulary: "completed" cells are skipped on resume, "infra" cells (harness-side
-faults, not agent or docs failures) always rerun. The latest line for a cell wins.
+Cell status vocabulary: "completed" cells are skipped on resume; "infra" (harness-side faults,
+not agent or docs failures) and "error" (the agent invocation itself never ran, e.g. a usage-limit
+rejection) cells always rerun. The latest line for a cell wins.
 """
 
 import json
@@ -16,8 +17,8 @@ class JournalEntry:
     task: str
     regime: str
     trial: int
-    status: str  # "completed" | "infra"
-    passed: bool
+    status: str  # "completed" | "infra" | "error"
+    passed: Optional[bool]
     reason_code: str
     wall_secs: float
     turns: Optional[int]

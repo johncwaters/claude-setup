@@ -152,6 +152,19 @@ def _token_budget_exceeded_entry(task, regime, trial, wall_secs, turns, usage, m
     )
 
 
+def _rate_limited_entry(task, regime, trial, wall_secs, turns, usage, model, bundle_hash, snapshot_hashes):
+    # a zero-gross-token run means the CLI process never actually reached the model (a usage-limit
+    # rejection is the observed cause); scoring an untouched workspace against checks.py would
+    # misreport it as a genuine wrong-answer/build-fail, so it must never reach scoring at all
+    return JournalEntry(
+        ts=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        task=task["id"], regime=regime, trial=trial, status="error",
+        passed=None, reason_code="rate-limited", wall_secs=wall_secs, turns=turns, usage=usage,
+        model=model, bundle_hash=bundle_hash, snapshot_hashes=snapshot_hashes, posthog_captured=False,
+        detail="claude invocation returned zero gross tokens (usage-limit or auth rejection); not scored",
+    )
+
+
 def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, evals_root=None):
     cell_start = time.monotonic()
     workspace = None
@@ -192,6 +205,14 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
             "cost_usd": claude_result.total_cost_usd,
         }
         bundle_hash = assembly.snapshot_hashes.get("bundle")
+
+        if usage["gross"] == 0:
+            entry = _rate_limited_entry(
+                task, regime, trial, wall_secs, claude_result.num_turns, usage, config["model"],
+                bundle_hash, assembly.snapshot_hashes,
+            )
+            journal.append(entry)
+            return entry
 
         max_noncached_tokens = config.get("token_budget", {}).get("max_noncached_tokens_per_run")
         if max_noncached_tokens and usage["noncached"] > max_noncached_tokens:
@@ -262,6 +283,7 @@ def _summarize(journal, tasks, regime_names, trials, model):
     for (row_model, task, regime), rows in cells.items():
         scored = [row for row in rows if row["status"] == "completed"]
         infra = [row for row in rows if row["status"] == "infra"]
+        errored = [row for row in rows if row["status"] == "error"]
         pass_count = sum(1 for row in scored if row["passed"])
         summary_by_model[row_model][f"{task}::{regime}"] = {
             "task": task,
@@ -269,6 +291,7 @@ def _summarize(journal, tasks, regime_names, trials, model):
             "model": row_model,
             "scored_trials": len(scored),
             "infra_trials": len(infra),
+            "error_trials": len(errored),
             "total_trials": len(rows),
             "pass_rate": (pass_count / len(scored)) if scored else None,
             "mean_cost_usd": (sum(row["usage"]["cost_usd"] for row in scored) / len(scored)) if scored else None,

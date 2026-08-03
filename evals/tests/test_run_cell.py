@@ -245,6 +245,99 @@ class TokenBudgetTests(unittest.TestCase):
         self.assertTrue(entry.passed)
 
 
+class RateLimitDetectionTests(unittest.TestCase):
+    """A zero-gross-token claude invocation (observed cause: a usage-limit rejection) must
+    never reach scoring.score_task, which would misreport an untouched workspace as a
+    genuine wrong-answer or build-fail.
+    """
+
+    def setUp(self):
+        self.tmp_root = tempfile.mkdtemp(prefix="evals-rate-limit-test-")
+        self.tasks_dir = os.path.join(self.tmp_root, "tasks")
+        os.makedirs(self.tasks_dir)
+        shutil.copytree(FIXTURE_TASK_DIR, os.path.join(self.tasks_dir, "sample-task"))
+
+        self.bundles_dir = os.path.join(self.tmp_root, "bundles")
+        os.makedirs(os.path.join(self.bundles_dir, "snapshots"))
+        self.results_dir = os.path.join(self.tmp_root, "results")
+
+        self.config_path = os.path.join(self.tmp_root, "config.yml")
+        with open(self.config_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "model: claude-sonnet-5\n"
+                "max_turns: 5\n"
+                "trials_per_cell: 1\n"
+                "regimes: [none]\n"
+                f"bundles_dir: {self.bundles_dir}\n"
+            )
+
+        self.replay_dir = os.path.join(self.tmp_root, "fixtures")
+        os.makedirs(self.replay_dir)
+        with open(os.path.join(self.replay_dir, "sample-task_none_1.json"), "w", encoding="utf-8") as handle:
+            json.dump({
+                "num_turns": 1, "total_cost_usd": 0.0,
+                "usage": {"input_tokens": 0, "cache_creation_input_tokens": 0,
+                          "cache_read_input_tokens": 0, "output_tokens": 0},
+                "result": "",
+            }, handle)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_root, ignore_errors=True)
+
+    def test_zero_gross_token_run_journals_as_rate_limited_without_scoring(self):
+        task = run_module.load_task(os.path.join(self.tasks_dir, "sample-task"))
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+        config = {"model": "claude-sonnet-5", "max_turns": 5, "bundles_dir": self.bundles_dir}
+
+        entry = run_module.run_cell(task, "none", 1, config, journal, self.replay_dir, False, False)
+
+        self.assertEqual(entry.status, "error")
+        self.assertEqual(entry.reason_code, "rate-limited")
+        self.assertIsNone(entry.passed)
+        self.assertEqual(entry.usage["gross"], 0)
+
+    def test_rate_limited_cell_is_retried_on_a_resumed_batch_instead_of_skipped(self):
+        exit_code = run_module.main([
+            "--tasks-dir", self.tasks_dir,
+            "--config", self.config_path,
+            "--results-dir", self.results_dir,
+            "--replay-dir", self.replay_dir,
+        ])
+        self.assertEqual(exit_code, 0)
+
+        journal = Journal(os.path.join(self.results_dir, "journal.jsonl"))
+        self.assertEqual(len(journal.read_all()), 1)
+        self.assertFalse(journal.is_cell_completed("sample-task", "none", 1, "claude-sonnet-5"))
+
+        exit_code = run_module.main([
+            "--tasks-dir", self.tasks_dir,
+            "--config", self.config_path,
+            "--results-dir", self.results_dir,
+            "--replay-dir", self.replay_dir,
+        ])
+        self.assertEqual(exit_code, 0)
+
+        rows = journal.read_all()
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(row["status"] == "error" for row in rows))
+
+    def test_rate_limited_cell_is_excluded_from_scored_and_infra_summary_buckets(self):
+        run_module.main([
+            "--tasks-dir", self.tasks_dir,
+            "--config", self.config_path,
+            "--results-dir", self.results_dir,
+            "--replay-dir", self.replay_dir,
+        ])
+
+        with open(os.path.join(self.results_dir, "summary.json"), encoding="utf-8") as handle:
+            summary = json.load(handle)
+        cell = summary["claude-sonnet-5"]["sample-task::none"]
+        self.assertEqual(cell["scored_trials"], 0)
+        self.assertEqual(cell["infra_trials"], 0)
+        self.assertEqual(cell["error_trials"], 1)
+        self.assertEqual(cell["total_trials"], 1)
+
+
 class McpConfigLifecycleTests(unittest.TestCase):
     """The generated MCP config holds a live bearer token, so no cell may leave one behind."""
 
