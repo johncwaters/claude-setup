@@ -2,8 +2,11 @@
 # docs and context conditions are configuration, not code (see docs/evals-plan.html).
 
 model: claude-sonnet-5              # pinned model for every regime; results are single-model claims
-max_turns: 50                       # headless `claude -p` turn cap per run; 30 floor-limited every ch- task
-                                     # in batch 1 (all runs exhausted the cap, most with zero files changed)
+max_turns: 1000                     # effectively uncapped: the 2026-08-02 cap-100 sweep showed 39 of 40
+                                     # addressable ch- failures at cap 50 were turn starvation, so runs
+                                     # must finish on their own merits; run_timeout_secs is the wall bound
+run_timeout_secs: 5400              # per-run claude -p subprocess ceiling; at max_turns 1000 the old
+                                     # 1800s default would silently become the binding cap again
 trials_per_cell: 2                  # trials per (task, regime) cell; nightly raises this on headline_regimes first
 
 regimes: [none, llms-txt, mcp, bundle]     # full regime matrix (see runner/regimes.py)
@@ -16,9 +19,11 @@ checks_timeout_secs: 600             # per-run checks.py subprocess timeout befo
                                       # this ceiling under its own internal timeouts
 
 token_budget:
-  max_noncached_tokens_per_run: 500000   # noncached = input + cache_creation + output (see runner/run.py);
+  max_noncached_tokens_per_run: 3000000  # noncached = input + cache_creation + output (see runner/run.py);
                                           # cache reads are excluded because multi-turn runs re-read cached
-                                          # context every turn, so gross scales with turns, not real spend
+                                          # context every turn, so gross scales with turns, not real spend.
+                                          # Sized for max_turns 1000 so it stays a runaway backstop, not
+                                          # the effective cap
 
 posthog:
   host: https://us.i.posthog.com

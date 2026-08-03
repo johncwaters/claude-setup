@@ -165,6 +165,27 @@ class ModelOverrideTests(unittest.TestCase):
 
         self.assertEqual(captured_models, ["claude-opus-5"])
 
+    def test_run_timeout_secs_from_config_reaches_the_claude_cli_invocation(self):
+        with open(self.config_path, "a", encoding="utf-8") as handle:
+            handle.write("run_timeout_secs: 5400\n")
+        captured_timeouts = []
+        real_run = run_module.claude_cli.run
+
+        def recording_run(*args, **kwargs):
+            captured_timeouts.append(kwargs.get("timeout_secs"))
+            return real_run(*args, **kwargs)
+
+        with mock.patch.object(run_module.claude_cli, "run", recording_run):
+            run_module.main([
+                "--tasks-dir", self.tasks_dir,
+                "--config", self.config_path,
+                "--results-dir", self.results_dir,
+                "--replay-dir", self.replay_dir,
+                "--model", "claude-opus-5",
+            ])
+
+        self.assertEqual(captured_timeouts, [5400])
+
     def test_sonnet_rerun_still_skips_the_previously_completed_cell(self):
         exit_code = run_module.main([
             "--tasks-dir", self.tasks_dir,

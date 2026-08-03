@@ -175,6 +175,7 @@ def run_cell(task, regime, trial, config, journal, replay_dir, record, dry_run, 
                 task_id=task["id"], regime=regime, trial=trial,
                 replay_dir=replay_dir, record=record, mcp_config_path=assembly.mcp_config_path,
                 allowed_tools=assembly.allowed_tools,
+                timeout_secs=config.get("run_timeout_secs", 1800),
             )
         except Exception as exc:
             entry = _infra_entry(task, regime, trial, time.monotonic() - start, config["model"],
