@@ -83,6 +83,25 @@ def resolve_mainline(git):
     return None
 
 
+def find_worktree_for_branch(porcelain_text, branch):
+    target = f"refs/heads/{branch}"
+    worktree_path = None
+    worktree_branch = None
+    for line in porcelain_text.splitlines() + [""]:
+        if not line.strip():
+            if worktree_path and worktree_branch == target:
+                return worktree_path
+            worktree_path = None
+            worktree_branch = None
+            continue
+        if line.startswith("worktree "):
+            worktree_path = line[len("worktree "):]
+            continue
+        if line.startswith("branch "):
+            worktree_branch = line[len("branch "):]
+    return None
+
+
 def _intent_block(context):
     """Author-intent lines shared by the slop and review prompts."""
     if not context:
@@ -631,16 +650,44 @@ class Pipeline:
 
     def _handle_ff_refusal(self, src, dst, stderr):
         if "checked out" in stderr:
-            self.result.warnings.append(
-                f"{dst} is checked out in another worktree and must be updated there; promotion stopped"
-            )
-            return Outcome.PROMOTE_FAILED
+            return self._ff_in_holding_worktree(src, dst)
         if "non-fast-forward" not in stderr and "rejected" not in stderr:
             self.result.warnings.append(
                 f"could not fast-forward {dst} from {src}; promotion stopped: {stderr.strip()}"
             )
             return Outcome.PROMOTE_FAILED
         return self._merge_fallback(src, dst)
+
+    def _ff_in_holding_worktree(self, src, dst):
+        worktrees = self.git.worktree_list_porcelain()
+        holder = None
+        if worktrees.returncode == 0:
+            holder = find_worktree_for_branch(worktrees.stdout, dst)
+
+        if holder is None:
+            self.result.warnings.append(
+                f"{dst} is checked out in another worktree but the holding worktree could not be found; promotion stopped"
+            )
+            return Outcome.PROMOTE_FAILED
+
+        dirty = [line for line in self.git.status_short_in(holder) if not line.startswith("??")]
+        if dirty:
+            self.result.warnings.append(
+                f"{dst} is checked out in {holder} and has uncommitted changes; promotion stopped"
+            )
+            return Outcome.PROMOTE_FAILED
+
+        merge = self.git.merge_ff_only_in(holder, src)
+        if merge.returncode != 0:
+            self.result.warnings.append(
+                f"could not fast-forward {dst} from {src} in {holder}; promotion stopped: {(merge.stderr or '').strip()}"
+            )
+            return Outcome.PROMOTE_FAILED
+
+        self.result.warnings.append(
+            f"{dst} was fast-forwarded in its holding worktree: {holder}"
+        )
+        return None
 
     def _merge_fallback(self, src, dst):
         dirty = [line for line in self.git.status_short() if not line.startswith("??")]

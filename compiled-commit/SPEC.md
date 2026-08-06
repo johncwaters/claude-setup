@@ -172,7 +172,9 @@ Each hop src -> dst, in order:
    `git checkout <original>`, and if that restore fails -> PROMOTE_FAILED with a warning
    that dst was merged locally but the push was skipped and the repo was left on dst.
 4. Step 2 refused because dst is checked out in another worktree (stderr contains
-   "checked out") -> PROMOTE_FAILED naming the branch.
+   "checked out") -> find that worktree and run `git merge --ff-only <src>` there.
+   If the holder is missing, dirty aside from untracked files, or cannot fast-forward
+   dst, PROMOTE_FAILED with a warning; on success, continue to push.
 5. Push: origin present -> `git push origin <dst>` (plain refspec, no checkout); nonzero ->
    PROMOTE_FAILED with stderr. No origin -> a single stage warning "no origin remote;
    promoted branches updated locally only", keep going.

@@ -29,6 +29,17 @@ class GitOps:
             errors="replace",
         )
 
+    def _run_in(self, cwd, args):
+        self.op_count += 1
+        return subprocess.run(
+            ["git"] + args,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
     def is_inside_work_tree(self):
         proc = self._run(["rev-parse", "--is-inside-work-tree"])
         return proc.returncode == 0 and proc.stdout.strip() == "true"
@@ -50,6 +61,9 @@ class GitOps:
     def fetch_local_ff(self, src, dst):
         # Fast-forward local ref dst to src without touching the working tree.
         return self._run(["fetch", ".", f"{src}:{dst}"])
+
+    def worktree_list_porcelain(self):
+        return self._run(["worktree", "list", "--porcelain"])
 
     def checkout(self, ref):
         return self._run(["checkout", ref])
@@ -75,6 +89,13 @@ class GitOps:
     def status_short(self, paths=None):
         proc = self._run(_scoped(["status", "--short"], paths))
         return [line for line in proc.stdout.splitlines() if line.strip()]
+
+    def status_short_in(self, worktree_path):
+        proc = self._run_in(worktree_path, ["status", "--short"])
+        return [line for line in proc.stdout.splitlines() if line.strip()]
+
+    def merge_ff_only_in(self, worktree_path, ref):
+        return self._run_in(worktree_path, ["merge", "--ff-only", ref])
 
     def diff_head(self, paths=None):
         proc = self._run(_scoped(["diff", "HEAD"], paths))

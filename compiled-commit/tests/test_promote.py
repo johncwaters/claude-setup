@@ -6,7 +6,7 @@ import unittest
 
 from src.failures import Outcome
 from src.llm import LlmClient
-from src.pipeline import Pipeline, PipelineConfig
+from src.pipeline import Pipeline, PipelineConfig, find_worktree_for_branch
 from tests.helpers import (
     cleanup,
     clone_repo,
@@ -40,7 +40,48 @@ def _origin_ref(origin, branch):
     return proc.stdout.strip() if proc.returncode == 0 else None
 
 
+def _make_cross_worktree_repo():
+    origin = make_bare_origin()
+    seed = make_repo()
+    local_parent = tempfile.mkdtemp(prefix="cc-test-worktree-parent-")
+    holder = os.path.join(local_parent, "holder")
+    session = os.path.join(local_parent, "session")
+    run_git(seed, ["remote", "add", "origin", origin])
+    commit_file(seed, "base.txt", "base\n", "init")
+    run_git(seed, ["push", "-u", "origin", "main"])
+    run_git(seed, ["checkout", "-b", "develop"])
+    run_git(seed, ["push", "-u", "origin", "develop"])
+    run_git(seed, ["checkout", "-b", "feature"])
+    run_git(seed, ["push", "-u", "origin", "feature"])
+
+    clone_repo(origin, holder)
+    run_git(holder, ["branch", "develop", "origin/develop"])
+    run_git(holder, ["checkout", "develop"])
+    run_git(holder, ["worktree", "add", "-b", "feature", session, "origin/feature"])
+    return origin, seed, local_parent, holder, session
+
+
 class PromoteTests(unittest.TestCase):
+    def test_find_worktree_for_branch_skips_detached_and_bare_blocks(self):
+        porcelain = "\n".join(
+            [
+                "worktree C:/repo/main",
+                "HEAD abc123",
+                "branch refs/heads/develop",
+                "",
+                "worktree C:/repo/detached",
+                "HEAD def456",
+                "detached",
+                "",
+                "worktree C:/repo/bare",
+                "bare",
+                "",
+            ]
+        )
+
+        self.assertEqual(find_worktree_for_branch(porcelain, "develop"), "C:/repo/main")
+        self.assertIsNone(find_worktree_for_branch(porcelain, "feature"))
+
     def test_full_chain_feature_to_develop_to_main(self):
         origin = make_bare_origin()
         seed = make_repo()
@@ -191,6 +232,61 @@ class PromoteTests(unittest.TestCase):
             self.assertIn("develop", result.promoted)
             self.assertIn("main", result.promoted)
             self.assertIsNotNone(_origin_ref(origin, "develop"))
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_checked_out_holder_clean_fast_forwards_in_holder_worktree(self):
+        origin, seed, local_parent, holder, session = _make_cross_worktree_repo()
+        try:
+            write_file(session, "base.txt", "base\nfeature change\n")
+
+            result = _make_pipeline(session).run()
+
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(result.promoted, ["develop", "main"])
+            self.assertEqual(_origin_ref(origin, "develop"), result.commit_hash)
+            self.assertEqual(_origin_ref(origin, "main"), result.commit_hash)
+            self.assertEqual(run_git(holder, ["rev-parse", "develop"]).stdout.strip(), result.commit_hash)
+            self.assertEqual(run_git(holder, ["rev-parse", "HEAD"]).stdout.strip(), result.commit_hash)
+            with open(os.path.join(holder, "base.txt"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "base\nfeature change\n")
+            self.assertTrue(any("fast-forwarded in its holding worktree" in w for w in result.warnings))
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_checked_out_holder_dirty_stops_without_advancing_develop(self):
+        origin, seed, local_parent, holder, session = _make_cross_worktree_repo()
+        try:
+            write_file(session, "base.txt", "base\nfeature change\n")
+            develop_before = run_git(holder, ["rev-parse", "develop"]).stdout.strip()
+            write_file(holder, "base.txt", "base\nholder dirty\n")
+
+            result = _make_pipeline(session).run()
+
+            self.assertEqual(result.outcome, Outcome.PROMOTE_FAILED)
+            self.assertTrue(any("uncommitted changes" in w for w in result.warnings))
+            self.assertEqual(run_git(holder, ["rev-parse", "develop"]).stdout.strip(), develop_before)
+            self.assertEqual(_origin_ref(origin, "develop"), develop_before)
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_checked_out_holder_diverged_stops_without_merge_commit(self):
+        origin, seed, local_parent, holder, session = _make_cross_worktree_repo()
+        try:
+            write_file(holder, "holder_only.txt", "holder\n")
+            run_git(holder, ["add", "--", "holder_only.txt"])
+            run_git(holder, ["commit", "-q", "-m", "holder develop"])
+            develop_before = run_git(holder, ["rev-parse", "develop"]).stdout.strip()
+            write_file(session, "base.txt", "base\nfeature change\n")
+
+            result = _make_pipeline(session).run()
+
+            self.assertEqual(result.outcome, Outcome.PROMOTE_FAILED)
+            self.assertTrue(any("could not fast-forward develop" in w for w in result.warnings))
+            self.assertEqual(run_git(holder, ["rev-parse", "develop"]).stdout.strip(), develop_before)
+            second_parent = run_git(holder, ["rev-parse", "-q", "--verify", "develop^2"], check=False)
+            self.assertNotEqual(second_parent.returncode, 0)
+            self.assertEqual(run_git(holder, ["rev-list", "--count", "develop"]).stdout.strip(), "2")
         finally:
             cleanup(origin, seed, local_parent)
 
