@@ -1,0 +1,15 @@
+id: kp-release-impact
+class: hogql-analysis
+mode: retrospective
+posthog_project_id_env: EVALS_POSTHOG_KEEPLINGS_PROJECT_ID
+repo: null
+pinned_commit: null
+prompt_file: prompt.md
+time_window:
+  before_start: "2026-07-05T00:00:00Z"
+  before_end: "2026-07-12T00:00:00Z"
+  after_start: "2026-07-12T00:00:00Z"
+  after_end: "2026-07-19T00:00:00Z"
+bundle: kp-release-impact.md
+captured: "2026-07-30"
+reference: reference.md

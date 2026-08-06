@@ -1,0 +1,29 @@
+# Cap-sweep arm config: identical to config.yml except max_turns raised to 100
+# (39 of 40 addressable ch- failures at cap 50 were turn-capped), token budget
+# doubled to keep the runaway guard from tripping on deliberately longer runs,
+# and PostHog capture disabled (project_api_key_env points at an unset var) so
+# sweep trials never blend into the dashboard's batch events.
+
+model: claude-sonnet-5              # overridden per arm with --model
+max_turns: 100
+trials_per_cell: 2
+
+regimes: [none, llms-txt, mcp, bundle]
+headline_regimes: [none, bundle]
+
+runs_per_batch_cap: 60
+checks_timeout_secs: 600
+
+token_budget:
+  max_noncached_tokens_per_run: 1000000
+
+posthog:
+  host: https://us.i.posthog.com
+  project_api_key_env: EVALS_POSTHOG_CAPSWEEP_CAPTURE_DISABLED
+  personal_api_key_env: EVALS_POSTHOG_PERSONAL_KEY
+  scratch_project_id_env: EVALS_POSTHOG_SCRATCH_PROJECT_ID
+  keeplings_project_id_env: EVALS_POSTHOG_KEEPLINGS_PROJECT_ID
+  mcp_url: https://mcp.posthog.com/mcp
+  mcp_token_env: EVALS_POSTHOG_PERSONAL_KEY
+
+bundles_dir: bundles

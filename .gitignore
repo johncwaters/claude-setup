@@ -1,0 +1,61 @@
+# Ignore everything by default; whitelist only portable config.
+*
+!*/
+
+# Whitelisted config
+!.gitignore
+!.gitattributes
+!README.md
+!NOTICE.md
+!AGENTS.md
+!settings.base.json
+!agents/**
+!docs/**
+!hud/**
+!commands/**
+!hooks/**
+!skills/**
+!setup/**
+!compiled-commit/**
+!profiles/**
+!evals/**
+
+# Never sync these even if a rule above matches
+.credentials.json
+settings.local.json
+# Machine-local: private clone urls and live glissa runtime state (project ids, absolute
+# paths). Tracked *.example.* siblings document the format; apply.ps1 falls back to them.
+setup/repos.txt
+setup/glissa/config.json
+evals/.env
+evals/results/replays/
+*.local.json
+*.bak*
+!evals/results/*/journal.jsonl.bak
+*.backup*
+*.tmp.*
+__pycache__/
+*.py[cod]
+/CLAUDE.md
+/settings.json
+commands/commit.md
+/.machine-profile
+
+# Runtime/state dirs (blocked by * already, listed for clarity)
+/projects/
+/plugins/
+/sessions/
+/tasks/
+/teams/
+/cache/
+/backups/
+/file-history/
+shell-snapshots/
+session-env/
+paste-cache/
+debug/
+downloads/
+ide/
+daemon/
+plans/
+.omc/

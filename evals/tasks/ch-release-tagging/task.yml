@@ -1,0 +1,10 @@
+id: ch-release-tagging
+class: install-instrumentation
+mode: prospective
+repo: ~/Projects/card-harbor
+pinned_commit: 08bfc39aa61af7eb96b112d9d01a725771a22af3
+prompt_file: prompt.md
+time_window: null
+bundle: ch-release-tagging.md
+captured: "2026-07-30"
+reference: reference.md

@@ -1,0 +1,346 @@
+{
+  "claude-sonnet-5": {
+    "ch-flag-gated-rollout::none": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 5.381387550000001,
+      "reason_code_histogram": {
+        "pass": 1,
+        "missing-events": 1
+      }
+    },
+    "ch-flag-gated-rollout::llms-txt": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 8.29860165,
+      "reason_code_histogram": {
+        "pass": 1,
+        "missing-events": 1
+      }
+    },
+    "ch-flag-gated-rollout::mcp": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 3.3440778,
+      "reason_code_histogram": {
+        "missing-events": 2
+      }
+    },
+    "ch-flag-gated-rollout::bundle": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 3.5776917000000004,
+      "reason_code_histogram": {
+        "pass": 1,
+        "missing-events": 1
+      }
+    },
+    "ch-main-process-capture::none": {
+      "task": "ch-main-process-capture",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 2.9561189999999993,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::llms-txt": {
+      "task": "ch-main-process-capture",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 9.6257345,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::mcp": {
+      "task": "ch-main-process-capture",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 4.345536299999999,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::bundle": {
+      "task": "ch-main-process-capture",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 4.107491849999999,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-release-tagging::none": {
+      "task": "ch-release-tagging",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 2.0072871,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-release-tagging::llms-txt": {
+      "task": "ch-release-tagging",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 5.3075755000000004,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-release-tagging::mcp": {
+      "task": "ch-release-tagging",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 1.7272903499999999,
+      "reason_code_histogram": {
+        "pass": 1,
+        "missing-events": 1
+      }
+    },
+    "ch-release-tagging::bundle": {
+      "task": "ch-release-tagging",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 1.2384339,
+      "reason_code_histogram": {
+        "build-fail": 1,
+        "pass": 1
+      }
+    },
+    "kp-release-impact::none": {
+      "task": "kp-release-impact",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.7516293,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-release-impact::llms-txt": {
+      "task": "kp-release-impact",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 2.12915535,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-release-impact::mcp": {
+      "task": "kp-release-impact",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 0.8951209499999999,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "kp-release-impact::bundle": {
+      "task": "kp-release-impact",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.5893857000000001,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::none": {
+      "task": "kp-reminder-funnel",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.45798570000000005,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::llms-txt": {
+      "task": "kp-reminder-funnel",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 1.52621925,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::mcp": {
+      "task": "kp-reminder-funnel",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 0.8405533500000001,
+      "reason_code_histogram": {
+        "pass": 1,
+        "wrong-answer": 1
+      }
+    },
+    "kp-reminder-funnel::bundle": {
+      "task": "kp-reminder-funnel",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.42368039999999996,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-store-engagement::none": {
+      "task": "kp-store-engagement",
+      "regime": "none",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.5686375499999999,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-store-engagement::llms-txt": {
+      "task": "kp-store-engagement",
+      "regime": "llms-txt",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 1.7377375499999999,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-store-engagement::mcp": {
+      "task": "kp-store-engagement",
+      "regime": "mcp",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 0.7811166,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "kp-store-engagement::bundle": {
+      "task": "kp-store-engagement",
+      "regime": "bundle",
+      "model": "claude-sonnet-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.3768816,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    }
+  }
+}

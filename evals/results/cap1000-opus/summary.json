@@ -1,0 +1,343 @@
+{
+  "claude-opus-5": {
+    "ch-flag-gated-rollout::none": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "none",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 7.163613999999999,
+      "reason_code_histogram": {
+        "missing-events": 1,
+        "pass": 1
+      }
+    },
+    "ch-flag-gated-rollout::llms-txt": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "llms-txt",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 11.1696125,
+      "reason_code_histogram": {
+        "pass": 1,
+        "missing-events": 1
+      }
+    },
+    "ch-flag-gated-rollout::mcp": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "mcp",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.5,
+      "mean_cost_usd": 7.6772762499999985,
+      "reason_code_histogram": {
+        "pass": 1,
+        "wrong-api": 1
+      }
+    },
+    "ch-flag-gated-rollout::bundle": {
+      "task": "ch-flag-gated-rollout",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 7.020520500000001,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::none": {
+      "task": "ch-main-process-capture",
+      "regime": "none",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 6.522599749999999,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::llms-txt": {
+      "task": "ch-main-process-capture",
+      "regime": "llms-txt",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 10.847816750000003,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::mcp": {
+      "task": "ch-main-process-capture",
+      "regime": "mcp",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 7.59495825,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-main-process-capture::bundle": {
+      "task": "ch-main-process-capture",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 5.6139392500000005,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-release-tagging::none": {
+      "task": "ch-release-tagging",
+      "regime": "none",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 5.325155750000002,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-release-tagging::llms-txt": {
+      "task": "ch-release-tagging",
+      "regime": "llms-txt",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 9.26435275,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "ch-release-tagging::mcp": {
+      "task": "ch-release-tagging",
+      "regime": "mcp",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 2.24979325,
+      "reason_code_histogram": {
+        "missing-events": 2
+      }
+    },
+    "ch-release-tagging::bundle": {
+      "task": "ch-release-tagging",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 8.23320925,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "kp-release-impact::none": {
+      "task": "kp-release-impact",
+      "regime": "none",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.8601867499999999,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-release-impact::llms-txt": {
+      "task": "kp-release-impact",
+      "regime": "llms-txt",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 4.41244975,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-release-impact::mcp": {
+      "task": "kp-release-impact",
+      "regime": "mcp",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 1.0648185,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "kp-release-impact::bundle": {
+      "task": "kp-release-impact",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 1.0590989999999998,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::none": {
+      "task": "kp-reminder-funnel",
+      "regime": "none",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.880147,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::llms-txt": {
+      "task": "kp-reminder-funnel",
+      "regime": "llms-txt",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 2.9065055000000006,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::mcp": {
+      "task": "kp-reminder-funnel",
+      "regime": "mcp",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 1.2169842499999999,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-reminder-funnel::bundle": {
+      "task": "kp-reminder-funnel",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.7326199999999999,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-store-engagement::none": {
+      "task": "kp-store-engagement",
+      "regime": "none",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.8230765,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-store-engagement::llms-txt": {
+      "task": "kp-store-engagement",
+      "regime": "llms-txt",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 2.6205852500000004,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    },
+    "kp-store-engagement::mcp": {
+      "task": "kp-store-engagement",
+      "regime": "mcp",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 1.031699,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    },
+    "kp-store-engagement::bundle": {
+      "task": "kp-store-engagement",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "error_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 0.0,
+      "mean_cost_usd": 0.937121,
+      "reason_code_histogram": {
+        "wrong-answer": 2
+      }
+    }
+  }
+}

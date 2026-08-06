@@ -1,0 +1,9 @@
+﻿@ast-grep/napi
+@biomejs/biome
+@earendil-works/pi-coding-agent
+@openai/codex
+@xai-official/grok
+glissa
+postiz
+typescript
+typescript-language-server

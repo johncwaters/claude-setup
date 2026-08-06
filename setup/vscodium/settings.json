@@ -1,0 +1,122 @@
+{
+  "workbench.editorAssociations": {
+    "*.ipynb": "jupyter-notebook"
+  },
+  "notebook.cellToolbarLocation": {
+    "default": "right",
+    "jupyter-notebook": "left"
+  },
+  "gitlens.hovers.currentLine.over": "line",
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "editor.minimap.enabled": false,
+  "editor.suggestSelection": "first",
+  "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
+  "redhat.telemetry.enabled": true,
+  "editor.wordWrap": "on",
+  "editor.largeFileOptimizations": false,
+  "[powershell]": {
+    "editor.defaultFormatter": "ms-vscode.powershell"
+  },
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "editor.formatOnPaste": true,
+  "editor.formatOnSave": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.autopep8"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "editor.linkedEditing": true,
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "git.autofetch": true,
+  "[css]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "svelte.enable-ts-plugin": true,
+  "[astro]": {
+    "editor.defaultFormatter": "astro-build.astro-vscode"
+  },
+  "[go]": {
+    "editor.defaultFormatter": "golang.go"
+  },
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "eslint.format.enable": true,
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+  "eslint.alwaysShowStatus": true,
+  "eslint.options": {},
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "astro", // Enable .astro
+    "typescript", // Enable .ts
+    "typescriptreact", // Enable .tsx
+  ],
+  "eslint.debug": true,
+  "[svg]": {
+    "editor.defaultFormatter": "jock.svg"
+  },
+  "workbench.colorCustomizations": {},
+  "githubPullRequests.createOnPublishBranch": "never",
+  "go.toolsManagement.autoUpdate": true,
+  "terminal.integrated.env.windows": {},
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
+  },
+  "editor.unicodeHighlight.allowedLocales": {
+    "es": true
+  },
+  "editor.fontFamily": "CommitMono",
+  "editor.fontLigatures": true,
+  "css.lint.unknownAtRules": "ignore",
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "vitest.enable": true,
+  "gitlens.ai.experimental.openai.model": "gpt-4",
+  "eslint.probe": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "html",
+    "vue",
+    "markdown",
+    "astro"
+  ],
+  "workbench.activityBar.location": "top",
+  "workbench.startupEditor": "none",
+  "biome.suggestInstallingGlobally": false,
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.colorTheme": "Night Owl",
+  "terminal.integrated.stickyScroll.enabled": false,
+  "dart.flutterSdkPath": "C:\\flutter",
+  "claudeCode.preferredLocation": "panel",
+  "json.schemaDownload.trustedDomains": {
+    "https://schemastore.azurewebsites.net/": true,
+    "https://raw.githubusercontent.com/": true,
+    "https://www.schemastore.org/": true,
+    "https://json.schemastore.org/": true,
+    "https://json-schema.org/": true,
+    "https://biomejs.dev": true
+  },
+  "security.workspace.trust.untrustedFiles": "open"
+}

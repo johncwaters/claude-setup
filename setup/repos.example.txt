@@ -1,0 +1,6 @@
+# Repos the "repos" step clones and keeps synced.
+# Format: one entry per line, <path relative to %USERPROFILE%>=<clone url>.
+# Copy this file to setup/repos.txt and list your own repos. repos.txt is gitignored,
+# so machine-specific (and private) clone urls never leave your machine; setup/collect.ps1
+# regenerates it from the glissa project list.
+Projects\glissa=https://github.com/johncwaters/glissa

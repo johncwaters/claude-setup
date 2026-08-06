@@ -1,0 +1,17 @@
+{
+  "claude-opus-5": {
+    "ch-main-process-capture::bundle": {
+      "task": "ch-main-process-capture",
+      "regime": "bundle",
+      "model": "claude-opus-5",
+      "scored_trials": 2,
+      "infra_trials": 0,
+      "total_trials": 2,
+      "pass_rate": 1.0,
+      "mean_cost_usd": 6.15641125,
+      "reason_code_histogram": {
+        "pass": 2
+      }
+    }
+  }
+}

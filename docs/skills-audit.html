@@ -1,0 +1,217 @@
+<title>Claude Setup: Skills &amp; Workflow Audit</title>
+<style>
+  :root {
+    --ground: #f6f7f5;
+    --panel: #ffffff;
+    --ink: #1e2a2e;
+    --muted: #5c6b6f;
+    --line: #dde3e0;
+    --accent: #256d64;
+    --accent-soft: #e3efec;
+    --keep: #3e7a4e;
+    --keep-bg: #e6f0e8;
+    --trim: #a06c1c;
+    --trim-bg: #f5ecd9;
+    --dead: #a8453e;
+    --dead-bg: #f6e4e2;
+    --mono: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #141a1c;
+      --panel: #1c2427;
+      --ink: #e2e8e6;
+      --muted: #93a3a0;
+      --line: #2c3639;
+      --accent: #4fa79b;
+      --accent-soft: #1e3330;
+      --keep: #7cc08b;
+      --keep-bg: #21301f;
+      --trim: #d9a955;
+      --trim-bg: #33290f;
+      --dead: #d98079;
+      --dead-bg: #372020;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141a1c; --panel: #1c2427; --ink: #e2e8e6; --muted: #93a3a0;
+    --line: #2c3639; --accent: #4fa79b; --accent-soft: #1e3330;
+    --keep: #7cc08b; --keep-bg: #21301f; --trim: #d9a955; --trim-bg: #33290f;
+    --dead: #d98079; --dead-bg: #372020;
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f7f5; --panel: #ffffff; --ink: #1e2a2e; --muted: #5c6b6f;
+    --line: #dde3e0; --accent: #256d64; --accent-soft: #e3efec;
+    --keep: #3e7a4e; --keep-bg: #e6f0e8; --trim: #a06c1c; --trim-bg: #f5ecd9;
+    --dead: #a8453e; --dead-bg: #f6e4e2;
+  }
+  body { background: var(--ground); color: var(--ink); font-family: var(--sans);
+         line-height: 1.55; margin: 0; padding: 2.5rem 1.25rem 4rem; }
+  main { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 2.2rem; }
+  header h1 { font-size: 1.7rem; margin: 0 0 .3rem; letter-spacing: -.015em; text-wrap: balance; }
+  header p { color: var(--muted); margin: 0; max-width: 62ch; }
+  .stamp { font-family: var(--mono); font-size: .78rem; color: var(--muted); margin-top: .6rem; }
+  section h2 { font-size: 1.05rem; letter-spacing: .06em; text-transform: uppercase;
+               color: var(--accent); margin: 0 0 .9rem; }
+  .counts { display: flex; flex-wrap: wrap; gap: .75rem; }
+  .count { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+           padding: .7rem 1rem; min-width: 7.5rem; }
+  .count b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .count span { font-size: .8rem; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 6px; overflow: hidden; font-size: .9rem; }
+  .tablewrap { overflow-x: auto; }
+  th { text-align: left; font-size: .72rem; letter-spacing: .07em; text-transform: uppercase;
+       color: var(--muted); padding: .55rem .8rem; border-bottom: 1px solid var(--line); }
+  td { padding: .55rem .8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  code, .name { font-family: var(--mono); font-size: .84em; }
+  .name { font-weight: 600; }
+  .pill { display: inline-block; font-family: var(--mono); font-size: .7rem; font-weight: 600;
+          letter-spacing: .04em; padding: .12rem .55rem; border-radius: 999px; }
+  .keep { color: var(--keep); background: var(--keep-bg); }
+  .trim { color: var(--trim); background: var(--trim-bg); }
+  .dead { color: var(--dead); background: var(--dead-bg); }
+  .note { color: var(--muted); font-size: .85rem; }
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+             padding: 1rem; overflow-x: auto; }
+  ul.clean { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: .5rem; }
+  ul.clean li::marker { color: var(--accent); }
+  .tag { font-family: var(--mono); font-size: .72rem; color: var(--accent);
+         background: var(--accent-soft); padding: .1rem .45rem; border-radius: 4px; }
+</style>
+
+<main>
+<header>
+  <h1>Claude Setup: Skills &amp; Workflow Audit</h1>
+  <p>Everything custom in <code>~/.claude</code> (synced via johncwaters/claude-setup), how the pieces connect, and what to clean up. Post-OMC state.</p>
+  <div class="stamp">2026-07-23 &middot; repo @ 727563c, all pushed &middot; cleanup executed &middot; machine: desktop</div>
+</header>
+
+<section>
+  <h2>At a glance</h2>
+  <div class="counts">
+    <div class="count"><b>4</b><span>custom skills</span></div>
+    <div class="count"><b>3</b><span>reviewer agents</span></div>
+    <div class="count"><b>2</b><span>commands</span></div>
+    <div class="count"><b>3</b><span>milepost skills</span></div>
+    <div class="count"><b>4</b><span>plugins</span></div>
+    <div class="count"><b>0</b><span>cleanup items left</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>How it connects</h2>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph commands["/commands"]
+    COMMIT["/commit"]
+    SEO["/seo-audit"]
+  end
+  subgraph skills["skills"]
+    ASC["ai-slop-cleaner"]
+    CR["code-review"]
+    REL["release"]
+    IMP["impeccable"]
+  end
+  subgraph agents["agents (read-only)"]
+    CRA["code-reviewer\nsonnet"]
+    SEC["security-reviewer\nopus"]
+    STR["structure-reviewer\nsonnet"]
+  end
+  subgraph external["external advisors (direct CLI)"]
+    CODEX["codex exec\nChatGPT"]
+    GROK["grok --prompt-file\nresearch default"]
+  end
+  COMMIT --> ASC --> CR
+  CR --> CRA
+  CR -. security lane .-> SEC
+  CR -. org lane .-> STR
+  CR -. second opinion .-> CODEX
+  REL --> LINT["lint-profile.py\ndeterministic"]
+  REL --> PROF["per-repo\n.claude/release-profile.yml"]
+  SEO --> GP["general-purpose agents"]
+</pre>
+  </div>
+  <p class="note">Solid = always runs. Dotted = trigger-gated (lane table in code-review SKILL.md is the source of truth). Grok is the research default from CLAUDE.md routing; Codex is the mechanical/PC-control default.</p>
+</section>
+
+<section>
+  <h2>Custom skills (claude-setup)</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Skill</th><th>Status</th><th>Size</th><th>Role / verdict</th></tr>
+    <tr><td class="name">ai-slop-cleaner</td><td><span class="pill keep">KEEP</span></td><td>1 file</td>
+        <td>Regression-safe cleanup pass. Step 1 of /commit. Own port of the OMC workflow.</td></tr>
+    <tr><td class="name">code-review</td><td><span class="pill keep">KEEP</span></td><td>1 file</td>
+        <td>Lane-based review (general / security / organization / Codex second opinion). Step 2 of /commit.</td></tr>
+    <tr><td class="name">release</td><td><span class="pill keep">KEEP</span></td><td>3 files</td>
+        <td>Profile-driven release runbook + deterministic linter + template. Profiles live in each project repo.</td></tr>
+    <tr><td class="name">impeccable</td><td><span class="pill keep">KEEP</span></td><td>52 files / 789K</td>
+        <td>Frontend design system. Heavy but earns it (reference library + live-browser scripts). Left untouched by request (external plugin).</td></tr>
+    <tr><td class="name">postiz</td><td><span class="pill dead">REMOVED</span></td><td>was 47 files</td>
+        <td>Deleted at 727563c (user call). Milepost cross-post talks to the Postiz API directly and never used it. The postiz npm global is a separate tool and stays.</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Agents &amp; commands</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Item</th><th>Status</th><th>Notes</th></tr>
+    <tr><td class="name">agents/code-reviewer</td><td><span class="pill keep">KEEP</span></td><td>General lane. Live-tested twice.</td></tr>
+    <tr><td class="name">agents/security-reviewer</td><td><span class="pill keep">KEEP</span></td><td>Opus, attack-scenario contract. <span class="tag">no live run yet</span></td></tr>
+    <tr><td class="name">agents/structure-reviewer</td><td><span class="pill keep">KEEP</span></td><td>Organization lane. Live-tested once (caught real drift).</td></tr>
+    <tr><td class="name">commands/commit</td><td><span class="pill keep">KEEP</span></td><td>Hardened via two-lens deep review; git-state preflight, same-branch sync, untracked staging.</td></tr>
+    <tr><td class="name">commands/seo-audit</td><td><span class="pill keep">KEEP</span></td><td>Your expanded rewrite, executor refs fixed. Paths migrated: reports to <code>docs/seo/</code>, scratch to <code>.seo-tmp/</code>; heredoc workaround removed after the hook fix.</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Project-level &amp; plugins</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Item</th><th>Where</th><th>Status</th><th>Notes</th></tr>
+    <tr><td class="name">milepost-blog-post</td><td>milepost</td><td><span class="pill keep">KEEP</span></td><td>Voice-gated blog drafts.</td></tr>
+    <tr><td class="name">milepost-sample-trip-builder</td><td>milepost</td><td><span class="pill keep">KEEP</span></td><td>Curated /explore trips.</td></tr>
+    <tr><td class="name">milepost-social-cross-post</td><td>milepost</td><td><span class="pill keep">KEEP</span></td><td>Postiz API direct (env vars); independent of the postiz skill above.</td></tr>
+    <tr><td class="name">caveman</td><td>plugin</td><td><span class="pill keep">KEEP</span></td><td>Active every session.</td></tr>
+    <tr><td class="name">typescript-lsp</td><td>plugin</td><td><span class="pill keep">KEEP</span></td><td>Replaces OMC lsp tools.</td></tr>
+    <tr><td class="name">posthog</td><td>plugin</td><td><span class="pill keep">KEEP</span></td><td>Card Harbor analytics + LLM analytics.</td></tr>
+    <tr><td class="name">github</td><td>plugin</td><td><span class="pill keep">KEEP</span></td><td>Rode along in settings.json; keep.</td></tr>
+    <tr><td class="name">oh-my-claudecode</td><td>plugin</td><td><span class="pill dead">REMOVED</span></td><td>Ripped out at 9f064ff. Replacements above cover everything used.</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Cleanup: executed 2026-07-23</h2>
+  <ul class="clean">
+    <li><b>postiz skill:</b> deleted entirely (47 files) at <code>727563c</code>.</li>
+    <li><b>impeccable:</b> untouched by request (external plugin).</li>
+    <li><b>validate-file hook:</b> fail-open bug fixed (missing ruff engine now allows per contract); verified with the canonical 6-case suite plus the real absent-engine stderr. ruff + pyyaml now bootstrap via apply.ps1 on every machine.</li>
+    <li><b>.omc state dirs:</b> gone everywhere. card-harbor plans/SEO/research relocated to <code>docs/</code> (<code>028d871</code>); glissa pr-auto-review plan to <code>docs/plans/</code> (<code>d7a4c31</code>).</li>
+    <li><b>seo-audit paths:</b> reports to <code>docs/seo/</code>, scratch to <code>.seo-tmp/</code>, zero .omc references.</li>
+    <li><b>Stray repo:</b> zero-commit <code>.git</code> at <code>~</code> deleted.</li>
+    <li><b>All pushed:</b> claude-setup <code>727563c</code>; profiles landed in keeplings <code>ac5e5f5</code>, glissa <code>d7a4c31</code>, milepost <code>a921968</code>, card-harbor <code>028d871</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Built-in workflows still available</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Native feature</th><th>Replaces (from OMC)</th><th>When</th></tr>
+    <tr><td class="name">/loop</td><td>ralph-style iteration</td><td>Recurring prompt on interval or self-paced.</td></tr>
+    <tr><td class="name">Workflow tool</td><td>ultrawork / swarm</td><td>Deterministic multi-agent fan-out; opt-in via "use a workflow" or ultracode.</td></tr>
+    <tr><td class="name">Agent teams</td><td>/team</td><td><code>CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1</code> already on.</td></tr>
+    <tr><td class="name">/code-review ultra</td><td>heavyweight review</td><td>Multi-agent cloud review, billed, user-triggered only.</td></tr>
+    <tr><td class="name">Memory + skills dir</td><td>notepad / project-memory / wiki</td><td>Persistent memory active; skills sync via this repo.</td></tr>
+  </table>
+  </div>
+</section>
+</main>
