@@ -18,22 +18,11 @@ class GitOps:
         self.repo = repo
         self.op_count = 0
 
-    def _run(self, args):
+    def _run(self, args, cwd=None):
         self.op_count += 1
         return subprocess.run(
             ["git"] + args,
-            cwd=self.repo,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-
-    def _run_in(self, cwd, args):
-        self.op_count += 1
-        return subprocess.run(
-            ["git"] + args,
-            cwd=cwd,
+            cwd=cwd or self.repo,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -91,11 +80,11 @@ class GitOps:
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
     def status_short_in(self, worktree_path):
-        proc = self._run_in(worktree_path, ["status", "--short"])
+        proc = self._run(["status", "--short"], cwd=worktree_path)
         return [line for line in proc.stdout.splitlines() if line.strip()]
 
     def merge_ff_only_in(self, worktree_path, ref):
-        return self._run_in(worktree_path, ["merge", "--ff-only", ref])
+        return self._run(["merge", "--ff-only", ref], cwd=worktree_path)
 
     def diff_head(self, paths=None):
         proc = self._run(_scoped(["diff", "HEAD"], paths))
