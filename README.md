@@ -29,7 +29,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
   - `npm-globals-remove.txt`: retired global npm tools; apply uninstalls any of these still present so machines converge (currently oh-my-claude-sisyphus and the community grok CLI)
   - `repos.txt`: project repos referenced by glissa sessions (milepost, glissa, keeplings, card-harbor); apply clones missing ones into `~/Projects`, fast-forwards existing ones, then installs each repo's node deps (npm/pnpm/yarn by lockfile) and heals a missing electron binary
   - `fonts/`: CommitMono (referenced by VSCodium settings)
-  - `collect.ps1` / `apply.ps1`: sync scripts (see below)
+  - `collect.ps1` / `apply.ps1`: sync scripts (see below); `install.sh` / `apply.sh` are the Linux ports of the bootstrap pair, driven by the same profiles
 
 `CLAUDE.md`, `settings.json`, and `commands/commit.md` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, the two markdown files copied straight from the profile), so the live files exist on disk but git ignores them.
 
@@ -48,7 +48,7 @@ Extension sync direction is per profile (`vscodiumExtensionSync` in `profile.jso
 
 The chosen profile lives in a `.machine-profile` marker file at the repo root (ignored by git, so it stays local to the machine). Set it once by passing `-Profile personal` or `-Profile work` to `install.ps1` or `apply.ps1`; the marker records the choice and later runs reuse it. With no marker and no flag, apply prompts for the profile on an interactive host. Each profile's exact step list is `profiles/<profile>/profile.json`.
 
-## Setup on a new machine: one command
+## Setup on a new machine: one command (Windows)
 
 Paste into PowerShell (only prereq is winget, which ships with Windows 11). A browser window opens once for GitHub sign-in the first time git needs push access:
 
@@ -64,15 +64,39 @@ winget install -e --id Git.Git --accept-source-agreements --accept-package-agree
 
 That bootstraps git, clones this repo into `~/.claude`, and runs `setup/install.ps1`, which pulls latest and hands off to `setup/apply.ps1`: config copies, then installs anything missing (git, gh, node, Claude Code, VSCodium, CommitMono fonts, project repos from `repos.txt`, npm globals, VSCodium extensions). Extensions sync exactly to `extensions.txt`; project repos clone into `~/Projects`, fast-forward on reruns, and get their node deps installed. Everything is idempotent; rerun any time.
 
+## Setup on a new machine: one command (Linux)
+
+Paste into a terminal. Prereqs are `git` and `curl`; everything else installs itself:
+
+```bash
+d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C "$d" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C "$d" fetch origin; git -C "$d" checkout -f -B master origin/master; bash "$d/setup/install.sh"
+```
+
+For a work machine, use the same one-liner with the profile flag on the final call:
+
+```bash
+d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C "$d" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C "$d" fetch origin; git -C "$d" checkout -f -B master origin/master; bash "$d/setup/install.sh" --profile work
+```
+
+`setup/install.sh` and `setup/apply.sh` are the bash ports of the two PowerShell scripts and read the same `profiles/<profile>/profile.json` step lists and the same `.machine-profile` marker, so a Linux box adopts `personal` or `work` exactly like a Windows one. Same flags, spelled long: `--skip-installs`, `--profile personal|work`, `--dry-run`. Linux paths: VSCodium config to `~/.config/VSCodium/User`, glissa to `~/.glissa/config.json`, gitconfig to `~/.gitconfig`, Codex AGENTS.md to `~/.codex/AGENTS.md`, fonts to `~/.local/share/fonts` (then `fc-cache -f`), and project repos under `$HOME` with the backslashes in `repos.txt` paths translated to `/`.
+
+Differences from Windows: system packages come from apt-get, dnf, pacman, or zypper (with sudo when not root) instead of winget; Windows Terminal is reported as not applicable; VSCodium is not in any default distro repo, so it warns and points at https://vscodium.com/#install rather than adding third-party repos, and `gh` does the same where the package manager does not ship it; `python-tools` retries pip with `--user --break-system-packages` for PEP 668 distros; and `collect.ps1` has no Linux port, so publishing config changes still happens from the Windows machine.
+
 ## Re-sync an existing machine
 
 ```powershell
 powershell -File $env:USERPROFILE\.claude\setup\install.ps1
 ```
 
-Pulls latest and applies. `-SkipInstalls` copies config only.
+On Linux:
 
-Sync through `install.ps1`, not a bare `git pull`. Because the rendered `CLAUDE.md`, `settings.json`, and `commands/commit.md` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. `install.ps1` pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
+```bash
+bash "$HOME/.claude/setup/install.sh"
+```
+
+Pulls latest and applies. `-SkipInstalls` (`--skip-installs` on Linux) copies config only.
+
+Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md`, `settings.json`, and `commands/commit.md` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
 
 ## Auth checklist (manual, once per machine)
 
