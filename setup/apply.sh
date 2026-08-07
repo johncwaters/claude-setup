@@ -240,8 +240,12 @@ detectPackageManager() {
   return 1
 }
 
+isRoot() {
+  [[ "${EUID:-$(id -u)}" -eq 0 ]]
+}
+
 canInstallSystemPackages() {
-  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  if isRoot; then
     return 0
   fi
   if command -v sudo >/dev/null 2>&1; then
@@ -251,7 +255,7 @@ canInstallSystemPackages() {
 }
 
 runPackageManagerCommand() {
-  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  if isRoot; then
     "$@"
     return $?
   fi
@@ -266,11 +270,7 @@ packageNamesForTool() {
       printf 'git\n'
       return 0
       ;;
-    node:apt-get|node:dnf|node:zypper)
-      printf 'nodejs\nnpm\n'
-      return 0
-      ;;
-    node:pacman)
+    node:apt-get|node:dnf|node:pacman|node:zypper)
       printf 'nodejs\nnpm\n'
       return 0
       ;;
