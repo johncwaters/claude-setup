@@ -113,8 +113,15 @@ expression`, and a `tsconfig.json` with `//` comments must ALLOW.
   `content`.
 - **Biome runs as the native exe via a constructed path**
   (`@biomejs/cli-<platform>-<arch>`), with a `node bin/biome` shim fallback.
-  `biomeCmd()` returns `[bin, ...prefixArgs]`. No directory globbing — keep it.
-- **Ruff is `python -m ruff`** — version-agnostic, no path discovery.
+  `biomeCmd()` returns `[bin, ...prefixArgs]`. No directory globbing, keep it.
+  `biomeGlobalRoots()` lists the npm global roots to try: the Windows ones on
+  win32, otherwise the POSIX ones (execPath-relative, npm prefix, `~/.npm-global`,
+  `/usr/local`, `/usr`), with a POSIX-only PATH scan last. Never spawn `npm` to
+  find the prefix; this hook runs on every Write and Edit.
+- **Ruff is `<python> -m ruff`**, version-agnostic, with no path discovery for
+  ruff itself. `pythonBin()` picks the interpreter: bare `python` on Windows, and
+  on POSIX the first `python3` on PATH, because most distros ship no `python` and
+  a spawn failure fails open, which would drop the gate silently.
 - **Dart/Flutter via `dart format` (`validateDart`).** `dart format --output=none`
   is the syntax gate (exit 65 = parse failure; located message in stderr). Only a
   clear parse failure denies; other non-zero exits fail open. NOTE: on Windows the

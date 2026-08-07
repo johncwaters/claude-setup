@@ -22,8 +22,9 @@ so the agent can correct it immediately instead of guessing.
 ## How it's wired
 
 The hooks block now lives in `settings.base.json` with `{{HOME}}` tokens, and
-`setup/apply.ps1` renders it into the machine's `settings.json` (user-level =
-**global**, all projects), substituting the real home path for each token:
+`setup/apply.ps1` (or `setup/apply.sh` on Linux) renders it into the machine's
+`settings.json` (user-level = **global**, all projects), substituting the real
+home path for each token:
 
 ```json
 "hooks": {
@@ -135,4 +136,4 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"x.json","content":"{\"a\":
 - Plain `.json` (a name that isn't well-known) is checked as **strict** JSON, so
   comments/trailing commas in, say, `data.json` are rejected by design. Use a
   `.jsonc` extension or a well-known name for comment-bearing config.
-- Global per Windows user on this machine only — not synced across machines.
+- Global per OS user on this machine only, not synced across machines.

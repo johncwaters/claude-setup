@@ -488,8 +488,10 @@ readPackageList() {
 }
 
 listGlobalNpmPackages() {
+  # print only lines the strip actually shortened: on POSIX the first parseable
+  # line is the global root itself, which contains node_modules with nothing after it
   npm ls -g --depth=0 --parseable 2>/dev/null |
-    awk '/node_modules/ { sub(/^.*node_modules[\\/]/, ""); gsub(/\\/, "/"); print }'
+    awk '{ if (sub(/^.*node_modules[\\/]/, "")) { gsub(/\\/, "/"); print } }'
 }
 
 pythonCommandName() {

@@ -207,22 +207,51 @@ function exists(p) {
   }
 }
 
-// How to invoke biome, as [bin, ...prefixArgs]. Honors BIOME_BIN, else the
-// npm-global install. Prefers the platform exe (run directly, fast) whose
-// package name is deterministic -- `@biomejs/cli-<platform>-<arch>` matches
-// Node's process.platform/arch -- so no directory globbing is needed. Falls
-// back to the portable JS launcher (run via node) only if the exe is absent.
+// How to invoke biome, as [bin, ...prefixArgs]. Honors BIOME_BIN, then checks
+// known npm-global roots without spawning npm. Prefers the platform exe (run
+// directly, fast) whose package name is deterministic: `@biomejs/cli-<platform>-<arch>`
+// matches Node's process.platform/arch, so no directory globbing is needed.
+// Falls back to the portable JS launcher (run via node) only if the exe is absent.
+function biomeGlobalRoots() {
+  const nodeDir = path.dirname(process.execPath);
+  const roots = [];
+  if (process.platform === "win32") {
+    roots.push(path.join(process.env.APPDATA || "", "npm", "node_modules"));
+    roots.push(path.join(nodeDir, "node_modules"));
+    return roots;
+  }
+  roots.push(path.resolve(nodeDir, "..", "lib", "node_modules"));
+  if (process.env.npm_config_prefix) {
+    roots.push(path.join(process.env.npm_config_prefix, "lib", "node_modules"));
+  }
+  if (process.env.HOME) {
+    roots.push(path.join(process.env.HOME, ".npm-global", "lib", "node_modules"));
+  }
+  roots.push("/usr/local/lib/node_modules");
+  roots.push("/usr/lib/node_modules");
+  return roots;
+}
+
 function biomeCmd() {
   if (exists(process.env.BIOME_BIN)) return [process.env.BIOME_BIN];
-  const root = path.join(process.env.APPDATA || "", "npm", "node_modules", "@biomejs", "biome");
   const win = process.platform === "win32";
-  const exe = path.join(
-    root, "node_modules", "@biomejs",
-    `cli-${process.platform}-${process.arch}`, win ? "biome.exe" : "biome"
-  );
-  if (exists(exe)) return [exe];
-  const shim = path.join(root, "bin", "biome");
-  return exists(shim) ? [process.execPath, shim] : null;
+  for (const globalRoot of biomeGlobalRoots()) {
+    const packageRoot = path.join(globalRoot, "@biomejs", "biome");
+    const exe = path.join(
+      packageRoot, "node_modules", "@biomejs",
+      `cli-${process.platform}-${process.arch}`, win ? "biome.exe" : "biome"
+    );
+    if (exists(exe)) return [exe];
+    const shim = path.join(packageRoot, "bin", "biome");
+    if (exists(shim)) return [process.execPath, shim];
+  }
+  if (win) return null;
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    const direct = path.join(dir, "biome");
+    if (exists(direct)) return [direct];
+  }
+  return null;
 }
 
 const SPAWN_OPTS = {
@@ -316,8 +345,23 @@ function validateWithBiome(content, ext, filePath) {
   };
 }
 
+// Resolve the interpreter for the ruff gate. Windows keeps the bare `python`
+// that has always resolved there; most Linux distros ship only `python3`, and a
+// spawn failure fails open, so an unresolved name silently drops the gate on
+// every .py edit instead of announcing itself.
+function pythonBin() {
+  if (exists(process.env.PYTHON_BIN)) return process.env.PYTHON_BIN;
+  if (process.platform === "win32") return "python";
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    const direct = path.join(dir, "python3");
+    if (exists(direct)) return direct;
+  }
+  return "python";
+}
+
 function validatePython(content) {
-  const r = runStdin("python", ["-m", "ruff", "format", "--stdin-filename", "f.py", "-"], content);
+  const r = runStdin(pythonBin(), ["-m", "ruff", "format", "--stdin-filename", "f.py", "-"], content);
   if (r.error || r.status === 0) return null; // no python/ruff or valid -> allow
   const err = (r.stderr || r.stdout || "").trim();
   // python present but ruff not installed: engine absent, not a parse failure.

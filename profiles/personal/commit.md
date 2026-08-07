@@ -4,7 +4,7 @@ description: Personal workflow. Compiled runner does slop cleanup, code review, 
 
 # Commit (compiled)
 
-This workflow is compiled. The runner at `$HOME\.claude\compiled-commit\runner.py` owns the
+This workflow is compiled. The runner at `$HOME/.claude/compiled-commit/runner.py` owns the
 entire procedure: preflight, develop sync, slop cleanup, code review, message generation,
 staging, and the commit itself, with typed outcomes. Do not reimplement any of those steps,
 do not run your own review, and do not stage or commit yourself. Findings are yours to fix:
@@ -20,10 +20,12 @@ directly; main/master only ever receives merges from develop.
 
 ## Invoke
 
-Run exactly one command (PowerShell; `$HOME` resolves the machine-specific user directory):
+Run exactly one command. `$HOME` resolves the machine-specific user directory in both
+PowerShell and bash, and the forward slashes work in both; the interpreter is `python` on
+Windows and `python3` on Linux:
 
 ```
-python "$HOME\.claude\compiled-commit\runner.py" --repo <current working directory> --json <flags>
+python "$HOME/.claude/compiled-commit/runner.py" --repo <current working directory> --json <flags>
 ```
 
 Flag mapping from the user's arguments:

@@ -55,7 +55,7 @@ if (-not (Test-Path $gitConfigSrc)) { Write-Warning "missing: $gitConfigSrc" }
 if (Test-Path $gitConfigSrc) {
     $section = ""
     $scrubbed = @(
-        "# Placeholder identity. Edit these two values before running setup/apply.ps1: while the",
+        "# Placeholder identity. Edit these two values before running the apply script: while the",
         "# placeholders are present the gitconfig step refuses to copy this file to ~/.gitconfig,",
         "# so nobody commits under someone else's name."
     )
