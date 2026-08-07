@@ -538,7 +538,8 @@ if [[ -n "$profile" ]]; then
   writeMarker=1
 fi
 if [[ -z "$profile" && -f "$markerPath" ]]; then
-  fromMarker="$(tr -d '\r\n[:space:]' < "$markerPath")"
+  # case-folded to match the PowerShell scripts, whose -eq compare ignores case
+  fromMarker="$(tr -d '\r\n[:space:]' < "$markerPath" | tr '[:upper:]' '[:lower:]')"
   if [[ "$fromMarker" == "personal" || "$fromMarker" == "work" ]]; then
     profile="$fromMarker"
   fi
@@ -553,6 +554,7 @@ while [[ -z "$profile" ]]; do
   fi
   read -r -p "Machine profile (personal/work) " answer
   answer="${answer//[$'\r\n\t ']}"
+  answer="${answer,,}"
   if [[ "$answer" == "personal" || "$answer" == "work" ]]; then
     profile="$answer"
     writeMarker=1

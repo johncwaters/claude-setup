@@ -28,8 +28,10 @@ while (($# > 0)); do
   esac
 done
 
+# case-folded because the PowerShell scripts compare the marker with -eq, which is
+# case-insensitive; a hand-edited "Work" must not quietly collect personal config
 if [[ -f "$markerPath" ]]; then
-  machineProfile="$(tr -d '\r\n[:space:]' < "$markerPath")"
+  machineProfile="$(tr -d '\r\n[:space:]' < "$markerPath" | tr '[:upper:]' '[:lower:]')"
 fi
 if [[ ! -f "$markerPath" ]]; then
   printf 'WARNING: no .machine-profile marker, assuming personal\n' >&2

@@ -346,9 +346,7 @@ function validateWithBiome(content, ext, filePath) {
 }
 
 // Resolve the interpreter for the ruff gate. Windows keeps the bare `python`
-// that has always resolved there; most Linux distros ship only `python3`, and a
-// spawn failure fails open, so an unresolved name silently drops the gate on
-// every .py edit instead of announcing itself.
+// that has always resolved there; most Linux distros ship only `python3`.
 function pythonBin() {
   if (exists(process.env.PYTHON_BIN)) return process.env.PYTHON_BIN;
   if (process.platform === "win32") return "python";
