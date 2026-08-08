@@ -337,6 +337,82 @@ lastLogLine() {
   grep -v '^[[:space:]]*$' "$logPath" 2>/dev/null | tail -n 1 | cut -c1-100
 }
 
+npmGlobalRootWritable() {
+  local npmGlobalRoot
+  npmGlobalRoot="$(npm root -g 2>/dev/null || true)"
+  if [[ -z "$npmGlobalRoot" ]]; then
+    return 1
+  fi
+  if [[ -d "$npmGlobalRoot" ]]; then
+    [[ -w "$npmGlobalRoot" ]]
+    return $?
+  fi
+  local npmGlobalRootParent
+  npmGlobalRootParent="$(dirname -- "$npmGlobalRoot")"
+  [[ -d "$npmGlobalRootParent" && -w "$npmGlobalRootParent" ]]
+}
+
+# npm as root (or via sudo) breaks native lifecycle builds (node-pty dies with
+# uv_cwd ENOENT), so an unwritable global root gets a per-account prefix instead.
+userNpmPrefixEnsured=0
+ensureUserNpmPrefix() {
+  if ((userNpmPrefixEnsured == 1)); then
+    return 0
+  fi
+  userNpmPrefixEnsured=1
+  if isRoot; then
+    return 0
+  fi
+  if npmGlobalRootWritable; then
+    return 0
+  fi
+  npm config set prefix "$HOME/.npm-global" >/dev/null 2>&1
+  mkdir -p "$HOME/.npm-global/bin"
+  refreshSessionPath
+  if [[ ! -f "$HOME/.bashrc" ]] || ! grep -q '\.npm-global/bin' "$HOME/.bashrc"; then
+    printf 'export PATH="$HOME/.npm-global/bin:$PATH"\n' >>"$HOME/.bashrc"
+  fi
+  writeLine " ok " "$colorGreen" "npm prefix" "global root not writable, using ~/.npm-global"
+}
+
+# Global installs straight from a git spec run native postinstalls (glissa's
+# node-pty) in a directory npm has already moved, dying with ENOENT uv_cwd
+# (github.com/emiasims/tree-sitter-org/issues/37), so pack first and install
+# the tarball, which takes the ordinary registry-style path.
+installGlobalNpmPackage() {
+  local packageSource="$1"
+  if [[ "$packageSource" != github:* && "$packageSource" != git+* && "$packageSource" != git:* ]]; then
+    npm install -g "$packageSource" --loglevel=error
+    return $?
+  fi
+  local packDir tarball status
+  packDir="$(mktemp -d "${TMPDIR:-/tmp}/claude-npm-pack.XXXXXX")"
+  if ! (cd "$packDir" && npm pack "$packageSource" --loglevel=error >/dev/null); then
+    rm -rf "$packDir"
+    return 1
+  fi
+  tarball="$(find "$packDir" -maxdepth 1 -name '*.tgz' | head -n 1)"
+  if [[ -z "$tarball" ]]; then
+    rm -rf "$packDir"
+    return 1
+  fi
+  npm install -g "$tarball" --loglevel=error
+  status=$?
+  rm -rf "$packDir"
+  return $status
+}
+
+npmFailureReason() {
+  local npmLogFile="$1"
+  local reason
+  reason="$(grep -E -m1 'EACCES|EPERM|E404|ENOTFOUND|EAI_AGAIN|uv_cwd|code E' "$npmLogFile" 2>/dev/null || true)"
+  if [[ -z "$reason" ]]; then
+    reason="$(grep -v 'A complete log of this run' "$npmLogFile" 2>/dev/null | awk 'NF { line=$0 } END { print line }')"
+  fi
+  reason="$(sed -E 's/^npm (error|ERR!) //' <<<"$reason")"
+  printf '%.120s\n' "$reason"
+}
+
 packageNamesForTool() {
   local manager="$1"
   local toolKey="$2"
@@ -1205,17 +1281,22 @@ if stepEnabled "biome"; then
       noteWarned "biome" "npm not on PATH"
     fi
     if command -v npm >/dev/null 2>&1; then
+      ensureUserNpmPrefix
       writeLine " .. " "$colorYellow" "biome" "npm install -g @biomejs/biome"
       biomeInstallOk=0
-      if npm install -g @biomejs/biome --loglevel=error >/dev/null; then
+      biomeInstallLog="$(mktemp "${TMPDIR:-/tmp}/claude-npm-install.XXXXXX")"
+      if npm install -g @biomejs/biome --loglevel=error >"$biomeInstallLog" 2>&1; then
         biomeInstallOk=1
       fi
       refreshSessionPath
       if ((biomeInstallOk == 1)); then
+        rm -f "$biomeInstallLog"
         noteInstalled "biome" "installed"
       fi
       if ((biomeInstallOk == 0)); then
-        noteWarned "biome" "npm install failed"
+        biomeFailureReason="$(npmFailureReason "$biomeInstallLog")"
+        rm -f "$biomeInstallLog"
+        noteWarned "biome" "npm install failed: $biomeFailureReason"
       fi
     fi
   fi
@@ -1299,6 +1380,7 @@ if stepEnabled "npm-globals"; then
     noteWarned "npm" "not on PATH, skipping packages"
   fi
   if [[ -f "$npmGlobals" ]] && command -v npm >/dev/null 2>&1; then
+    ensureUserNpmPrefix
     mapfile -t wantedPackages < <(readPackageList "$npmGlobals")
     mapfile -t installedPackages < <(listGlobalNpmPackages)
     missingPackages=()
@@ -1322,7 +1404,7 @@ if stepEnabled "npm-globals"; then
       packageSource="$(npmPackageSource "$packageEntry")"
       writeLine " .. " "$colorYellow" "$packageName" "npm install -g $packageSource"
       npmInstallLog="$(mktemp "${TMPDIR:-/tmp}/claude-npm-install.XXXXXX")"
-      if npm install -g "$packageSource" --loglevel=error >"$npmInstallLog" 2>&1; then
+      if installGlobalNpmPackage "$packageSource" >"$npmInstallLog" 2>&1; then
         rm -f "$npmInstallLog"
         noteInstalled "$packageName" "installed"
         continue
@@ -1334,12 +1416,14 @@ if stepEnabled "npm-globals"; then
         notePresent "$packageName" "not published for this platform"
         continue
       fi
+      npmInstallFailureReason="$(npmFailureReason "$npmInstallLog")"
       rm -f "$npmInstallLog"
-      noteWarned "$packageName" "npm install failed"
+      noteWarned "$packageName" "npm install failed: $npmInstallFailureReason"
     done
   fi
   npmRemovals="$setupDir/npm-globals-remove.txt"
   if [[ -f "$npmRemovals" ]] && command -v npm >/dev/null 2>&1; then
+    ensureUserNpmPrefix
     mapfile -t unwantedPackages < <(readPackageList "$npmRemovals")
     mapfile -t installedPackages < <(listGlobalNpmPackages)
     presentPackages=()

@@ -1,7 +1,12 @@
 FROM fedora:41
 
 # Second distro so the dnf branch of detectPackageManager is exercised for real.
-RUN dnf -y install git ca-certificates curl findutils && dnf clean all
+RUN dnf -y install git ca-certificates curl findutils sudo && dnf clean all
+RUN useradd -m -s /bin/bash tester \
+  && printf 'tester ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/tester \
+  && chmod 0440 /etc/sudoers.d/tester
 
 ENV SUITE_MODE=fast
+ENV HOME=/home/tester
+USER tester
 ENTRYPOINT ["bash", "/suite/suite.sh"]

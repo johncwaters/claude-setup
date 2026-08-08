@@ -126,6 +126,18 @@ stripColor() {
   sed 's/\x1b\[[0-9;]*m//g'
 }
 
+isSuiteRoot() {
+  [[ "${EUID:-$(id -u)}" -eq 0 ]]
+}
+
+runSuiteRootCommand() {
+  if isSuiteRoot; then
+    "$@"
+    return $?
+  fi
+  sudo "$@"
+}
+
 hashTree() {
   local root="$1"
   local relativePath
@@ -139,16 +151,16 @@ installNodeForRender() {
     return 0
   fi
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq >/dev/null 2>&1
-    apt-get install -y -qq nodejs >/dev/null 2>&1
+    runSuiteRootCommand apt-get update -qq >/dev/null 2>&1
+    runSuiteRootCommand apt-get install -y -qq nodejs >/dev/null 2>&1
     return 0
   fi
   if command -v dnf >/dev/null 2>&1; then
-    dnf -y -q install nodejs >/dev/null 2>&1
+    runSuiteRootCommand dnf -y -q install nodejs >/dev/null 2>&1
     return 0
   fi
   if command -v pacman >/dev/null 2>&1; then
-    pacman -Sy --noconfirm --needed nodejs npm >/dev/null 2>&1
+    runSuiteRootCommand pacman -Sy --noconfirm --needed nodejs npm >/dev/null 2>&1
     return 0
   fi
 }
@@ -356,8 +368,8 @@ codiumUser="$HOME/.config/VSCodium/User"
 printf '{"editor.fontSize": 42}\n' > "$codiumUser/settings.json"
 printf '[{"key": "ctrl+k"}]\n' > "$codiumUser/keybindings.json"
 
-mkdir -p /usr/local/bin
-cat > /usr/local/bin/codium <<'FAKE'
+fakeCodiumScript="$(mktemp)"
+cat > "$fakeCodiumScript" <<'FAKE'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "--list-extensions" ]]; then
   printf 'vendor.second\nvendor.first\n'
@@ -365,7 +377,9 @@ if [[ "${1:-}" == "--list-extensions" ]]; then
 fi
 exit 0
 FAKE
-chmod +x /usr/local/bin/codium
+runSuiteRootCommand mkdir -p /usr/local/bin
+runSuiteRootCommand install -m 755 "$fakeCodiumScript" /usr/local/bin/codium
+rm -f "$fakeCodiumScript"
 
 cat > "$HOME/.glissa/config.json" <<GLISSA
 {
@@ -405,16 +419,18 @@ assertMatch "leaves an alias called name alone" "name = rev-parse" "$collectedGi
 assertMatch "keeps unrelated sections" "autocrlf = false" "$collectedGitConfig"
 assertMatch "keeps the placeholder header" "before running the apply script" "$collectedGitConfig"
 
-cat > /usr/local/bin/codium <<'FAKE'
+fakeCodiumScript="$(mktemp)"
+cat > "$fakeCodiumScript" <<'FAKE'
 #!/usr/bin/env bash
 exit 0
 FAKE
-chmod +x /usr/local/bin/codium
+runSuiteRootCommand install -m 755 "$fakeCodiumScript" /usr/local/bin/codium
+rm -f "$fakeCodiumScript"
 emptyProbeOutput="$(bash "$claudeHome/setup/collect.sh" 2>&1)"
 assertMatch "warns when a probe returns nothing" "keeping existing extensions.txt" "$emptyProbeOutput"
 assertEquals "keeps the tracked list on an empty probe" "vendor.first
 vendor.second" "$(cat "$claudeHome/setup/vscodium/extensions.txt")"
-rm -f /usr/local/bin/codium
+runSuiteRootCommand rm -f /usr/local/bin/codium
 
 # ---------------------------------------------------------------------------
 phase "profile marker is case insensitive"

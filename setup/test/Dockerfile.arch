@@ -2,7 +2,12 @@ FROM archlinux:base
 
 # Third package manager, so the pacman branch of packageNamesForTool is exercised
 # rather than assumed.
-RUN pacman -Sy --noconfirm --needed git curl && pacman -Scc --noconfirm
+RUN pacman -Sy --noconfirm --needed git curl sudo && pacman -Scc --noconfirm
+RUN useradd -m -s /bin/bash tester \
+  && printf 'tester ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/tester \
+  && chmod 0440 /etc/sudoers.d/tester
 
 ENV SUITE_MODE=fast
+ENV HOME=/home/tester
+USER tester
 ENTRYPOINT ["bash", "/suite/suite.sh"]
