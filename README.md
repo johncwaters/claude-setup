@@ -70,16 +70,25 @@ That bootstraps git, clones this repo into `~/.claude`, and runs `setup/install.
 
 ## Setup on a new machine: one command (Linux)
 
-Paste into a terminal. Prereqs are `git` and `curl`; everything else installs itself:
+Paste into a terminal. Nothing has to be installed first: `setup/install.sh` installs `git` and `curl` itself through apt-get, dnf, pacman, or zypper (with sudo when not root), then clones and applies:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/johncwaters/claude-setup/master/setup/install.sh)
+```
+
+For a work or server machine, pass the profile flag through:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/johncwaters/claude-setup/master/setup/install.sh) --profile work
+bash <(curl -fsSL https://raw.githubusercontent.com/johncwaters/claude-setup/master/setup/install.sh) --profile server
+```
+
+On a box with no `curl` yet, `wget -qO- <same URL>` substitutes. Process substitution keeps stdin on the terminal so the profile prompt still works; a plain `curl ... | bash -s -- --profile personal` pipe has to name the profile because apply refuses to guess one without a tty.
+
+If `git` is already there and you would rather clone by hand, the long form still works and lands in the same place:
 
 ```bash
 d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C "$d" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C "$d" fetch origin; git -C "$d" checkout -f -B master origin/master; bash "$d/setup/install.sh"
-```
-
-For a work machine, use the same one-liner with the profile flag on the final call:
-
-```bash
-d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C "$d" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C "$d" fetch origin; git -C "$d" checkout -f -B master origin/master; bash "$d/setup/install.sh" --profile work
 ```
 
 `setup/install.sh` and `setup/apply.sh` are the bash ports of the two PowerShell scripts and read the same `profiles/<profile>/profile.json` step lists and the same `.machine-profile` marker, so a Linux box adopts `personal`, `work`, or `server` exactly like a Windows one. Same flags, spelled long: `--skip-installs`, `--profile personal|work|server`, `--dry-run`. Linux paths: VSCodium config to `~/.config/VSCodium/User`, glissa to `~/.glissa/config.json`, gitconfig to `~/.gitconfig`, Codex AGENTS.md to `~/.codex/AGENTS.md`, fonts to `~/.local/share/fonts` (then `fc-cache -f`), and project repos under `$HOME` with the backslashes in `repos.txt` paths translated to `/`.

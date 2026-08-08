@@ -216,6 +216,36 @@ assertMatch "collect.sh --help prints usage" "Usage: setup/collect.sh" "$collect
 assertNoMatch "collect.sh --help collects nothing" "collected:" "$collectHelpOutput"
 
 # ---------------------------------------------------------------------------
+# The container already ships git, so the prerequisite bootstrap is exercised
+# against a stub PATH where git is absent rather than by uninstalling it.
+phase "prerequisite bootstrap"
+
+prereqStubDir="$(mktemp -d)"
+prereqRoot="$prereqStubDir/root"
+
+noManagerOutput="$(PATH="$prereqStubDir" /bin/bash /suite/src/setup/install.sh --root "$prereqRoot" 2>&1 | stripColor)"
+noManagerStatus="${PIPESTATUS[0]}"
+assertStatus "install.sh stops when git cannot be installed" 1 "$noManagerStatus"
+assertMatch "install.sh reports the missing package manager" "no supported package manager" "$noManagerOutput"
+assertNoFile "install.sh clones nothing without git" "$prereqRoot"
+
+cat >"$prereqStubDir/apt-get" <<'STUB'
+#!/bin/bash
+exit 1
+STUB
+cat >"$prereqStubDir/sudo" <<'STUB'
+#!/bin/bash
+exec "$@"
+STUB
+chmod +x "$prereqStubDir/apt-get" "$prereqStubDir/sudo"
+
+failedInstallOutput="$(PATH="$prereqStubDir" /bin/bash /suite/src/setup/install.sh --root "$prereqRoot" 2>&1 | stripColor)"
+failedInstallStatus="${PIPESTATUS[0]}"
+assertStatus "install.sh stops when the package manager fails" 1 "$failedInstallStatus"
+assertMatch "install.sh reports the install attempt" "Installing git via apt-get" "$failedInstallOutput"
+assertMatch "install.sh reports the failed install" "git install via apt-get failed" "$failedInstallOutput"
+
+# ---------------------------------------------------------------------------
 phase "bootstrap (README one-liner path, personal)"
 
 claudeHome="$HOME/.claude"
