@@ -128,6 +128,8 @@ function Assert-NoMatch([string]$label, [string]$pattern, [string]$text) {
     Fail "$label (unexpected match for /$pattern/)"
 }
 
+# Deliberately duplicated from run-windows.ps1 rather than dot-sourced: this file is
+# mounted into the container on its own, with no sibling scripts to import.
 function Format-CommandArgument([string]$argument) {
     if ($null -eq $argument) { return '""' }
     if ($argument.Length -eq 0) { return '""' }
