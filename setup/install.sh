@@ -8,7 +8,7 @@ root="$HOME/.claude"
 
 usage() {
   cat <<'USAGE'
-Usage: setup/install.sh [--skip-installs] [--profile personal|work] [--root <dir>] [--help]
+Usage: setup/install.sh [--skip-installs] [--profile personal|work|server] [--root <dir>] [--help]
 
 Clone or update claude-setup, then apply it.
 USAGE
@@ -22,7 +22,7 @@ while (($# > 0)); do
       ;;
     --profile)
       if (($# < 2)); then
-        printf 'install.sh: --profile requires personal or work\n' >&2
+        printf 'install.sh: --profile requires personal, work, or server\n' >&2
         exit 2
       fi
       profile="$2"
@@ -49,9 +49,9 @@ while (($# > 0)); do
 done
 
 case "$profile" in
-  ""|personal|work) ;;
+  ""|personal|work|server) ;;
   *)
-    printf 'install.sh: --profile must be personal or work\n' >&2
+    printf 'install.sh: --profile must be personal, work, or server\n' >&2
     exit 2
     ;;
 esac

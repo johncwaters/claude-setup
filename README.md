@@ -38,16 +38,19 @@ Everything else in `~/.claude` (credentials, history, sessions, caches, plugins)
 
 ## Machine profiles
 
-Each machine adopts one profile, `personal` or `work`, and apply runs only that profile's steps.
+Each machine adopts one profile, `personal`, `work`, or `server`, and apply runs only that profile's steps.
 
 - `personal` runs the full set: workflow config and settings render, VSCodium config, glissa, gitconfig, Codex AGENTS.md, Windows Terminal, software installs, fonts, project repos, npm globals, python tools, and VSCodium extensions.
 - `work` runs a focused set: workflow config and settings render, VSCodium config, fonts, the biome hook dependency, python tools, and VSCodium extensions. It skips all software installs, project repos, npm globals sync, glissa, gitconfig, and Windows Terminal.
+- `server` runs the headless Linux set: workflow config and settings render, glissa config, gitconfig, Codex AGENTS.md, software installs, Tailscale, Glissa server provisioning, npm globals, and python tools. It skips desktop-only VSCodium, fonts, terminal styling, and project repo sync.
 
 The work profile installs nothing beyond biome and the pip tools, so it assumes git, node, and python are already on the machine. When node is missing, apply warns instead of failing and `settings.json` gets rendered on the next run after node is installed.
 
 Extension sync direction is per profile (`vscodiumExtensionSync` in `profile.json`): `personal` syncs exactly to `extensions.txt`, uninstalling extras; `work` is additive, installing the tracked list but never uninstalling, so machine-specific extensions (sideloaded work tooling) survive.
 
-The chosen profile lives in a `.machine-profile` marker file at the repo root (ignored by git, so it stays local to the machine). Set it once by passing `-Profile personal` or `-Profile work` to `install.ps1` or `apply.ps1` (`--profile` on the Linux scripts); the marker records the choice and later runs reuse it. With no marker and no flag, apply prompts for the profile on an interactive host. Each profile's exact step list is `profiles/<profile>/profile.json`.
+The chosen profile lives in a `.machine-profile` marker file at the repo root (ignored by git, so it stays local to the machine). Set it once by passing `-Profile personal`, `-Profile work`, or `-Profile server` to `install.ps1` or `apply.ps1` (`--profile` on the Linux scripts); the marker records the choice and later runs reuse it. With no marker and no flag, apply prompts for the profile on an interactive host. Each profile's exact step list is `profiles/<profile>/profile.json`.
+
+Glissa remote mode is provisioned by the `server` profile. The script-owned Tailscale serve command points at remote port `3001`; never serve local port `3000`, because that publishes the unauthenticated local dashboard across the tailnet.
 
 ## Setup on a new machine: one command (Windows)
 
@@ -79,7 +82,7 @@ For a work machine, use the same one-liner with the profile flag on the final ca
 d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config remote.origin.url https://github.com/johncwaters/claude-setup.git; git -C "$d" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C "$d" fetch origin; git -C "$d" checkout -f -B master origin/master; bash "$d/setup/install.sh" --profile work
 ```
 
-`setup/install.sh` and `setup/apply.sh` are the bash ports of the two PowerShell scripts and read the same `profiles/<profile>/profile.json` step lists and the same `.machine-profile` marker, so a Linux box adopts `personal` or `work` exactly like a Windows one. Same flags, spelled long: `--skip-installs`, `--profile personal|work`, `--dry-run`. Linux paths: VSCodium config to `~/.config/VSCodium/User`, glissa to `~/.glissa/config.json`, gitconfig to `~/.gitconfig`, Codex AGENTS.md to `~/.codex/AGENTS.md`, fonts to `~/.local/share/fonts` (then `fc-cache -f`), and project repos under `$HOME` with the backslashes in `repos.txt` paths translated to `/`.
+`setup/install.sh` and `setup/apply.sh` are the bash ports of the two PowerShell scripts and read the same `profiles/<profile>/profile.json` step lists and the same `.machine-profile` marker, so a Linux box adopts `personal`, `work`, or `server` exactly like a Windows one. Same flags, spelled long: `--skip-installs`, `--profile personal|work|server`, `--dry-run`. Linux paths: VSCodium config to `~/.config/VSCodium/User`, glissa to `~/.glissa/config.json`, gitconfig to `~/.gitconfig`, Codex AGENTS.md to `~/.codex/AGENTS.md`, fonts to `~/.local/share/fonts` (then `fc-cache -f`), and project repos under `$HOME` with the backslashes in `repos.txt` paths translated to `/`.
 
 Differences from Windows: system packages come from apt-get, dnf, pacman, or zypper (with sudo when not root) instead of winget; Windows Terminal is reported as not applicable; VSCodium is not in any default distro repo, so it warns and points at https://vscodium.com/#install rather than adding third-party repos, and `gh` does the same where the package manager does not ship it; `python-tools` retries pip with `--user --break-system-packages` for PEP 668 distros; and `collect.ps1` has no Linux port, so publishing config changes still happens from the Windows machine.
 

@@ -15,6 +15,7 @@ scriptStartSeconds="$SECONDS"
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$setupDir/.." && pwd)"
+glissaServerRepoDir="$HOME/Projects/glissa"
 
 colorCyan=$'\033[36m'
 colorGreen=$'\033[32m'
@@ -25,7 +26,7 @@ colorReset=$'\033[0m'
 
 usage() {
   cat <<'USAGE'
-Usage: setup/apply.sh [--skip-installs] [--profile personal|work] [--dry-run] [--help]
+Usage: setup/apply.sh [--skip-installs] [--profile personal|work|server] [--dry-run] [--help]
 
 Apply repo config to this machine.
 USAGE
@@ -39,7 +40,7 @@ while (($# > 0)); do
       ;;
     --profile)
       if (($# < 2)); then
-        printf 'apply.sh: --profile requires personal or work\n' >&2
+        printf 'apply.sh: --profile requires personal, work, or server\n' >&2
         exit 2
       fi
       profile="$2"
@@ -62,9 +63,9 @@ while (($# > 0)); do
 done
 
 case "$profile" in
-  ""|personal|work) ;;
+  ""|personal|work|server) ;;
   *)
-    printf 'apply.sh: --profile must be personal or work\n' >&2
+    printf 'apply.sh: --profile must be personal, work, or server\n' >&2
     exit 2
     ;;
 esac
@@ -424,6 +425,199 @@ installClaudeCode() {
   noteWarned "Claude Code" "not on PATH yet, open a new shell"
 }
 
+warnUnlessTailscaleAuthed() {
+  if tailscale status >/dev/null 2>&1; then
+    return 0
+  fi
+  noteWarned "Tailscale auth" "checklist: run sudo tailscale up once"
+}
+
+installTailscaleLinux() {
+  refreshSessionPath
+  if command -v tailscale >/dev/null 2>&1; then
+    notePresent "Tailscale" "already installed"
+    warnUnlessTailscaleAuthed
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    noteWarned "Tailscale" "curl not on PATH, install manually"
+    return 0
+  fi
+  writeLine " .. " "$colorYellow" "Tailscale" "running official installer"
+  if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
+    noteWarned "Tailscale" "official installer failed, install manually"
+    return 0
+  fi
+  refreshSessionPath
+  if ! command -v tailscale >/dev/null 2>&1; then
+    noteWarned "Tailscale" "installed, but not on PATH yet"
+    return 0
+  fi
+  noteInstalled "Tailscale" "installed"
+  warnUnlessTailscaleAuthed
+}
+
+renderGlissaService() {
+  local template="$1"
+  local dest="$2"
+  local nodePath="$3"
+  local servicePath="$4"
+  local escapedNode
+  local escapedHome
+  local escapedPath
+  escapedNode="$(printf '%s' "$nodePath" | sed 's/[\/&]/\\&/g')"
+  escapedHome="$(printf '%s' "$HOME" | sed 's/[\/&]/\\&/g')"
+  escapedPath="$(printf '%s' "$servicePath" | sed 's/[\/&]/\\&/g')"
+  sed \
+    -e "s/__NODE__/$escapedNode/g" \
+    -e "s/__HOME__/$escapedHome/g" \
+    -e "s/__PATH__/$escapedPath/g" \
+    "$template" > "$dest"
+}
+
+installGlissaService() {
+  local glissaRepo="$glissaServerRepoDir"
+  local serviceTemplate="$setupDir/glissa/glissa.service"
+  local systemdUserDir="$HOME/.config/systemd/user"
+  local serviceDest="$systemdUserDir/glissa.service"
+  local nodePath
+  local servicePath
+  local tempService
+  if ! command -v systemctl >/dev/null 2>&1; then
+    noteWarned "glissa service" "systemctl not on PATH, skipping service"
+    return 0
+  fi
+  if [[ ! -d /run/systemd/system ]]; then
+    noteWarned "glissa service" "systemd not running, skipping service"
+    return 0
+  fi
+  if [[ ! -f "$serviceTemplate" ]]; then
+    noteWarned "glissa service" "template not in repo"
+    return 0
+  fi
+  if ! nodePath="$(command -v node)"; then
+    noteWarned "glissa service" "node not on PATH"
+    return 0
+  fi
+  servicePath="$PATH"
+  if command -v dirname >/dev/null 2>&1; then
+    servicePath="$(dirname -- "$nodePath"):$servicePath"
+  fi
+  mkdir -p "$systemdUserDir"
+  tempService="$(mktemp "${TMPDIR:-/tmp}/glissa-service.XXXXXX")"
+  renderGlissaService "$serviceTemplate" "$tempService" "$nodePath" "$servicePath"
+  if filesAreIdentical "$tempService" "$serviceDest"; then
+    rm -f "$tempService"
+    notePresent "glissa service" "up to date"
+  fi
+  if [[ -f "$tempService" ]]; then
+    mv -f "$tempService" "$serviceDest"
+    noteApplied "glissa service" "installed"
+  fi
+  if ! systemctl --user daemon-reload >/dev/null 2>&1; then
+    noteWarned "glissa service" "systemctl --user daemon-reload failed"
+    return 0
+  fi
+  if ! systemctl --user enable --now glissa >/dev/null 2>&1; then
+    noteWarned "glissa service" "enable/start failed"
+    return 0
+  fi
+  notePresent "glissa service" "enabled and started"
+  if ! command -v loginctl >/dev/null 2>&1; then
+    noteWarned "glissa linger" "loginctl not on PATH"
+    return 0
+  fi
+  if loginctl show-user "$USER" -p Linger --value 2>/dev/null | grep -qx yes; then
+    notePresent "glissa linger" "enabled"
+    return 0
+  fi
+  if loginctl enable-linger "$USER" >/dev/null 2>&1; then
+    noteApplied "glissa linger" "enabled"
+    return 0
+  fi
+  noteWarned "glissa linger" "enable-linger failed"
+}
+
+configureGlissaServe() {
+  if ! command -v tailscale >/dev/null 2>&1; then
+    noteWarned "Tailscale serve" "tailscale not on PATH"
+    return 0
+  fi
+  if ! tailscale status >/dev/null 2>&1; then
+    noteWarned "Tailscale serve" "checklist: run sudo tailscale up once, then tailscale serve --bg 3001"
+    return 0
+  fi
+  # 3001 is Glissa's auth-gated remote listener. Serving 3000 exposes the unauthenticated local dashboard.
+  if tailscale serve --bg 3001 >/dev/null 2>&1; then
+    noteApplied "Tailscale serve" "remote port 3001"
+    return 0
+  fi
+  noteWarned "Tailscale serve" "serve failed, run: tailscale serve --bg 3001"
+}
+
+installGlissaServer() {
+  local glissaRepo="$glissaServerRepoDir"
+  local glissaConfigDir="$HOME/.glissa"
+  local glissaConfigDest="$glissaConfigDir/config.json"
+  local glissaConfigSrc="$setupDir/glissa/config.server.example.json"
+  if ! command -v git >/dev/null 2>&1; then
+    noteWarned "glissa server" "git not on PATH"
+    return 0
+  fi
+  if [[ ! -e "$glissaRepo" ]]; then
+    writeLine " .. " "$colorYellow" "glissa server" "cloning"
+    mkdir -p "$(dirname -- "$glissaRepo")"
+    if ! git clone -q https://github.com/johncwaters/glissa.git "$glissaRepo"; then
+      noteWarned "glissa server" "clone failed"
+      return 0
+    fi
+    noteInstalled "glissa server" "cloned"
+  fi
+  if [[ ! -d "$glissaRepo/.git" ]]; then
+    noteWarned "glissa server" "exists but is not a git repo"
+    return 0
+  fi
+  if ! git -C "$glissaRepo" pull --ff-only -q; then
+    noteWarned "glissa server" "pull failed (dirty or diverged), resolve manually"
+    return 0
+  fi
+  notePresent "glissa server" "synced"
+  if ! command -v npm >/dev/null 2>&1; then
+    noteWarned "glissa server" "npm not on PATH"
+    return 0
+  fi
+  writeLine " .. " "$colorYellow" "glissa deps" "npm ci"
+  if ! (cd "$glissaRepo" && npm ci --no-audit --no-fund --loglevel=error >/dev/null); then
+    noteWarned "glissa deps" "npm ci failed"
+    return 0
+  fi
+  notePresent "glissa deps" "installed"
+  writeLine " .. " "$colorYellow" "glissa build" "npm run build"
+  if ! (cd "$glissaRepo" && npm run build >/dev/null); then
+    noteWarned "glissa build" "build failed"
+    return 0
+  fi
+  notePresent "glissa build" "built"
+  if [[ -f "$glissaConfigDest" ]]; then
+    notePresent "glissa server config" "exists, runtime state kept"
+  fi
+  if [[ ! -f "$glissaConfigDest" ]]; then
+    copyConfig "glissa server config" "$glissaConfigSrc" "$glissaConfigDest"
+  fi
+  if [[ -d "$glissaConfigDir" ]]; then
+    chmod 700 "$glissaConfigDir" 2>/dev/null || noteWarned "glissa config perms" "chmod 700 failed"
+  fi
+  if [[ -f "$glissaConfigDest" ]]; then
+    chmod 600 "$glissaConfigDest" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
+  fi
+  if [[ -f "$glissaConfigDest" ]] && grep -q "CHANGEME" "$glissaConfigDest"; then
+    noteWarned "glissa server config" "publicHost/allowedOrigins still say CHANGEME, edit ~/.glissa/config.json before remote access works"
+  fi
+  installGlissaService
+  configureGlissaServe
+  noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+}
+
 syncDevelopBranch() {
   local label="$1"
   local dest="$2"
@@ -585,7 +779,7 @@ fi
 if [[ -z "$profile" && -f "$markerPath" ]]; then
   # case-folded to match the PowerShell scripts, whose -eq compare ignores case
   fromMarker="$(tr -d '\r\n[:space:]' < "$markerPath" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$fromMarker" == "personal" || "$fromMarker" == "work" ]]; then
+  if [[ "$fromMarker" == "personal" || "$fromMarker" == "work" || "$fromMarker" == "server" ]]; then
     profile="$fromMarker"
   fi
   if [[ -z "$profile" ]]; then
@@ -594,18 +788,18 @@ if [[ -z "$profile" && -f "$markerPath" ]]; then
 fi
 while [[ -z "$profile" ]]; do
   if [[ ! -t 0 ]]; then
-    printf 'Cannot prompt for a machine profile on a non-interactive host. Re-run with --profile personal or --profile work.\n' >&2
+    printf 'Cannot prompt for a machine profile on a non-interactive host. Re-run with --profile personal, --profile work, or --profile server.\n' >&2
     exit 1
   fi
-  read -r -p "Machine profile (personal/work) " answer
+  read -r -p "Machine profile (personal/work/server) " answer
   answer="${answer//[$'\r\n\t ']}"
   answer="${answer,,}"
-  if [[ "$answer" == "personal" || "$answer" == "work" ]]; then
+  if [[ "$answer" == "personal" || "$answer" == "work" || "$answer" == "server" ]]; then
     profile="$answer"
     writeMarker=1
   fi
   if [[ -z "$profile" ]]; then
-    printf '%s  Enter '\''personal'\'' or '\''work'\''.%s\n' "$colorYellow" "$colorReset"
+    printf '%s  Enter '\''personal'\'', '\''work'\'', or '\''server'\''.%s\n' "$colorYellow" "$colorReset"
   fi
 done
 
@@ -631,9 +825,9 @@ if [[ -z "$vscodiumExtensionSync" ]]; then
 fi
 
 knownSteps=(
-  "vscodium-config" "glissa" "gitconfig" "codex-agents" "terminal"
+  "vscodium-config" "glissa" "glissa-server" "gitconfig" "codex-agents" "terminal"
   "workflow-config" "settings-render" "software" "fonts" "biome"
-  "repos" "npm-globals" "python-tools" "vscodium-extensions"
+  "tailscale" "repos" "npm-globals" "python-tools" "vscodium-extensions"
 )
 
 if ((dryRun == 1)); then
@@ -762,9 +956,23 @@ if stepEnabled "software"; then
   installPackageTool "VSCodium" "codium" "vscodium"
   installClaudeCode
 fi
+if ! stepEnabled "tailscale"; then
+  noteSkipped "Tailscale"
+fi
+if stepEnabled "tailscale"; then
+  installTailscaleLinux
+fi
 
 if ((retrySettingsRender == 1)); then
   invokeSettingsRender
+fi
+
+writeSection "Glissa server"
+if ! stepEnabled "glissa-server"; then
+  noteSkipped "glissa server"
+fi
+if stepEnabled "glissa-server"; then
+  installGlissaServer
 fi
 
 writeSection "Fonts"

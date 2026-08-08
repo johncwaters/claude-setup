@@ -1,7 +1,7 @@
 # One-command machine bootstrap: clone or update claude-setup, then apply it.
 param(
     [switch]$SkipInstalls,
-    [ValidateSet("personal","work")][string]$Profile,
+    [ValidateSet("personal","work","server")][string]$Profile,
     [string]$Root = (Join-Path $env:USERPROFILE ".claude"),
     [switch]$Help
 )
@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $repoUrl = "https://github.com/johncwaters/claude-setup.git"
 
 function Write-Usage {
-    Write-Host "Usage: setup/install.ps1 [-SkipInstalls] [-Profile personal|work] [-Root <dir>] [-Help]"
+    Write-Host "Usage: setup/install.ps1 [-SkipInstalls] [-Profile personal|work|server] [-Root <dir>] [-Help]"
     Write-Host ""
     Write-Host "Clone or update claude-setup, then apply it."
 }

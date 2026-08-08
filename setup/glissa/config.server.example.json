@@ -1,0 +1,39 @@
+{
+  "port": 3000,
+  "attentionTimeoutSeconds": 60,
+  "waitingEscalationSeconds": 300,
+  "startingWatchdogSeconds": 30,
+  "autoRecoverSeconds": 3,
+  "inputGraceSeconds": 5,
+  "promptDetectionMs": 1500,
+  "notifyDebounceMs": 3000,
+  "repoRoots": [
+    "~/Projects"
+  ],
+  "projects": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "glissa",
+      "path": "~/Projects/glissa"
+    }
+  ],
+  "replayBufferKB": 512,
+  "scrollback": 50000,
+  "feedDebounceMs": 50,
+  "noFlicker": true,
+  "cursorBlink": false,
+  "debugMode": false,
+  "teams": [],
+  "editorCommand": "",
+  "headroomEasyStart": false,
+  "proxyBaseUrl": "http://127.0.0.1:8787",
+  "headroomPort": 8787,
+  "remote": {
+    "enabled": true,
+    "port": 3001,
+    "publicHost": "CHANGEME.your-tailnet.ts.net",
+    "allowedOrigins": [
+      "https://CHANGEME.your-tailnet.ts.net"
+    ]
+  }
+}

@@ -183,7 +183,7 @@ phase "argument handling"
 
 installOutput="$(bash /suite/src/setup/install.sh --profile bogus 2>&1)"
 assertStatus "install.sh rejects an unknown profile" 2 $?
-assertMatch "install.sh names the valid profiles" "personal or work" "$installOutput"
+assertMatch "install.sh names the valid profiles" "personal, work, or server" "$installOutput"
 
 bash /suite/src/setup/install.sh --nonsense >/dev/null 2>&1
 assertStatus "install.sh rejects an unknown flag" 2 $?

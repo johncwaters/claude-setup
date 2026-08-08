@@ -1,9 +1,9 @@
 # Apply repo config to this machine. Run directly or via install.ps1.
-param([switch]$SkipInstalls, [ValidateSet("personal","work")][string]$Profile, [switch]$DryRun, [switch]$Help)
+param([switch]$SkipInstalls, [ValidateSet("personal","work","server")][string]$Profile, [switch]$DryRun, [switch]$Help)
 $ErrorActionPreference = "Stop"
 
 function Write-Usage {
-    Write-Host "Usage: setup/apply.ps1 [-SkipInstalls] [-Profile personal|work] [-DryRun] [-Help]"
+    Write-Host "Usage: setup/apply.ps1 [-SkipInstalls] [-Profile personal|work|server] [-DryRun] [-Help]"
     Write-Host ""
     Write-Host "Apply repo config to this machine."
 }
@@ -64,6 +64,16 @@ function Install-WingetTool([string]$label, [string]$cmd, [string]$id) {
     Update-SessionPath
     if (Get-Command $cmd -ErrorAction SilentlyContinue) { Note-Installed $label "installed"; return }
     Note-Warned $label "installed, but open a new shell for PATH"
+}
+
+function Install-Tailscale {
+    if (Get-Command tailscale -ErrorAction SilentlyContinue) { Note-Present "Tailscale" "already installed"; return }
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Note-Warned "Tailscale" "winget missing, install manually"; return }
+    Write-Line " .. " Yellow "Tailscale" "installing via winget"
+    winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements | Out-Null
+    Update-SessionPath
+    if (Get-Command tailscale -ErrorAction SilentlyContinue) { Note-Installed "Tailscale" "installed"; return }
+    Note-Warned "Tailscale" "installed, but open a new shell for PATH"
 }
 
 # Back up a soon-to-be-overwritten rendered file the first time a machine adopts a
@@ -135,17 +145,17 @@ if ($Profile) {
 }
 if ((-not $Profile) -and $markerExisted) {
     $fromMarker = (Get-Content $markerPath -Raw).Trim()
-    if ($fromMarker -eq "personal" -or $fromMarker -eq "work") { $Profile = $fromMarker }
+    if ($fromMarker -eq "personal" -or $fromMarker -eq "work" -or $fromMarker -eq "server") { $Profile = $fromMarker }
     if (-not $Profile) { Write-Host "  .machine-profile has invalid content, ignoring" -ForegroundColor Yellow }
 }
 while (-not $Profile) {
     try {
-        $answer = (Read-Host "Machine profile (personal/work)").Trim()
+        $answer = (Read-Host "Machine profile (personal/work/server)").Trim()
     } catch {
-        throw "Cannot prompt for a machine profile on a non-interactive host. Re-run with -Profile personal or -Profile work."
+        throw "Cannot prompt for a machine profile on a non-interactive host. Re-run with -Profile personal, -Profile work, or -Profile server."
     }
-    if ($answer -eq "personal" -or $answer -eq "work") { $Profile = $answer; $writeMarker = $true }
-    if (-not $Profile) { Write-Host "  Enter 'personal' or 'work'." -ForegroundColor Yellow }
+    if ($answer -eq "personal" -or $answer -eq "work" -or $answer -eq "server") { $Profile = $answer; $writeMarker = $true }
+    if (-not $Profile) { Write-Host "  Enter 'personal', 'work', or 'server'." -ForegroundColor Yellow }
 }
 
 $profileJsonPath = Join-Path $repoRoot "profiles\$Profile\profile.json"
@@ -159,9 +169,9 @@ $steps = @($profileJson.steps)
 
 # Full step catalog in execution order, for the dry-run plan.
 $knownSteps = @(
-    "vscodium-config", "glissa", "gitconfig", "codex-agents", "terminal",
+    "vscodium-config", "glissa", "glissa-server", "gitconfig", "codex-agents", "terminal",
     "workflow-config", "settings-render", "software", "fonts", "biome",
-    "repos", "npm-globals", "python-tools", "vscodium-extensions"
+    "tailscale", "repos", "npm-globals", "python-tools", "vscodium-extensions"
 )
 
 if ($DryRun) {
@@ -277,9 +287,15 @@ if (Step-Enabled "software") {
         if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Note-Warned "Claude Code" "not on PATH yet, open a new shell" }
     }
 }
+if (-not (Step-Enabled "tailscale")) { Note-Skipped "Tailscale" }
+if (Step-Enabled "tailscale") { Install-Tailscale }
 
 # node may have just been installed above; retry a settings render that was deferred
 if ($retrySettingsRender) { Invoke-SettingsRender }
+
+Write-Section "Glissa server"
+# Registered so the server profile stays loadable on Windows; the step itself is Linux-only.
+if (Step-Enabled "glissa-server") { Note-Present "glissa server" "server step is Linux-only, skipping" }
 
 Write-Section "Fonts"
 if (-not (Step-Enabled "fonts")) { Note-Skipped "Fonts" }

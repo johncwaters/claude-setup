@@ -1,0 +1,19 @@
+[Unit]
+Description=Glissa dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__HOME__/Projects/glissa
+ExecStart=__NODE__ server.js
+Environment=PATH=__PATH__
+KillMode=control-group
+TimeoutStopSec=10
+LimitNOFILE=65536
+TasksMax=4096
+LimitNPROC=4096
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:unpkg.com)"
+    ],
+    "defaultMode": "auto"
+  },
+  "skillOverrides": {
+    "ai-slop-cleaner": "off"
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "posthog@claude-plugins-official": false,
+    "github@claude-plugins-official": false,
+    "postiz@skills-dir": false
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    },
+    "claude-community": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-community"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node {{HOME}}/.claude/hooks/caveman-ultra.mjs"
+          }
+        ]
+      }
+    ]
+  },
+  "spinnerTipsEnabled": false,
+  "alwaysThinkingEnabled": true,
+  "theme": "auto"
+}
