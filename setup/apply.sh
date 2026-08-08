@@ -739,6 +739,24 @@ readPackageList() {
   sed '1s/^\xEF\xBB\xBF//' "$packageFile" | sed '/^[[:space:]]*$/d'
 }
 
+npmPackageName() {
+  local packageEntry="$1"
+  if [[ "$packageEntry" == *=* ]]; then
+    printf '%s\n' "${packageEntry%%=*}"
+    return 0
+  fi
+  printf '%s\n' "$packageEntry"
+}
+
+npmPackageSource() {
+  local packageEntry="$1"
+  if [[ "$packageEntry" == *=* ]]; then
+    printf '%s\n' "${packageEntry#*=}"
+    return 0
+  fi
+  printf '%s\n' "$packageEntry"
+}
+
 listGlobalNpmPackages() {
   # print only lines the strip actually shortened: on POSIX the first parseable
   # line is the global root itself, which contains node_modules with nothing after it
@@ -1130,7 +1148,8 @@ if stepEnabled "npm-globals"; then
     mapfile -t wantedPackages < <(readPackageList "$npmGlobals")
     mapfile -t installedPackages < <(listGlobalNpmPackages)
     missingPackages=()
-    for packageName in "${wantedPackages[@]}"; do
+    for packageEntry in "${wantedPackages[@]}"; do
+      packageName="$(npmPackageName "$packageEntry")"
       packageFound=0
       for installedPackage in "${installedPackages[@]}"; do
         if [[ "$installedPackage" == "$packageName" ]]; then
@@ -1138,16 +1157,18 @@ if stepEnabled "npm-globals"; then
         fi
       done
       if ((packageFound == 0)); then
-        missingPackages+=("$packageName")
+        missingPackages+=("$packageEntry")
       fi
     done
     if ((${#missingPackages[@]} == 0)); then
       notePresent "packages" "all ${#wantedPackages[@]} present"
     fi
-    for packageName in "${missingPackages[@]}"; do
-      writeLine " .. " "$colorYellow" "$packageName" "npm install -g"
+    for packageEntry in "${missingPackages[@]}"; do
+      packageName="$(npmPackageName "$packageEntry")"
+      packageSource="$(npmPackageSource "$packageEntry")"
+      writeLine " .. " "$colorYellow" "$packageName" "npm install -g $packageSource"
       npmInstallLog="$(mktemp "${TMPDIR:-/tmp}/claude-npm-install.XXXXXX")"
-      if npm install -g "$packageName" --loglevel=error >"$npmInstallLog" 2>&1; then
+      if npm install -g "$packageSource" --loglevel=error >"$npmInstallLog" 2>&1; then
         rm -f "$npmInstallLog"
         noteInstalled "$packageName" "installed"
         continue

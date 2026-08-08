@@ -450,7 +450,7 @@ assertNoMatch "biome never reports installed and failed together" 'biome +npm in
 
 npmGlobalList="$(npm ls -g --depth=0 --parseable 2>/dev/null)"
 assertMatch "installs the tracked npm globals" "node_modules/typescript" "$npmGlobalList"
-assertMatch "reports a win32-only package as unavailable, not failed" "not published for this platform" "$fullOutput"
+assertMatch "installs glissa from GitHub source" "glissa +npm install -g github:johncwaters/glissa" "$fullOutput"
 assertNoMatch "no npm package is reported as a plain failure" "npm install failed" "$fullOutput"
 
 command -v python3 >/dev/null 2>&1

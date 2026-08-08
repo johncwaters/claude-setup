@@ -39,6 +39,14 @@ function Note-Present([string]$label, [string]$note)   { Write-Line " -- " DarkG
 function Note-Warned([string]$label, [string]$note)    { Write-Line "warn" Red      $label $note; $counts.warned++ }
 function Note-Skipped([string]$label) { Write-Line " -- " DarkGray $label "skipped ($Profile profile)" }
 function Step-Enabled([string]$name) { return $steps -contains $name }
+function Get-NpmPackageName([string]$entry) {
+    if ($entry -match "=") { return ($entry -split "=", 2)[0] }
+    return $entry
+}
+function Get-NpmPackageSource([string]$entry) {
+    if ($entry -match "=") { return ($entry -split "=", 2)[1] }
+    return $entry
+}
 
 function Update-SessionPath {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
@@ -436,11 +444,13 @@ if (Step-Enabled "npm-globals") {
         $have = npm ls -g --depth=0 --parseable 2>$null |
             Where-Object { $_ -match "node_modules" } |
             ForEach-Object { ($_ -replace ".*node_modules[\\/]", "") -replace "\\", "/" }
-        $missing = @($wanted | Where-Object { $have -notcontains $_ })
+        $missing = @($wanted | Where-Object { $have -notcontains (Get-NpmPackageName $_) })
         if ($missing.Count -eq 0) { Note-Present "packages" "all $($wanted.Count) present" }
-        foreach ($pkg in $missing) {
-            Write-Line " .. " Yellow $pkg "npm install -g"
-            npm install -g $pkg --loglevel=error | Out-Null
+        foreach ($entry in $missing) {
+            $pkg = Get-NpmPackageName $entry
+            $source = Get-NpmPackageSource $entry
+            Write-Line " .. " Yellow $pkg "npm install -g $source"
+            npm install -g $source --loglevel=error | Out-Null
             if ($LASTEXITCODE -eq 0) { Note-Installed $pkg "installed"; continue }
             Note-Warned $pkg "npm install failed"
         }
