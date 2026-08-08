@@ -134,9 +134,9 @@ Judge token usage is written to `judge.json` only and is never merged into
 | `SLOP_PATCH_INVALID` | 19 | Non-terminal warning: a proposed slop cleanup patch failed `git apply --check` twice; findings are kept, the patch is dropped, and the pipeline continues |
 | `MESSAGE_INVALID` | 20 | The commit message failed schema or convention validation after its bounded retries |
 | `HOOK_FAILED` | 21 | `git commit` exited nonzero (e.g. a pre-commit hook failed) |
-| `PUSH_FAILED` | 22 | The commit succeeded but `git push` (or `git push -u origin <branch>` when there was no upstream) exited nonzero; `commit_hash` is still populated in the result, and the push stderr is captured as a warning |
+| `PUSH_FAILED` | 22 | The commit succeeded but all 3 `git push` attempts (or `git push -u origin <branch>` attempts when there was no upstream) exited nonzero; `commit_hash` is still populated in the result, and each failed attempt's stderr is captured as a warning |
 | `PROMOTE_CONFLICT` | 23 | A `--promote` hop could not fast-forward and the fallback merge conflicted; the merge was aborted and the original branch restored. `commit_hash`, `commit_message`, `pushed`, and `findings` stay populated; the conflicting files are captured as a warning |
-| `PROMOTE_FAILED` | 24 | A `--promote` hop could not complete: local develop/mainline diverged from origin, the target's holding worktree was dirty or could not fast-forward, the fallback merge needed a clean working tree that was dirty, the merge target could not be checked out, the post-merge restore checkout failed (the merge landed locally but the push was skipped and the repo is left on the target branch), or a promotion push exited nonzero. Earlier-stage result fields stay populated and the stderr or reason is captured as a warning |
+| `PROMOTE_FAILED` | 24 | A `--promote` hop could not complete: local develop/mainline diverged from origin and the recovery merge could not be attempted or restored cleanly, the target's holding worktree was dirty or could not fast-forward, the fallback merge needed a clean working tree that was dirty, the merge target could not be checked out, the post-merge restore checkout failed (the merge landed locally but the push was skipped and the repo is left on the target branch), or all 3 promotion push attempts exited nonzero. Earlier-stage result fields stay populated and the stderr or reason is captured as a warning |
 
 `SLOP_PATCH_INVALID` is listed as a warning code, not a terminal `outcome` value: it is
 recorded as a warning string and the pipeline continues to the next stage, per SPEC.
@@ -148,7 +148,8 @@ recorded as a warning string and the pipeline continues to the next stage, per S
   asserts the repo path is the workspace or nested inside it before any other stage runs;
   a violation is `GATE_FAILED` before a single git command executes.
 - Pushes by default after a successful commit: Stage 9 runs `git push` when the current
-  branch already has an upstream, `git push -u origin <branch>` when it does not. `origin`
+  branch already has an upstream, `git push -u origin <branch>` when it does not, and
+  retries nonzero push exits up to 2 more times before returning `PUSH_FAILED`. `origin`
   not being configured is not an error; it is a skip, with a warning, and the outcome
   stays `COMMITTED`. `--no-push` opts out entirely (the stage still runs and is recorded
   in `stages_run` as `PUSH(skipped)`, it just never touches git). The benchmark
@@ -182,16 +183,20 @@ convention rule (banned characters, type enum, length, trailing period, required
 trailers, exact rendering), the slop patch apply gate (invalid patch rejected, valid
 patch applied and re-staged), the commit stage (real commit, hash resolvable, message
 file cleanup, staged-empty guard), the push stage (push from a feature branch with no
-upstream configured advances a real bare-repo `origin` ref, a repo with no `origin`
-commits successfully with push skipped and a warning present, a push to a since-deleted
-`origin` is `PUSH_FAILED` with `commit_hash` still populated), sync (clean feature-branch
+upstream configured advances a real bare-repo `origin` ref, a flaky pre-push hook is
+retried successfully, an always-failing pre-push hook exhausts all 3 attempts as
+`PUSH_FAILED`, a repo with no `origin` commits successfully with push skipped and a
+warning present, a push to a since-deleted `origin` is `PUSH_FAILED` with `commit_hash`
+still populated), sync (clean feature-branch
 merge, diverged local branch, conflicting merge with a verified clean abort), the LLM
 replay adapter end to end through a real commit, workspace confinement, and outward
 promotion (`--promote`: the full feature/develop/mainline fast-forward chain with pushes,
 auto-creation of a missing develop, the commit-on-develop and commit-on-mainline cases, a
 non-fast-forward hop that conflicts with a verified clean abort and branch restore, a
-non-fast-forward hop that merges cleanly, local-only promotion with no origin, a dirty
-unrelated file surviving fast-forward hops, and a master-only repo).
+non-fast-forward hop that merges cleanly, flaky promote-push retry, clean local mainline
+divergence recovery from origin, conflicting local mainline divergence with a verified
+clean abort and branch restore, local-only promotion with no origin, a dirty unrelated
+file surviving fast-forward hops, and a master-only repo).
 
 Verified after implementation, during the benchmark phase: `bench/run_bench.py` executed
 end to end with live sonnet calls against all 13 private scenarios (11 COMMITTED,

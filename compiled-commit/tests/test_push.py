@@ -1,13 +1,22 @@
+import os
 import shutil
 import unittest
 
 from src.failures import Outcome
 from src.llm import LlmClient
 from src.pipeline import Pipeline, PipelineConfig
-from tests.helpers import cleanup, commit_file, make_bare_origin, make_repo, run_git, write_file
+from tests.helpers import (
+    cleanup,
+    commit_file,
+    make_bare_origin,
+    make_repo,
+    run_git,
+    write_file,
+    write_flaky_hook,
+)
 
 
-def _make_pipeline(repo, message="chore: push test"):
+def _make_pipeline(repo, message="chore: push test", push_retry_delay_sec=0):
     client = LlmClient(mode="live")  # never dispatched: message is always supplied here
     config = PipelineConfig(
         repo=repo,
@@ -16,6 +25,7 @@ def _make_pipeline(repo, message="chore: push test"):
         skip_deslop=True,
         skip_review=True,
         message=message,
+        push_retry_delay_sec=push_retry_delay_sec,
     )
     return Pipeline(config)
 
@@ -77,6 +87,60 @@ class PushStageTests(unittest.TestCase):
             self.assertFalse(result.pushed)
         finally:
             cleanup(repo)
+
+    def test_flaky_pre_push_hook_retries_and_pushes(self):
+        origin = make_bare_origin()
+        repo = make_repo()
+        try:
+            run_git(repo, ["remote", "add", "origin", origin])
+            commit_file(repo, "base.txt", "base\n", "init")
+            run_git(repo, ["push", "-u", "origin", "main"])
+            write_flaky_hook(
+                os.path.join(repo, ".git", "hooks"),
+                "pre-push",
+                ".git/hooks/pre-push-count",
+                failing_attempts=1,
+                label="flaky pre-push",
+            )
+            write_file(repo, "base.txt", "base\nchanged\n")
+
+            result = _make_pipeline(repo).run()
+
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertTrue(result.pushed)
+            retry_warnings = [w for w in result.warnings if "push attempt" in w]
+            self.assertEqual(len(retry_warnings), 1)
+            self.assertIn("attempt 1/3", retry_warnings[0])
+            self.assertIn("flaky pre-push attempt 1", retry_warnings[0])
+        finally:
+            cleanup(repo, origin)
+
+    def test_pre_push_hook_exhausts_retries(self):
+        origin = make_bare_origin()
+        repo = make_repo()
+        try:
+            run_git(repo, ["remote", "add", "origin", origin])
+            commit_file(repo, "base.txt", "base\n", "init")
+            run_git(repo, ["push", "-u", "origin", "main"])
+            write_flaky_hook(
+                os.path.join(repo, ".git", "hooks"),
+                "pre-push",
+                ".git/hooks/pre-push-count",
+                failing_attempts=3,
+                label="flaky pre-push",
+            )
+            write_file(repo, "base.txt", "base\nchanged\n")
+
+            result = _make_pipeline(repo).run()
+
+            self.assertEqual(result.outcome, Outcome.PUSH_FAILED)
+            self.assertTrue(result.commit_hash)
+            self.assertFalse(result.pushed)
+            retry_warnings = [w for w in result.warnings if "push attempt" in w]
+            self.assertEqual(len(retry_warnings), 3)
+            self.assertIn("attempt 3/3", retry_warnings[-1])
+        finally:
+            cleanup(repo, origin)
 
 
 if __name__ == "__main__":

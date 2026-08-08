@@ -56,3 +56,22 @@ def clone_repo(origin, dest):
     run_git(dest, ["config", "user.email", "test@example.com"])
     run_git(dest, ["config", "commit.gpgsign", "false"])
     return dest
+
+
+def write_flaky_hook(hooks_dir, hook_name, count_file_rel, failing_attempts, label):
+    hook_path = os.path.join(hooks_dir, hook_name)
+    with open(hook_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(
+            "#!/bin/sh\n"
+            f"count_file=\"{count_file_rel}\"\n"
+            "count=0\n"
+            "[ -f \"$count_file\" ] && count=$(cat \"$count_file\")\n"
+            "count=$((count + 1))\n"
+            "printf \"%s\" \"$count\" > \"$count_file\"\n"
+            f"if [ \"$count\" -le {failing_attempts} ]; then\n"
+            f"  echo \"{label} attempt $count\" >&2\n"
+            "  exit 1\n"
+            "fi\n"
+            "exit 0\n"
+        )
+    os.chmod(hook_path, 0o755)

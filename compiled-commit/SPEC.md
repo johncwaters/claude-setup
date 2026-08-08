@@ -121,8 +121,10 @@ HOOK_FAILED with stderr captured. Success: capture hash via `git rev-parse HEAD`
 `pushed` stays false)
 No `origin` remote configured -> skip with a warning, outcome stays COMMITTED. Otherwise
 `git push` when the current branch already has an upstream, `git push -u origin <branch>`
-when it does not. Nonzero exit -> PUSH_FAILED with stderr captured; commit_hash from
-Stage 8 is still populated in the result. Success: result field `pushed` set true.
+when it does not. A nonzero push exit records a warning containing the attempt number
+and stderr, then retries up to 2 more times after `push_retry_delay_sec` seconds (3 total
+attempts). All attempts nonzero -> PUSH_FAILED; commit_hash from Stage 8 is still
+populated in the result. Success on any attempt: result field `pushed` set true.
 
 ### Stage 10 PROMOTE (runs only with --promote, after a successful COMMIT and a successful
 or skipped-by---no-push PUSH; skipped entirely when --promote is absent, contributing
@@ -157,8 +159,12 @@ Hops from the current branch B:
 Each hop src -> dst, in order:
 1. When origin exists: `git fetch origin <dst>` (failure -> warning, continue with local
    state), then `git fetch origin <dst>:<dst>`; a non-fast-forward rejection here means
-   local dst diverged from origin -> PROMOTE_FAILED (commit_hash and pushed stay populated).
-   Other failures (dst absent on origin, checked out elsewhere) -> warning, continue local.
+   local dst diverged from origin. Recover by using the same clean-tree checkout, merge,
+   abort, and restore machinery as the fallback merge path to merge `origin/<dst>` into
+   `dst`; a clean merge records a warning and continues promotion. A conflict ->
+   PROMOTE_CONFLICT with the merge aborted and the original branch restored. Dirty tree or
+   failed checkout -> PROMOTE_FAILED. Other failures (dst absent on origin, checked out
+   elsewhere) -> warning, continue local.
 2. `git fetch . <src>:<dst>` to fast-forward dst to src without touching the working tree
    (the normal path, since SYNC already merged develop into the feature branch, and it
    works even when unrelated files are dirty).
@@ -175,9 +181,15 @@ Each hop src -> dst, in order:
    "checked out") -> find that worktree and run `git merge --ff-only <src>` there.
    If the holder is missing, dirty aside from untracked files, or cannot fast-forward
    dst, PROMOTE_FAILED with a warning; on success, continue to push.
-5. Push: origin present -> `git push origin <dst>` (plain refspec, no checkout); nonzero ->
-   PROMOTE_FAILED with stderr. No origin -> a single stage warning "no origin remote;
-   promoted branches updated locally only", keep going.
+5. Push: origin present -> `git push origin <dst>` (plain refspec, no checkout). A
+   nonzero push records a warning containing the attempt number and stderr, then retries
+   up to 2 more times after `push_retry_delay_sec` seconds (3 total attempts). If stderr
+   indicates a fetch-first or non-fast-forward rejection (`non-fast-forward`,
+   `fetch first`, or `rejected`), first re-run the dst sync cycle and `git fetch .
+   <src>:<dst>` before the next push attempt, with the same conflict and failure handling
+   as steps 1 through 4. Other push failures just wait and retry. All push attempts
+   nonzero -> PROMOTE_FAILED with the accumulated warnings. No origin -> a single stage
+   warning "no origin remote; promoted branches updated locally only", keep going.
 6. On success append dst to the result list `promoted`.
 Never force-push, never delete branches, never auto-resolve conflicts, never `--no-verify`.
 PROMOTE_CONFLICT and PROMOTE_FAILED are terminal but leave commit_hash, commit_message,

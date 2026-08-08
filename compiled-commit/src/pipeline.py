@@ -20,6 +20,8 @@ MAINLINE_CANDIDATES = ("main", "master")
 
 DENYLIST_DIR_PREFIXES = ("node_modules/", "dist/", "__pycache__/")
 
+PUSH_ATTEMPTS = 3
+
 CONVENTION_NOTE = (
     "Commit message convention: header is `<type>(<scope>): <description>` or "
     "`<type>: <description>` with no scope. type is one of feat, fix, refactor, chore, "
@@ -178,6 +180,7 @@ class PipelineConfig:
     fixture_prefix: str = "run"
     context: str = None
     paths: list = None
+    push_retry_delay_sec: float = 2.0
 
     def __post_init__(self):
         if self.workspace is None:
@@ -525,11 +528,19 @@ class Pipeline:
             return None
 
         branch = self.git.current_branch()
-        proc = self.git.push() if self.git.has_upstream() else self.git.push_set_upstream("origin", branch)
 
-        if proc.returncode != 0:
-            self.result.warnings.append((proc.stderr or "").strip())
-            return Outcome.PUSH_FAILED
+        def push_once():
+            if self.git.has_upstream():
+                return self.git.push()
+            return self.git.push_set_upstream("origin", branch)
+
+        outcome = self._push_with_retries(
+            push_once,
+            Outcome.PUSH_FAILED,
+            lambda attempt, stderr: f"push attempt {attempt}/{PUSH_ATTEMPTS} failed: {stderr}",
+        )
+        if outcome:
+            return outcome
 
         self.result.pushed = True
         return None
@@ -622,7 +633,7 @@ class Pipeline:
             if outcome:
                 return outcome
 
-        return self._push_promoted(dst, origin_exists)
+        return self._push_promoted(src, dst, origin_exists)
 
     def _sync_dst_with_origin(self, dst):
         fetch = self.git.fetch("origin", dst)
@@ -638,10 +649,13 @@ class Pipeline:
 
         stderr = update.stderr or ""
         if "non-fast-forward" in stderr or "rejected" in stderr:
+            outcome = self._merge_for_promotion(f"origin/{dst}", dst)
+            if outcome:
+                return outcome
             self.result.warnings.append(
-                f"local {dst} has diverged from origin/{dst}; promotion stopped"
+                f"local {dst} diverged from origin/{dst}; merged origin/{dst} into {dst} and continued promotion"
             )
-            return Outcome.PROMOTE_FAILED
+            return None
 
         self.result.warnings.append(
             f"could not update local {dst} from origin, continuing with local state: {stderr.strip()}"
@@ -656,7 +670,7 @@ class Pipeline:
                 f"could not fast-forward {dst} from {src}; promotion stopped: {stderr.strip()}"
             )
             return Outcome.PROMOTE_FAILED
-        return self._merge_fallback(src, dst)
+        return self._merge_for_promotion(src, dst)
 
     def _ff_in_holding_worktree(self, src, dst):
         worktrees = self.git.worktree_list_porcelain()
@@ -689,7 +703,7 @@ class Pipeline:
         )
         return None
 
-    def _merge_fallback(self, src, dst):
+    def _merge_for_promotion(self, src, dst):
         dirty = [line for line in self.git.status_short() if not line.startswith("??")]
         if dirty:
             self.result.warnings.append(f"working tree not clean; cannot merge {src} into {dst}")
@@ -727,7 +741,7 @@ class Pipeline:
             return Outcome.PROMOTE_FAILED
         return None
 
-    def _push_promoted(self, dst, origin_exists):
+    def _push_promoted(self, src, dst, origin_exists):
         if not origin_exists:
             if not self._no_origin_promote_warned:
                 self.result.warnings.append(
@@ -737,15 +751,59 @@ class Pipeline:
             self.result.promoted.append(dst)
             return None
 
-        push = self.git.push_ref("origin", dst)
-        if push.returncode != 0:
-            self.result.warnings.append(
-                f"failed to push {dst} to origin; promotion stopped: {(push.stderr or '').strip()}"
-            )
-            return Outcome.PROMOTE_FAILED
+        def resync_promoted_dst():
+            return self._resync_promoted_dst(src, dst)
+
+        outcome = self._push_with_retries(
+            lambda: self.git.push_ref("origin", dst),
+            Outcome.PROMOTE_FAILED,
+            lambda attempt, stderr: (
+                f"promote push {dst} attempt {attempt}/{PUSH_ATTEMPTS} failed: {stderr}"
+            ),
+            on_rejected=resync_promoted_dst,
+        )
+        if outcome:
+            return outcome
 
         self.result.promoted.append(dst)
         return None
+
+    def _push_with_retries(self, push_once, exhausted_outcome, warn, on_rejected=None):
+        for attempt in range(1, PUSH_ATTEMPTS + 1):
+            push = push_once()
+            if push.returncode == 0:
+                return None
+
+            stderr = (push.stderr or "").strip()
+            self.result.warnings.append(warn(attempt, stderr))
+            if attempt == PUSH_ATTEMPTS:
+                return exhausted_outcome
+
+            if on_rejected is not None and self._is_fetch_first_rejection(stderr):
+                outcome = on_rejected()
+                if outcome:
+                    return outcome
+
+            time.sleep(self.config.push_retry_delay_sec)
+        return exhausted_outcome
+
+    def _resync_promoted_dst(self, src, dst):
+        outcome = self._sync_dst_with_origin(dst)
+        if outcome:
+            return outcome
+
+        ff = self.git.fetch_local_ff(src, dst)
+        if ff.returncode == 0:
+            return None
+        return self._handle_ff_refusal(src, dst, ff.stderr or "")
+
+    def _is_fetch_first_rejection(self, stderr):
+        normalized = stderr.lower()
+        if "non-fast-forward" in normalized:
+            return True
+        if "fetch first" in normalized:
+            return True
+        return "rejected" in normalized
 
     # -- helpers ----------------------------------------------------------
 
