@@ -14,6 +14,7 @@ detectedPackageManager=""
 minimumNodeMajor=20
 nodeSourceMajor=22
 dpkgLockWaitSeconds=180
+packageInstallLog=""
 scriptStartSeconds="$SECONDS"
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -287,27 +288,28 @@ runPackageManagerCommand() {
 installSystemPackages() {
   local manager="$1"
   shift
+  local outputSink="${packageInstallLog:-/dev/null}"
   case "$manager" in
     apt-get)
       if ((aptUpdated == 0)); then
-        if ! runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" update >/dev/null 2>&1; then
+        if ! runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" update >>"$outputSink" 2>&1; then
           return 1
         fi
         aptUpdated=1
       fi
-      runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" install -y "$@" >/dev/null 2>&1
+      runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" install -y "$@" >>"$outputSink" 2>&1
       return $?
       ;;
     dnf)
-      runPackageManagerCommand dnf install -y "$@" >/dev/null 2>&1
+      runPackageManagerCommand dnf install -y "$@" >>"$outputSink" 2>&1
       return $?
       ;;
     pacman)
-      runPackageManagerCommand pacman -S --noconfirm --needed "$@" >/dev/null 2>&1
+      runPackageManagerCommand pacman -S --noconfirm --needed "$@" >>"$outputSink" 2>&1
       return $?
       ;;
     zypper)
-      runPackageManagerCommand zypper --non-interactive install "$@" >/dev/null 2>&1
+      runPackageManagerCommand zypper --non-interactive install "$@" >>"$outputSink" 2>&1
       return $?
       ;;
   esac
@@ -462,11 +464,11 @@ installPackageTool() {
 
 nodeSourceSetupUrl() {
   local manager="$1"
-  if [[ "$manager" == "apt-get" ]]; then
-    printf 'https://deb.nodesource.com/setup_%s.x\n' "$nodeSourceMajor"
+  if [[ "$manager" == "dnf" ]]; then
+    printf 'https://rpm.nodesource.com/setup_%s.x\n' "$nodeSourceMajor"
     return 0
   fi
-  printf 'https://rpm.nodesource.com/setup_%s.x\n' "$nodeSourceMajor"
+  printf 'https://deb.nodesource.com/setup_%s.x\n' "$nodeSourceMajor"
 }
 
 # The NodeSource package provides npm itself and conflicts with the distro npm,
@@ -478,6 +480,9 @@ installNodeSourcePackage() {
     return 0
   fi
   if [[ "$manager" != "apt-get" ]]; then
+    return 1
+  fi
+  if ! grep -qi 'conflict' "$logPath"; then
     return 1
   fi
   printf 'retrying without the distro npm package\n' >>"$logPath"
@@ -520,11 +525,14 @@ installNodeJs() {
     return 0
   fi
   aptUpdated=0
+  packageInstallLog="$setupLog"
   if ! installNodeSourcePackage "$manager" "$setupLog"; then
+    packageInstallLog=""
     noteWarned "Node.js" "NodeSource install failed: $(lastLogLine "$setupLog")"
     rm -f "$setupLog"
     return 0
   fi
+  packageInstallLog=""
   rm -f "$setupLog"
   refreshSessionPath
   if nodeIsCurrentEnough; then
