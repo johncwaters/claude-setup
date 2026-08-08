@@ -44,24 +44,24 @@ installSystemPackage() {
   case "$manager" in
     apt-get)
       if ((aptUpdated == 0)); then
-        if ! runAsRoot apt-get update >/dev/null; then
+        if ! runAsRoot apt-get update >/dev/null 2>&1; then
           return 1
         fi
         aptUpdated=1
       fi
-      runAsRoot apt-get install -y "$packageName" >/dev/null
+      runAsRoot apt-get install -y "$packageName" >/dev/null 2>&1
       return $?
       ;;
     dnf)
-      runAsRoot dnf install -y "$packageName" >/dev/null
+      runAsRoot dnf install -y "$packageName" >/dev/null 2>&1
       return $?
       ;;
     pacman)
-      runAsRoot pacman -S --noconfirm --needed "$packageName" >/dev/null
+      runAsRoot pacman -S --noconfirm --needed "$packageName" >/dev/null 2>&1
       return $?
       ;;
     zypper)
-      runAsRoot zypper --non-interactive install "$packageName" >/dev/null
+      runAsRoot zypper --non-interactive install "$packageName" >/dev/null 2>&1
       return $?
       ;;
   esac

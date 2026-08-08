@@ -83,7 +83,17 @@ bash <(curl -fsSL https://raw.githubusercontent.com/johncwaters/claude-setup/mas
 bash <(curl -fsSL https://raw.githubusercontent.com/johncwaters/claude-setup/master/setup/install.sh) --profile server
 ```
 
-On a box with no `curl` yet, `wget -qO- <same URL>` substitutes. Process substitution keeps stdin on the terminal so the profile prompt still works; a plain `curl ... | bash -s -- --profile personal` pipe has to name the profile because apply refuses to guess one without a tty.
+On a box with no `curl` yet, wget substitutes:
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/johncwaters/claude-setup/master/setup/install.sh)
+```
+
+Process substitution keeps stdin on the terminal so the profile prompt still works. A plain pipe has to name the profile instead, because apply refuses to guess one without a tty:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/johncwaters/claude-setup/master/setup/install.sh | bash -s -- --profile personal
+```
 
 If `git` is already there and you would rather clone by hand, the long form still works and lands in the same place:
 
