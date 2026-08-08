@@ -777,7 +777,7 @@ class Pipeline:
             stderr = (push.stderr or "").strip()
             self.result.warnings.append(warn(attempt, stderr))
             if attempt == PUSH_ATTEMPTS:
-                return exhausted_outcome
+                break
 
             if on_rejected is not None and self._is_fetch_first_rejection(stderr):
                 outcome = on_rejected()
