@@ -48,6 +48,7 @@ if ($suiteMode -eq "full" -and $env:CLAUDE_SETUP_TEST_CONTAINER -ne "1") {
 
 $ErrorActionPreference = "Stop"
 $powerShellPath = (Get-Process -Id $PID).Path
+$childWorkingDirectory = $resolvedUserProfile
 
 function Pass([string]$label) {
     $script:passCount++
@@ -168,6 +169,10 @@ function Invoke-PowerShellFile([string]$scriptPath, [string[]]$arguments) {
     $processArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $scriptPath) + $arguments
     $startInfo.Arguments = ($processArguments | ForEach-Object { Format-CommandArgument $_ }) -join " "
     $startInfo.UseShellExecute = $false
+    # Children inherit the caller's directory otherwise, and a tool that resolves a
+    # cache path relative to it (PowerShell's ModuleAnalysisCache does) drops files
+    # into the repo being tested.
+    $startInfo.WorkingDirectory = $childWorkingDirectory
     $startInfo.RedirectStandardInput = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
@@ -190,6 +195,7 @@ function Invoke-NodeWithInput([string]$scriptPath, [string]$inputText) {
     $startInfo.FileName = $env:ComSpec
     $startInfo.Arguments = "/c node " + (Format-CommandArgument $scriptPath) + " < " + (Format-CommandArgument $payloadPath)
     $startInfo.UseShellExecute = $false
+    $startInfo.WorkingDirectory = $childWorkingDirectory
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)

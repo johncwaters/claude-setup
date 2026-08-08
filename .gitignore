@@ -27,6 +27,9 @@ settings.local.json
 # paths). Tracked *.example.* siblings document the format; apply.ps1 falls back to them.
 setup/repos.txt
 setup/glissa/config.json
+# Tool caches a sandboxed test run can drop next to the scripts (PowerShell resolves
+# ModuleAnalysisCache relative to the working directory when LOCALAPPDATA is unset).
+Microsoft/Windows/PowerShell/
 evals/.env
 evals/results/replays/
 *.local.json

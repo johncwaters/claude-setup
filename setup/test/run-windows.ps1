@@ -66,11 +66,13 @@ function Format-CommandArgument([string]$argument) {
     return $builder.ToString()
 }
 
-function Invoke-ChildProcess([string]$filePath, [string[]]$arguments, [hashtable]$environment) {
+function Invoke-ChildProcess([string]$filePath, [string[]]$arguments, [hashtable]$environment, [string]$workingDirectory) {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $filePath
     $startInfo.Arguments = ($arguments | ForEach-Object { Format-CommandArgument $_ }) -join " "
     $startInfo.UseShellExecute = $false
+    # Keeps anything the suite spawns from writing relative paths into the repo.
+    $startInfo.WorkingDirectory = $workingDirectory
     foreach ($key in $environment.Keys) {
         $startInfo.Environment[$key] = [string]$environment[$key]
     }
@@ -149,7 +151,7 @@ try {
         TEMP = $sandboxRoot
         TMP = $sandboxRoot
     }
-    $exitCode = Invoke-ChildProcess $powerShellPath @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $suiteSnapshot) $childEnvironment
+    $exitCode = Invoke-ChildProcess $powerShellPath @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $suiteSnapshot) $childEnvironment $sandboxRoot
     exit $exitCode
 }
 finally {
