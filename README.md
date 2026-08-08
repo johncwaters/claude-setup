@@ -30,6 +30,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
   - `repos.txt`: project repos referenced by glissa sessions (milepost, glissa, keeplings, card-harbor); apply clones missing ones into `~/Projects`, fast-forwards existing ones, then installs each repo's node deps (npm/pnpm/yarn by lockfile) and heals a missing electron binary
   - `fonts/`: CommitMono (referenced by VSCodium settings)
   - `collect.ps1` / `apply.ps1`: sync scripts (see below); `install.sh`, `apply.sh`, and `collect.sh` are the Linux ports, driven by the same profiles and the same tracked config
+  - `test/`: containerised acceptance suite for the Linux ports (see Testing the Linux scripts below)
 
 `CLAUDE.md`, `settings.json`, and `commands/commit.md` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, the two markdown files copied straight from the profile), so the live files exist on disk but git ignores them.
 
@@ -97,6 +98,18 @@ bash "$HOME/.claude/setup/install.sh"
 Pulls latest and applies. `-SkipInstalls` (`--skip-installs` on Linux) copies config only.
 
 Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md`, `settings.json`, and `commands/commit.md` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
+
+## Testing the Linux scripts
+
+The Linux ports have an executable acceptance suite, so their behavior is checked rather than described. It runs in a throwaway container against a snapshot of the current working tree (uncommitted edits included), served as a local git origin, so nothing touches GitHub or the host machine.
+
+```bash
+bash setup/test/run-docker.sh                  # config, flags, idempotency, collect round trip
+bash setup/test/run-docker.sh --full           # adds package installs, npm globals, repo clone, and a real hook run
+bash setup/test/run-docker.sh --distro fedora  # same suite against the dnf branch
+```
+
+Requires Docker and Git Bash (on Windows) or any Linux shell. The suite exits non-zero on the first failed assertion set, and each assertion prints what it checked.
 
 ## Auth checklist (manual, once per machine)
 

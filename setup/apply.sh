@@ -140,6 +140,22 @@ refreshSessionPath() {
   hash -r 2>/dev/null || true
 }
 
+# cmp lives in diffutils, which minimal images (Fedora, openSUSE) do not ship. A
+# missing cmp used to read as "files differ", so every run rewrote every file.
+# sha256sum is coreutils, so it is present wherever cp and mkdir are.
+filesAreIdentical() {
+  local left="$1"
+  local right="$2"
+  if [[ ! -f "$left" || ! -f "$right" ]]; then
+    return 1
+  fi
+  local leftDigest
+  local rightDigest
+  leftDigest="$(sha256sum < "$left" | cut -d' ' -f1)"
+  rightDigest="$(sha256sum < "$right" | cut -d' ' -f1)"
+  [[ "$leftDigest" == "$rightDigest" ]]
+}
+
 copyConfig() {
   local label="$1"
   local src="$2"
@@ -149,7 +165,7 @@ copyConfig() {
     return 0
   fi
   mkdir -p "$(dirname -- "$dest")"
-  if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
+  if filesAreIdentical "$src" "$dest"; then
     notePresent "$label" "up to date"
     return 0
   fi
@@ -169,7 +185,7 @@ backupIfFirstRun() {
   if [[ ! -f "$src" ]]; then
     return 0
   fi
-  if cmp -s "$src" "$dest"; then
+  if filesAreIdentical "$src" "$dest"; then
     return 0
   fi
   cp -f "$dest" "$dest.pre-profile.bak"
@@ -208,7 +224,7 @@ invokeSettingsRender() {
     return 0
   fi
   rm -f "$renderErr"
-  if ((existed == 1)) && cmp -s "$tempDest" "$dest"; then
+  if ((existed == 1)) && filesAreIdentical "$tempDest" "$dest"; then
     rm -f "$tempDest"
     notePresent "settings.json" "up to date"
     return 0
@@ -274,6 +290,14 @@ packageNamesForTool() {
       printf 'nodejs\nnpm\n'
       return 0
       ;;
+    python:apt-get|python:dnf|python:zypper)
+      printf 'python3\npython3-pip\n'
+      return 0
+      ;;
+    python:pacman)
+      printf 'python\npython-pip\n'
+      return 0
+      ;;
     gh:dnf)
       printf 'gh\n'
       return 0
@@ -286,6 +310,27 @@ packageNamesForTool() {
   return 1
 }
 
+pythonHasPip() {
+  local python
+  if ! python="$(pythonCommandName)"; then
+    return 1
+  fi
+  "$python" -m pip --version >/dev/null 2>&1
+}
+
+# python3 usually arrives as a dependency of something else while pip does not,
+# and a python without pip cannot install ruff, which the validate-file hook
+# needs for its Python gate. Treat pip as part of what "python is present" means.
+toolIsPresent() {
+  local toolKey="$1"
+  local commandName="$2"
+  if [[ "$toolKey" == "python" ]]; then
+    pythonHasPip
+    return $?
+  fi
+  command -v "$commandName" >/dev/null 2>&1
+}
+
 installPackageTool() {
   local label="$1"
   local commandName="$2"
@@ -293,7 +338,7 @@ installPackageTool() {
   local manager
   local packageNameArgs=()
   refreshSessionPath
-  if command -v "$commandName" >/dev/null 2>&1; then
+  if toolIsPresent "$toolKey" "$commandName"; then
     notePresent "$label" "already installed"
     return 0
   fi
@@ -349,7 +394,7 @@ installPackageTool() {
       ;;
   esac
   refreshSessionPath
-  if command -v "$commandName" >/dev/null 2>&1; then
+  if toolIsPresent "$toolKey" "$commandName"; then
     noteInstalled "$label" "installed"
     return 0
   fi
@@ -713,6 +758,7 @@ if stepEnabled "software"; then
   installPackageTool "git" "git" "git"
   installPackageTool "GitHub CLI" "gh" "gh"
   installPackageTool "Node.js" "node" "node"
+  installPackageTool "Python" "python3" "python"
   installPackageTool "VSCodium" "codium" "vscodium"
   installClaudeCode
 fi
@@ -734,7 +780,7 @@ if stepEnabled "fonts"; then
     target="$fontDir/$(basename -- "$font")"
     fontLabel="$(basename -- "$font")"
     fontLabel="${fontLabel%.*}"
-    if [[ -f "$target" ]] && cmp -s "$font" "$target"; then
+    if filesAreIdentical "$font" "$target"; then
       notePresent "$fontLabel" "installed"
       continue
     fi
@@ -879,10 +925,20 @@ if stepEnabled "npm-globals"; then
     fi
     for packageName in "${missingPackages[@]}"; do
       writeLine " .. " "$colorYellow" "$packageName" "npm install -g"
-      if npm install -g "$packageName" --loglevel=error >/dev/null; then
+      npmInstallLog="$(mktemp "${TMPDIR:-/tmp}/claude-npm-install.XXXXXX")"
+      if npm install -g "$packageName" --loglevel=error >"$npmInstallLog" 2>&1; then
+        rm -f "$npmInstallLog"
         noteInstalled "$packageName" "installed"
         continue
       fi
+      # The tracked list is shared with Windows, where some of these publish a
+      # win32-only package. That is a fact about the package, not a failure.
+      if grep -q "EBADPLATFORM" "$npmInstallLog"; then
+        rm -f "$npmInstallLog"
+        notePresent "$packageName" "not published for this platform"
+        continue
+      fi
+      rm -f "$npmInstallLog"
       noteWarned "$packageName" "npm install failed"
     done
   fi

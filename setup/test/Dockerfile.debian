@@ -1,0 +1,10 @@
+FROM debian:12-slim
+
+# Only the documented prerequisite (git) plus TLS roots and curl, so the suite
+# proves apply.sh installs everything else itself.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV SUITE_MODE=fast
+ENTRYPOINT ["bash", "/suite/suite.sh"]
