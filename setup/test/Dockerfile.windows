@@ -1,6 +1,8 @@
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
-# For hosts that can run Windows containers. Windows 11 Home with a Linux Docker daemon cannot execute this image.
+# For hosts that can run Windows containers: Windows 10/11 Pro or Enterprise with Docker
+# Desktop switched to Windows containers. Windows 11 Home has no Hyper-V and its Docker
+# Desktop only runs Linux containers, so run-windows.ps1 refuses -Mode container there.
 SHELL ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
@@ -8,5 +10,13 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
     Invoke-Expression ((New-Object Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
     choco install -y git nodejs-lts
 
+# Chocolatey writes its PATH additions to the machine registry, which a Windows container
+# process never reads: the process environment comes from the image config alone, so
+# without this git and node are installed but unreachable from the entrypoint.
+ENV PATH="C:\ProgramData\chocolatey\bin;C:\Program Files\Git\cmd;C:\Program Files\nodejs;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0"
+
 ENV SUITE_MODE=fast
+# Anything the suite spawns inherits this, so stray relative writes land in the sandbox
+# mount rather than in the read-only source mount.
+WORKDIR C:\\sandbox
 ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\suite\\suite.ps1"]

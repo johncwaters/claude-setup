@@ -2,7 +2,7 @@ $suiteMode = "fast"
 if ($env:SUITE_MODE) { $suiteMode = $env:SUITE_MODE }
 $originRepo = "C:\origin.git"
 if ($env:CLAUDE_SETUP_TEST_ORIGIN) { $originRepo = $env:CLAUDE_SETUP_TEST_ORIGIN }
-$sourceRepo = "C:\suite\src"
+$sourceRepo = "C:\src"
 if ($env:CLAUDE_SETUP_TEST_SOURCE) { $sourceRepo = $env:CLAUDE_SETUP_TEST_SOURCE }
 $passCount = 0
 $failCount = 0
@@ -286,10 +286,33 @@ Assert-Status "install.ps1 rejects an unknown profile" 1 $installOutput.Status
 Assert-Match "install.ps1 names the valid profiles" "personal" $installOutput.Output
 
 $unknownInstallOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\install.ps1") @("-Nonsense")
-Assert-Status "install.ps1 rejects an unknown flag" 1 $unknownInstallOutput.Status
+Assert-Status "install.ps1 rejects an unknown flag" 2 $unknownInstallOutput.Status
+Assert-Match "install.ps1 names the rejected flag" "unknown option: -Nonsense" $unknownInstallOutput.Output
+
+$installHelpOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\install.ps1") @("-Help")
+Assert-Status "install.ps1 -Help exits clean" 0 $installHelpOutput.Status
+Assert-Match "install.ps1 -Help prints usage" "Usage: setup/install.ps1" $installHelpOutput.Output
+
+# The README shows --help for the shell scripts, and carbon units paste it at the
+# PowerShell ones too, so both spellings have to reach the same usage text.
+$installLongHelpOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\install.ps1") @("--help")
+Assert-Status "install.ps1 --help exits clean" 0 $installLongHelpOutput.Status
+Assert-Match "install.ps1 --help prints usage" "Usage: setup/install.ps1" $installLongHelpOutput.Output
 
 $missingProfileOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\apply.ps1") @("-Profile")
 Assert-Status "apply.ps1 rejects a valueless -Profile" 1 $missingProfileOutput.Status
+
+$unknownApplyOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\apply.ps1") @("-Nonsense")
+Assert-Status "apply.ps1 rejects an unknown flag" 2 $unknownApplyOutput.Status
+Assert-Match "apply.ps1 names the rejected flag" "unknown option: -Nonsense" $unknownApplyOutput.Output
+
+$applyHelpOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\apply.ps1") @("-Help")
+Assert-Status "apply.ps1 -Help exits clean" 0 $applyHelpOutput.Status
+Assert-Match "apply.ps1 -Help prints usage" "Usage: setup/apply.ps1" $applyHelpOutput.Output
+Assert-NoMatch "apply.ps1 -Help applies nothing" "\[ ok \]" $applyHelpOutput.Output
+
+$applyLongHelpOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\apply.ps1") @("--help")
+Assert-Status "apply.ps1 --help exits clean" 0 $applyLongHelpOutput.Status
 
 $nonInteractiveOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\apply.ps1") @("-SkipInstalls")
 Assert-Status "apply.ps1 refuses to guess a profile without a redirected host" 1 $nonInteractiveOutput.Status
@@ -297,6 +320,14 @@ Assert-Match "apply.ps1 says how to supply the profile" "Re-run with -Profile" $
 
 $collectUnknownOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\collect.ps1") @("-Nonsense")
 Assert-Status "collect.ps1 rejects an unknown flag" 2 $collectUnknownOutput.Status
+
+$collectHelpOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\collect.ps1") @("-Help")
+Assert-Status "collect.ps1 -Help exits clean" 0 $collectHelpOutput.Status
+Assert-Match "collect.ps1 -Help prints usage" "Usage: setup/collect.ps1" $collectHelpOutput.Output
+Assert-NoMatch "collect.ps1 -Help collects nothing" "collected:" $collectHelpOutput.Output
+
+$collectLongHelpOutput = Invoke-PowerShellFile (Join-Path $sourceRepo "setup\collect.ps1") @("--help")
+Assert-Status "collect.ps1 --help exits clean" 0 $collectLongHelpOutput.Status
 
 Phase "bootstrap (README one-liner path, personal)"
 

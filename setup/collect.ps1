@@ -1,12 +1,20 @@
 # Collect live machine config into this repo. Run before committing config changes.
-param()
+param([switch]$Help)
 $ErrorActionPreference = "Stop"
 
-# Without a param block a mistyped flag was silently ignored and the full collection
-# ran anyway, unlike collect.sh which rejects it.
+function Write-Usage {
+    Write-Host "Usage: setup/collect.ps1"
+    Write-Host ""
+    Write-Host "Collect live machine config into this repo."
+}
+
+# Without this guard a mistyped flag was silently ignored and the full collection ran
+# anyway, unlike collect.sh which rejects it. --help is accepted alongside -Help because
+# the README documents the same flag for collect.sh.
+if ($Help -or ($args -contains "--help")) { Write-Usage; exit 0 }
 if ($args.Count -gt 0) {
     Write-Host "collect.ps1: unknown option: $($args -join ' ')"
-    Write-Host "Usage: setup/collect.ps1"
+    Write-Usage
     exit 2
 }
 $setupDir = $PSScriptRoot

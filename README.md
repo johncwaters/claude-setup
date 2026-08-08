@@ -119,7 +119,11 @@ powershell -File setup\test\run-windows.ps1                    # config-only, ag
 powershell -File setup\test\run-windows.ps1 -Mode container -Full  # needs a Windows-container host
 ```
 
-The Windows runner redirects `USERPROFILE`, `APPDATA`, and `LOCALAPPDATA` at the child process, and `suite.ps1` refuses to start unless it is pointed at a sandbox under the temp directory, so a host run can never write to the real profile. Install steps are refused in host mode and only run in container mode, which needs a Windows-container capable host (Windows 11 Home cannot run them).
+The Windows runner redirects `USERPROFILE`, `APPDATA`, and `LOCALAPPDATA` at the child process, and `suite.ps1` refuses to start unless it is pointed at a sandbox under the temp directory, so a host run can never write to the real profile. Install steps are refused in host mode and only run in container mode.
+
+Container mode needs Windows 10/11 Pro or Enterprise with Docker Desktop switched to Windows containers (the Home edition ships no Hyper-V and runs Linux containers only). The runner checks the daemon's OS type before doing any work and refuses with that explanation rather than failing later inside the `servercore` pull. Container mode is therefore the one path here that has never been executed: the Linux suites and the Windows host suite are all verified by real runs, `Dockerfile.windows` is reviewed but untested.
+
+Every script takes `--help` (`-Help` on the PowerShell ports) and rejects an unknown flag with exit 2, which the suites assert.
 
 Linux needs Docker plus Git Bash (on Windows) or any Linux shell.
 

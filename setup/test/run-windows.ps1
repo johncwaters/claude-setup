@@ -1,18 +1,54 @@
 param(
     [ValidateSet("host", "container")][string]$Mode = "host",
     [switch]$Full,
-    [switch]$Keep
+    [switch]$Keep,
+    [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
 
 function Write-Usage {
     Write-Host "Usage: setup/test/run-windows.ps1 [-Mode host|container] [-Full] [-Keep]"
+    Write-Host ""
+    Write-Host "Run the Windows acceptance suite against a snapshot of this working tree."
+    Write-Host "Host mode sandboxes the profile directories; container mode needs a Windows-container daemon."
+}
+
+if ($Help -or ($args -contains "--help")) { Write-Usage; exit 0 }
+if ($args.Count -gt 0) {
+    Write-Host "run-windows.ps1: unknown option: $($args -join ' ')"
+    Write-Usage
+    exit 2
+}
+
+# Deliberate refusals go out through stderr directly: Write-Error throws under
+# $ErrorActionPreference = "Stop", which loses the exit code the caller is told to expect.
+function Write-Refusal([string]$message) {
+    [Console]::Error.WriteLine($message)
 }
 
 if ($Full -and $Mode -eq "host") {
-    Write-Error "run-windows.ps1: -Full is refused in host mode; use -Mode container on a Windows-container host."
+    Write-Refusal "run-windows.ps1: -Full is refused in host mode; use -Mode container on a Windows-container host."
     exit 2
+}
+
+# Checked before any snapshot work so an unusable daemon costs nothing.
+if ($Mode -eq "container") {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Write-Refusal "run-windows.ps1: -Mode container needs docker on PATH."
+        exit 2
+    }
+    # A Linux daemon accepts the build and then fails deep inside the servercore pull with
+    # an unrelated-looking manifest error, so name the actual problem up front.
+    $daemonOsType = (docker info --format "{{.OSType}}" 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        Write-Refusal "run-windows.ps1: cannot reach the docker daemon; start Docker Desktop and retry."
+        exit 2
+    }
+    if ($daemonOsType -ne "windows") {
+        Write-Refusal "run-windows.ps1: the docker daemon is in $daemonOsType mode; switch to Windows containers (Docker Desktop tray menu). Windows 11 Home has no Hyper-V and cannot run them."
+        exit 2
+    }
 }
 
 $testDir = $PSScriptRoot
@@ -99,7 +135,12 @@ try {
     git clone -q --bare $sourceSnapshot $originRepo
     if ($LASTEXITCODE -ne 0) { throw "git clone --bare failed" }
 
-    $suiteSnapshot = Join-Path $workDir "suite.ps1"
+    # The copy lives in a directory of its own because Windows containers reject
+    # single-file bind mounts (moby#30555: "source path must be a directory"), so the
+    # container mounts this directory at C:\suite.
+    $suiteDir = Join-Path $workDir "suite"
+    New-Item -ItemType Directory -Force $suiteDir | Out-Null
+    $suiteSnapshot = Join-Path $suiteDir "suite.ps1"
     Copy-Item -LiteralPath (Join-Path $testDir "suite.ps1") -Destination $suiteSnapshot -Force
 
     $sandboxRoot = Join-Path $workDir "sandbox"
@@ -121,7 +162,7 @@ try {
             -e "CLAUDE_SETUP_TEST_SANDBOX=1" `
             -e "CLAUDE_SETUP_TEST_CONTAINER=1" `
             -e "CLAUDE_SETUP_TEST_ORIGIN=C:\origin.git" `
-            -e "CLAUDE_SETUP_TEST_SOURCE=C:\suite\src" `
+            -e "CLAUDE_SETUP_TEST_SOURCE=C:\src" `
             -e "CLAUDE_SETUP_TEST_REAL_USERPROFILE=$env:USERPROFILE" `
             -e "USERPROFILE=C:\sandbox\profile" `
             -e "APPDATA=C:\sandbox\appdata" `
@@ -129,8 +170,8 @@ try {
             -e "TEMP=C:\sandbox" `
             -e "TMP=C:\sandbox" `
             -v "${originRepo}:C:\origin.git:ro" `
-            -v "${sourceSnapshot}:C:\suite\src:ro" `
-            -v "${suiteSnapshot}:C:\suite\suite.ps1:ro" `
+            -v "${sourceSnapshot}:C:\src:ro" `
+            -v "${suiteDir}:C:\suite:ro" `
             -v "${sandboxRoot}:C:\sandbox" `
             $imageTag
         exit $LASTEXITCODE

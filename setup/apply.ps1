@@ -1,6 +1,23 @@
 # Apply repo config to this machine. Run directly or via install.ps1.
-param([switch]$SkipInstalls, [ValidateSet("personal","work")][string]$Profile, [switch]$DryRun)
+param([switch]$SkipInstalls, [ValidateSet("personal","work")][string]$Profile, [switch]$DryRun, [switch]$Help)
 $ErrorActionPreference = "Stop"
+
+function Write-Usage {
+    Write-Host "Usage: setup/apply.ps1 [-SkipInstalls] [-Profile personal|work] [-DryRun]"
+    Write-Host ""
+    Write-Host "Apply repo config to this machine."
+}
+
+# A script param block leaves unbound arguments in $args instead of failing, so without
+# this a mistyped flag would apply the whole profile anyway. --help is accepted alongside
+# -Help because the README documents the same flag for apply.sh.
+if ($Help -or ($args -contains "--help")) { Write-Usage; exit 0 }
+if ($args.Count -gt 0) {
+    Write-Host "apply.ps1: unknown option: $($args -join ' ')"
+    Write-Usage
+    exit 2
+}
+
 $setupDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent $setupDir
 $counts = @{ applied = 0; installed = 0; present = 0; warned = 0 }

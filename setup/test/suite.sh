@@ -188,11 +188,20 @@ assertMatch "install.sh names the valid profiles" "personal or work" "$installOu
 bash /suite/src/setup/install.sh --nonsense >/dev/null 2>&1
 assertStatus "install.sh rejects an unknown flag" 2 $?
 
-bash /suite/src/setup/install.sh --help >/dev/null 2>&1
+installHelpOutput="$(bash /suite/src/setup/install.sh --help 2>&1)"
 assertStatus "install.sh --help exits clean" 0 $?
+assertMatch "install.sh --help prints usage" "Usage: setup/install.sh" "$installHelpOutput"
 
 bash /suite/src/setup/apply.sh --profile >/dev/null 2>&1
 assertStatus "apply.sh rejects a valueless --profile" 2 $?
+
+bash /suite/src/setup/apply.sh --nonsense >/dev/null 2>&1
+assertStatus "apply.sh rejects an unknown flag" 2 $?
+
+applyHelpOutput="$(bash /suite/src/setup/apply.sh --help 2>&1)"
+assertStatus "apply.sh --help exits clean" 0 $?
+assertMatch "apply.sh --help prints usage" "Usage: setup/apply.sh" "$applyHelpOutput"
+assertNoMatch "apply.sh --help applies nothing" "ok ]" "$applyHelpOutput"
 
 nonInteractiveOutput="$(bash /suite/src/setup/apply.sh --skip-installs < /dev/null 2>&1)"
 assertStatus "apply.sh refuses to guess a profile without a tty" 1 $?
@@ -200,6 +209,11 @@ assertMatch "apply.sh says how to supply the profile" "Re-run with --profile" "$
 
 bash /suite/src/setup/collect.sh --nonsense >/dev/null 2>&1
 assertStatus "collect.sh rejects an unknown flag" 2 $?
+
+collectHelpOutput="$(bash /suite/src/setup/collect.sh --help 2>&1)"
+assertStatus "collect.sh --help exits clean" 0 $?
+assertMatch "collect.sh --help prints usage" "Usage: setup/collect.sh" "$collectHelpOutput"
+assertNoMatch "collect.sh --help collects nothing" "collected:" "$collectHelpOutput"
 
 # ---------------------------------------------------------------------------
 phase "bootstrap (README one-liner path, personal)"

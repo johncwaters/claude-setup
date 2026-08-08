@@ -2,10 +2,27 @@
 param(
     [switch]$SkipInstalls,
     [ValidateSet("personal","work")][string]$Profile,
-    [string]$Root = (Join-Path $env:USERPROFILE ".claude")
+    [string]$Root = (Join-Path $env:USERPROFILE ".claude"),
+    [switch]$Help
 )
 $ErrorActionPreference = "Stop"
 $repoUrl = "https://github.com/johncwaters/claude-setup.git"
+
+function Write-Usage {
+    Write-Host "Usage: setup/install.ps1 [-SkipInstalls] [-Profile personal|work] [-Root <dir>]"
+    Write-Host ""
+    Write-Host "Clone or update claude-setup, then apply it."
+}
+
+# A script param block leaves unbound arguments in $args instead of failing, so without
+# this a mistyped flag would bootstrap the machine anyway. --help is accepted alongside
+# -Help because the README documents the same flag for install.sh.
+if ($Help -or ($args -contains "--help")) { Write-Usage; exit 0 }
+if ($args.Count -gt 0) {
+    Write-Host "install.ps1: unknown option: $($args -join ' ')"
+    Write-Usage
+    exit 2
+}
 
 Write-Host ""
 Write-Host "  +--------------------------------------------+" -ForegroundColor Cyan
