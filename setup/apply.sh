@@ -366,7 +366,10 @@ ensureUserNpmPrefix() {
   if npmGlobalRootWritable; then
     return 0
   fi
-  npm config set prefix "$HOME/.npm-global" >/dev/null 2>&1
+  if ! npm config set prefix "$HOME/.npm-global" >/dev/null 2>&1; then
+    noteWarned "npm prefix" "npm config set prefix failed; global installs may hit EACCES"
+    return 0
+  fi
   mkdir -p "$HOME/.npm-global/bin"
   refreshSessionPath
   if [[ ! -f "$HOME/.bashrc" ]] || ! grep -q '\.npm-global/bin' "$HOME/.bashrc"; then
