@@ -136,6 +136,10 @@ installNodeForRender() {
     dnf -y -q install nodejs >/dev/null 2>&1
     return 0
   fi
+  if command -v pacman >/dev/null 2>&1; then
+    pacman -Sy --noconfirm --needed nodejs npm >/dev/null 2>&1
+    return 0
+  fi
 }
 
 assertRenderedSettings() {

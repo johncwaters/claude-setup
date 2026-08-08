@@ -1,0 +1,12 @@
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+# For hosts that can run Windows containers. Windows 11 Home with a Linux Docker daemon cannot execute this image.
+SHELL ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+    Invoke-Expression ((New-Object Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
+    choco install -y git nodejs-lts
+
+ENV SUITE_MODE=fast
+ENTRYPOINT ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\suite\\suite.ps1"]

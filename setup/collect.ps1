@@ -1,5 +1,14 @@
 # Collect live machine config into this repo. Run before committing config changes.
+param()
 $ErrorActionPreference = "Stop"
+
+# Without a param block a mistyped flag was silently ignored and the full collection
+# ran anyway, unlike collect.sh which rejects it.
+if ($args.Count -gt 0) {
+    Write-Host "collect.ps1: unknown option: $($args -join ' ')"
+    Write-Host "Usage: setup/collect.ps1"
+    exit 2
+}
 $setupDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $markerPath = Join-Path $repoRoot ".machine-profile"

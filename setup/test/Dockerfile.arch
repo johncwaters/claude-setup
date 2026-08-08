@@ -1,0 +1,8 @@
+FROM archlinux:base
+
+# Third package manager, so the pacman branch of packageNamesForTool is exercised
+# rather than assumed.
+RUN pacman -Sy --noconfirm --needed git curl && pacman -Scc --noconfirm
+
+ENV SUITE_MODE=fast
+ENTRYPOINT ["bash", "/suite/suite.sh"]
