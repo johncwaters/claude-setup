@@ -425,8 +425,12 @@ installClaudeCode() {
   noteWarned "Claude Code" "not on PATH yet, open a new shell"
 }
 
+isTailscaleAuthed() {
+  tailscale status >/dev/null 2>&1
+}
+
 warnUnlessTailscaleAuthed() {
-  if tailscale status >/dev/null 2>&1; then
+  if isTailscaleAuthed; then
     return 0
   fi
   noteWarned "Tailscale auth" "checklist: run sudo tailscale up once"
@@ -476,7 +480,6 @@ renderGlissaService() {
 }
 
 installGlissaService() {
-  local glissaRepo="$glissaServerRepoDir"
   local serviceTemplate="$setupDir/glissa/glissa.service"
   local systemdUserDir="$HOME/.config/systemd/user"
   local serviceDest="$systemdUserDir/glissa.service"
@@ -538,25 +541,35 @@ installGlissaService() {
   noteWarned "glissa linger" "enable-linger failed"
 }
 
+readGlissaRemotePort() {
+  node -p "String((require(process.argv[1]).remote || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
+}
+
 configureGlissaServe() {
+  local remotePort
   if ! command -v tailscale >/dev/null 2>&1; then
     noteWarned "Tailscale serve" "tailscale not on PATH"
     return 0
   fi
-  if ! tailscale status >/dev/null 2>&1; then
-    noteWarned "Tailscale serve" "checklist: run sudo tailscale up once, then tailscale serve --bg 3001"
+  # Serve must target remote.port (the auth-gated listener), never Glissa's local port:
+  # serving the local port exposes the unauthenticated dashboard to the whole tailnet.
+  remotePort="$(readGlissaRemotePort)" || remotePort=""
+  if [[ ! "$remotePort" =~ ^[0-9]+$ ]]; then
+    noteWarned "Tailscale serve" "could not read remote.port from ~/.glissa/config.json, skipping serve"
     return 0
   fi
-  # 3001 is Glissa's auth-gated remote listener. Serving 3000 exposes the unauthenticated local dashboard.
-  if tailscale serve --bg 3001 >/dev/null 2>&1; then
-    noteApplied "Tailscale serve" "remote port 3001"
+  if ! isTailscaleAuthed; then
+    noteWarned "Tailscale serve" "checklist: run sudo tailscale up once, then tailscale serve --bg $remotePort"
     return 0
   fi
-  noteWarned "Tailscale serve" "serve failed, run: tailscale serve --bg 3001"
+  if tailscale serve --bg "$remotePort" >/dev/null 2>&1; then
+    noteApplied "Tailscale serve" "remote port $remotePort"
+    return 0
+  fi
+  noteWarned "Tailscale serve" "serve failed, run: tailscale serve --bg $remotePort"
 }
 
 installGlissaServer() {
-  local glissaRepo="$glissaServerRepoDir"
   local glissaConfigDir="$HOME/.glissa"
   local glissaConfigDest="$glissaConfigDir/config.json"
   local glissaConfigSrc="$setupDir/glissa/config.server.example.json"
@@ -564,20 +577,20 @@ installGlissaServer() {
     noteWarned "glissa server" "git not on PATH"
     return 0
   fi
-  if [[ ! -e "$glissaRepo" ]]; then
+  if [[ ! -e "$glissaServerRepoDir" ]]; then
     writeLine " .. " "$colorYellow" "glissa server" "cloning"
-    mkdir -p "$(dirname -- "$glissaRepo")"
-    if ! git clone -q https://github.com/johncwaters/glissa.git "$glissaRepo"; then
+    mkdir -p "$(dirname -- "$glissaServerRepoDir")"
+    if ! git clone -q https://github.com/johncwaters/glissa.git "$glissaServerRepoDir"; then
       noteWarned "glissa server" "clone failed"
       return 0
     fi
     noteInstalled "glissa server" "cloned"
   fi
-  if [[ ! -d "$glissaRepo/.git" ]]; then
+  if [[ ! -d "$glissaServerRepoDir/.git" ]]; then
     noteWarned "glissa server" "exists but is not a git repo"
     return 0
   fi
-  if ! git -C "$glissaRepo" pull --ff-only -q; then
+  if ! git -C "$glissaServerRepoDir" pull --ff-only -q; then
     noteWarned "glissa server" "pull failed (dirty or diverged), resolve manually"
     return 0
   fi
@@ -587,13 +600,13 @@ installGlissaServer() {
     return 0
   fi
   writeLine " .. " "$colorYellow" "glissa deps" "npm ci"
-  if ! (cd "$glissaRepo" && npm ci --no-audit --no-fund --loglevel=error >/dev/null); then
+  if ! (cd "$glissaServerRepoDir" && npm ci --no-audit --no-fund --loglevel=error >/dev/null); then
     noteWarned "glissa deps" "npm ci failed"
     return 0
   fi
   notePresent "glissa deps" "installed"
   writeLine " .. " "$colorYellow" "glissa build" "npm run build"
-  if ! (cd "$glissaRepo" && npm run build >/dev/null); then
+  if ! (cd "$glissaServerRepoDir" && npm run build >/dev/null); then
     noteWarned "glissa build" "build failed"
     return 0
   fi

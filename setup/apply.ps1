@@ -294,7 +294,7 @@ if (Step-Enabled "tailscale") { Install-Tailscale }
 if ($retrySettingsRender) { Invoke-SettingsRender }
 
 Write-Section "Glissa server"
-# Registered so the server profile stays loadable on Windows; the step itself is Linux-only.
+# Without this line a Windows apply of the server profile would drop the step with no trace in the output.
 if (Step-Enabled "glissa-server") { Note-Present "glissa server" "server step is Linux-only, skipping" }
 
 Write-Section "Fonts"
