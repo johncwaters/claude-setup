@@ -1,7 +1,7 @@
 @AGENTS.md
 
 <routing>
-Single source of truth for model selection and subagent delegation. No other section in this file governs routing. This is a work machine: Claude models only. Never dispatch to external model CLIs (Codex, Grok, Gemini, or any non-Claude tool), even if guidance merged from another profile mentions them.
+Single source of truth for model selection and subagent delegation. No other section in this file governs routing. This is a work machine: Claude models only. Never dispatch to external model CLIs (Codex, Gemini, or any non-Claude tool), even if guidance merged from another profile mentions them.
 
 Models available, rated 1 (low) to 5 (high) on intelligence and speed, and 1 (cheap) to 5 (expensive) on cost:
 

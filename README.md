@@ -25,7 +25,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
   - `glissa/`: glissa dashboard config
   - `git/`: .gitconfig
   - `terminal/`: Windows Terminal settings
-  - `npm-globals.txt`: global npm tools (glissa, postiz, codex, grok, biome, typescript, ...); `@openai/codex` (Codex CLI) and `@xai-official/grok` (Grok Build CLI) are the external advisors CLAUDE.md routing dispatches directly
+  - `npm-globals.txt`: global npm tools (glissa, postiz, codex, grok, biome, typescript, ...); `@openai/codex` (Codex CLI) is the external advisor CLAUDE.md routing dispatches directly; `@xai-official/grok` (Grok Build CLI) stays installed for manual use only, outside routing
   - `npm-globals-remove.txt`: retired global npm tools; apply uninstalls any of these still present so machines converge (currently oh-my-claude-sisyphus and the community grok CLI)
   - `repos.txt`: project repos referenced by glissa sessions (milepost, glissa, keeplings, card-harbor); apply clones missing ones into `~/Projects`, fast-forwards existing ones, then installs each repo's node deps (npm/pnpm/yarn by lockfile) and heals a missing electron binary
   - `fonts/`: CommitMono (referenced by VSCodium settings)
@@ -105,7 +105,7 @@ Nothing secret syncs through this repo, so log in fresh:
 - [ ] `claude` (first launch prompts for Anthropic login)
 - [ ] `gh auth login` (GitHub CLI; git pushes ride on this via https)
 - [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for Codex routing)
-- [ ] `grok login` (Grok Build CLI; grok.com sign-in, or set `XAI_API_KEY`, needed for Grok research routing)
+- [ ] `grok login` (Grok Build CLI; grok.com sign-in, or set `XAI_API_KEY`; manual use only, not in routing)
 - [ ] `claude mcp add --transport http posthog https://mcp.posthog.com/mcp -s user` (PostHog MCP; OAuth browser login on first use)
 - [ ] VSCodium: re-auth MCP servers (PostHog) on first use
 - [ ] Anything project-specific (.env files) stays per-repo, not here

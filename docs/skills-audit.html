@@ -123,7 +123,6 @@ flowchart LR
   end
   subgraph external["external advisors (direct CLI)"]
     CODEX["codex exec\nChatGPT"]
-    GROK["grok --prompt-file\nresearch default"]
   end
   COMMIT --> ASC --> CR
   CR --> CRA
@@ -135,7 +134,7 @@ flowchart LR
   SEO --> GP["general-purpose agents"]
 </pre>
   </div>
-  <p class="note">Solid = always runs. Dotted = trigger-gated (lane table in code-review SKILL.md is the source of truth). Grok is the research default from CLAUDE.md routing; Codex is the mechanical/PC-control default.</p>
+  <p class="note">Solid = always runs. Dotted = trigger-gated (lane table in code-review SKILL.md is the source of truth). Codex is the mechanical/PC-control default from CLAUDE.md routing.</p>
 </section>
 
 <section>
