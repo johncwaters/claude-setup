@@ -18,7 +18,7 @@ keepWorkDir=0
 
 usage() {
   cat <<'USAGE'
-Usage: setup/test/run-docker.sh [--full] [--distro debian|fedora|arch] [--keep]
+Usage: setup/test/run-docker.sh [--full] [--distro debian|fedora|arch] [--keep] [--help]
 USAGE
 }
 

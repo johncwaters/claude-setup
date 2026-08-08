@@ -8,7 +8,7 @@ root="$HOME/.claude"
 
 usage() {
   cat <<'USAGE'
-Usage: setup/install.sh [--skip-installs] [--profile personal|work] [--root <dir>]
+Usage: setup/install.sh [--skip-installs] [--profile personal|work] [--root <dir>] [--help]
 
 Clone or update claude-setup, then apply it.
 USAGE

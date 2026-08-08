@@ -3,7 +3,7 @@ param([switch]$SkipInstalls, [ValidateSet("personal","work")][string]$Profile, [
 $ErrorActionPreference = "Stop"
 
 function Write-Usage {
-    Write-Host "Usage: setup/apply.ps1 [-SkipInstalls] [-Profile personal|work] [-DryRun]"
+    Write-Host "Usage: setup/apply.ps1 [-SkipInstalls] [-Profile personal|work] [-DryRun] [-Help]"
     Write-Host ""
     Write-Host "Apply repo config to this machine."
 }

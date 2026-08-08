@@ -25,7 +25,7 @@ colorReset=$'\033[0m'
 
 usage() {
   cat <<'USAGE'
-Usage: setup/apply.sh [--skip-installs] [--profile personal|work] [--dry-run]
+Usage: setup/apply.sh [--skip-installs] [--profile personal|work] [--dry-run] [--help]
 
 Apply repo config to this machine.
 USAGE

@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Write-Usage {
-    Write-Host "Usage: setup/test/run-windows.ps1 [-Mode host|container] [-Full] [-Keep]"
+    Write-Host "Usage: setup/test/run-windows.ps1 [-Mode host|container] [-Full] [-Keep] [-Help]"
     Write-Host ""
     Write-Host "Run the Windows acceptance suite against a snapshot of this working tree."
     Write-Host "Host mode sandboxes the profile directories; container mode needs a Windows-container daemon."

@@ -8,7 +8,7 @@ machineProfile="personal"
 
 usage() {
   cat <<'USAGE'
-Usage: setup/collect.sh
+Usage: setup/collect.sh [--help]
 
 Collect live machine config into this repo.
 USAGE

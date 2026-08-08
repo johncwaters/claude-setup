@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $repoUrl = "https://github.com/johncwaters/claude-setup.git"
 
 function Write-Usage {
-    Write-Host "Usage: setup/install.ps1 [-SkipInstalls] [-Profile personal|work] [-Root <dir>]"
+    Write-Host "Usage: setup/install.ps1 [-SkipInstalls] [-Profile personal|work] [-Root <dir>] [-Help]"
     Write-Host ""
     Write-Host "Clone or update claude-setup, then apply it."
 }

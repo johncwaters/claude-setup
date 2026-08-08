@@ -3,7 +3,7 @@ param([switch]$Help)
 $ErrorActionPreference = "Stop"
 
 function Write-Usage {
-    Write-Host "Usage: setup/collect.ps1"
+    Write-Host "Usage: setup/collect.ps1 [-Help]"
     Write-Host ""
     Write-Host "Collect live machine config into this repo."
 }
