@@ -78,6 +78,17 @@ assertDir() {
   fail "$label (missing dir $path)"
 }
 
+assertMinimum() {
+  local label="$1"
+  local minimum="$2"
+  local actual="$3"
+  if [[ "$actual" =~ ^[0-9]+$ ]] && ((actual >= minimum)); then
+    pass "$label"
+    return 0
+  fi
+  fail "$label (expected at least $minimum, got '${actual:-none}')"
+}
+
 assertEquals() {
   local label="$1"
   local expected="$2"
@@ -441,6 +452,7 @@ command -v node >/dev/null 2>&1
 assertOk "installs node" $?
 command -v npm >/dev/null 2>&1
 assertOk "installs npm" $?
+assertMinimum "installs a node the glissa build can run" 20 "$(node -v 2>/dev/null | sed 's/^v//; s/\..*//')"
 assertRenderedSettings "$claudeHome/settings.json"
 assertMatch "reports VSCodium as needing a manual install" "vscodium.com" "$fullOutput"
 assertDir "clones the repo listed in repos.txt" "$HOME/work/clonedrepo/.git"
@@ -450,7 +462,7 @@ assertNoMatch "biome never reports installed and failed together" 'biome +npm in
 
 npmGlobalList="$(npm ls -g --depth=0 --parseable 2>/dev/null)"
 assertMatch "installs the tracked npm globals" "node_modules/typescript" "$npmGlobalList"
-assertMatch "reports a win32-only package as unavailable, not failed" "not published for this platform" "$fullOutput"
+assertMatch "installs glissa from GitHub source" "glissa +npm install -g github:johncwaters/glissa" "$fullOutput"
 assertNoMatch "no npm package is reported as a plain failure" "npm install failed" "$fullOutput"
 
 command -v python3 >/dev/null 2>&1

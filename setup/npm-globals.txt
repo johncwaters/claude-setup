@@ -3,7 +3,7 @@
 @earendil-works/pi-coding-agent
 @openai/codex
 @xai-official/grok
-glissa
+glissa=github:johncwaters/glissa
 postiz
 typescript
 typescript-language-server

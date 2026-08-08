@@ -11,6 +11,10 @@ countsWarned=0
 retrySettingsRender=0
 aptUpdated=0
 detectedPackageManager=""
+minimumNodeMajor=20
+nodeSourceMajor=22
+dpkgLockWaitSeconds=180
+packageInstallLog=""
 scriptStartSeconds="$SECONDS"
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -279,6 +283,60 @@ runPackageManagerCommand() {
   sudo "$@"
 }
 
+# A desktop packagekitd or an unattended-upgrades run holds the dpkg lock for
+# minutes at a time, and apt fails outright rather than waiting for it.
+installSystemPackages() {
+  local manager="$1"
+  shift
+  local outputSink="${packageInstallLog:-/dev/null}"
+  case "$manager" in
+    apt-get)
+      if ((aptUpdated == 0)); then
+        if ! runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" update >>"$outputSink" 2>&1; then
+          return 1
+        fi
+        aptUpdated=1
+      fi
+      runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" install -y "$@" >>"$outputSink" 2>&1
+      return $?
+      ;;
+    dnf)
+      runPackageManagerCommand dnf install -y "$@" >>"$outputSink" 2>&1
+      return $?
+      ;;
+    pacman)
+      runPackageManagerCommand pacman -S --noconfirm --needed "$@" >>"$outputSink" 2>&1
+      return $?
+      ;;
+    zypper)
+      runPackageManagerCommand zypper --non-interactive install "$@" >>"$outputSink" 2>&1
+      return $?
+      ;;
+  esac
+  return 1
+}
+
+# Third-party installers run their own apt-get, so the lock timeout above cannot
+# reach them. Blocking on a lock-taking no-op first hands them a free lock.
+waitForPackageManagerLock() {
+  local manager
+  if ! manager="$(detectPackageManager)"; then
+    return 0
+  fi
+  if [[ "$manager" != "apt-get" ]]; then
+    return 0
+  fi
+  if ! canInstallSystemPackages; then
+    return 0
+  fi
+  runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" check >/dev/null 2>&1 || true
+}
+
+lastLogLine() {
+  local logPath="$1"
+  grep -v '^[[:space:]]*$' "$logPath" 2>/dev/null | tail -n 1 | cut -c1-100
+}
+
 packageNamesForTool() {
   local manager="$1"
   local toolKey="$2"
@@ -319,6 +377,29 @@ pythonHasPip() {
   "$python" -m pip --version >/dev/null 2>&1
 }
 
+nodeMajorVersion() {
+  local versionText
+  if ! versionText="$(node -v 2>/dev/null)"; then
+    return 1
+  fi
+  versionText="${versionText#v}"
+  versionText="${versionText%%.*}"
+  if [[ ! "$versionText" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  printf '%s\n' "$versionText"
+}
+
+# Debian bookworm ships Node 18, which the glissa build (Vite) refuses to run
+# under, so an old node counts as absent rather than as "already installed".
+nodeIsCurrentEnough() {
+  local major
+  if ! major="$(nodeMajorVersion)"; then
+    return 1
+  fi
+  ((major >= minimumNodeMajor))
+}
+
 # python3 usually arrives as a dependency of something else while pip does not,
 # and a python without pip cannot install ruff, which the validate-file hook
 # needs for its Python gate. Treat pip as part of what "python is present" means.
@@ -327,6 +408,10 @@ toolIsPresent() {
   local commandName="$2"
   if [[ "$toolKey" == "python" ]]; then
     pythonHasPip
+    return $?
+  fi
+  if [[ "$toolKey" == "node" ]]; then
+    nodeIsCurrentEnough
     return $?
   fi
   command -v "$commandName" >/dev/null 2>&1
@@ -353,6 +438,10 @@ installPackageTool() {
       noteWarned "$label" "not in default repos, install from https://vscodium.com/#install"
       return 0
     fi
+    if [[ "$toolKey" == "gh" ]]; then
+      noteWarned "$label" "not in this distro's repos, install from https://cli.github.com"
+      return 0
+    fi
     noteWarned "$label" "not available via $manager, install manually"
     return 0
   fi
@@ -361,45 +450,96 @@ installPackageTool() {
     return 0
   fi
   writeLine " .. " "$colorYellow" "$label" "installing via $manager"
-  case "$manager" in
-    apt-get)
-      if ((aptUpdated == 0)); then
-        if ! runPackageManagerCommand apt-get update >/dev/null; then
-          noteWarned "$label" "apt-get update failed"
-          return 0
-        fi
-        aptUpdated=1
-      fi
-      if ! runPackageManagerCommand apt-get install -y "${packageNameArgs[@]}" >/dev/null; then
-        noteWarned "$label" "$manager install failed"
-        return 0
-      fi
-      ;;
-    dnf)
-      if ! runPackageManagerCommand dnf install -y "${packageNameArgs[@]}" >/dev/null; then
-        noteWarned "$label" "$manager install failed"
-        return 0
-      fi
-      ;;
-    pacman)
-      if ! runPackageManagerCommand pacman -S --noconfirm --needed "${packageNameArgs[@]}" >/dev/null; then
-        noteWarned "$label" "$manager install failed"
-        return 0
-      fi
-      ;;
-    zypper)
-      if ! runPackageManagerCommand zypper --non-interactive install "${packageNameArgs[@]}" >/dev/null; then
-        noteWarned "$label" "$manager install failed"
-        return 0
-      fi
-      ;;
-  esac
+  if ! installSystemPackages "$manager" "${packageNameArgs[@]}"; then
+    noteWarned "$label" "$manager install failed"
+    return 0
+  fi
   refreshSessionPath
   if toolIsPresent "$toolKey" "$commandName"; then
     noteInstalled "$label" "installed"
     return 0
   fi
   noteWarned "$label" "installed, but open a new shell for PATH"
+}
+
+nodeSourceSetupUrl() {
+  local manager="$1"
+  if [[ "$manager" == "dnf" ]]; then
+    printf 'https://rpm.nodesource.com/setup_%s.x\n' "$nodeSourceMajor"
+    return 0
+  fi
+  printf 'https://deb.nodesource.com/setup_%s.x\n' "$nodeSourceMajor"
+}
+
+# The NodeSource package provides npm itself and conflicts with the distro npm,
+# which apt will not resolve on its own, so drop that one package and retry.
+installNodeSourcePackage() {
+  local manager="$1"
+  local logPath="$2"
+  if installSystemPackages "$manager" nodejs; then
+    return 0
+  fi
+  if [[ "$manager" != "apt-get" ]]; then
+    return 1
+  fi
+  if ! grep -qi 'conflict' "$logPath"; then
+    return 1
+  fi
+  printf 'retrying without the distro npm package\n' >>"$logPath"
+  if ! runPackageManagerCommand apt-get -o DPkg::Lock::Timeout="$dpkgLockWaitSeconds" remove -y npm >>"$logPath" 2>&1; then
+    return 1
+  fi
+  installSystemPackages "$manager" nodejs
+}
+
+installNodeJs() {
+  local manager
+  local setupLog
+  refreshSessionPath
+  if nodeIsCurrentEnough; then
+    notePresent "Node.js" "already installed"
+    return 0
+  fi
+  if ! manager="$(detectPackageManager)"; then
+    noteWarned "Node.js" "no supported package manager, install manually"
+    return 0
+  fi
+  if [[ "$manager" != "apt-get" && "$manager" != "dnf" ]]; then
+    installPackageTool "Node.js" "node" "node"
+    return 0
+  fi
+  if ! canInstallSystemPackages; then
+    noteWarned "Node.js" "$manager needs root or sudo, install manually"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    noteWarned "Node.js" "curl not on PATH, install manually"
+    return 0
+  fi
+  writeLine " .. " "$colorYellow" "Node.js" "installing Node $nodeSourceMajor from NodeSource"
+  setupLog="$(mktemp "${TMPDIR:-/tmp}/claude-nodesource.XXXXXX")"
+  waitForPackageManagerLock
+  if ! curl -fsSL "$(nodeSourceSetupUrl "$manager")" | runPackageManagerCommand bash - >"$setupLog" 2>&1; then
+    noteWarned "Node.js" "NodeSource setup failed: $(lastLogLine "$setupLog")"
+    rm -f "$setupLog"
+    return 0
+  fi
+  aptUpdated=0
+  packageInstallLog="$setupLog"
+  if ! installNodeSourcePackage "$manager" "$setupLog"; then
+    packageInstallLog=""
+    noteWarned "Node.js" "NodeSource install failed: $(lastLogLine "$setupLog")"
+    rm -f "$setupLog"
+    return 0
+  fi
+  packageInstallLog=""
+  rm -f "$setupLog"
+  refreshSessionPath
+  if nodeIsCurrentEnough; then
+    noteInstalled "Node.js" "Node $(nodeMajorVersion) installed"
+    return 0
+  fi
+  noteWarned "Node.js" "still older than Node $minimumNodeMajor, upgrade manually"
 }
 
 installClaudeCode() {
@@ -413,10 +553,14 @@ installClaudeCode() {
     return 0
   fi
   writeLine " .. " "$colorYellow" "Claude Code" "running native installer"
-  if ! curl -fsSL https://claude.ai/install.sh | bash >/dev/null; then
-    noteWarned "Claude Code" "native installer failed"
+  local installerLog
+  installerLog="$(mktemp "${TMPDIR:-/tmp}/claude-code-install.XXXXXX")"
+  if ! curl -fsSL https://claude.ai/install.sh | bash >"$installerLog" 2>&1; then
+    noteWarned "Claude Code" "native installer failed: $(lastLogLine "$installerLog")"
+    rm -f "$installerLog"
     return 0
   fi
+  rm -f "$installerLog"
   refreshSessionPath
   if command -v claude >/dev/null 2>&1; then
     noteInstalled "Claude Code" "installed"
@@ -448,10 +592,15 @@ installTailscaleLinux() {
     return 0
   fi
   writeLine " .. " "$colorYellow" "Tailscale" "running official installer"
-  if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
-    noteWarned "Tailscale" "official installer failed, install manually"
+  local installerLog
+  installerLog="$(mktemp "${TMPDIR:-/tmp}/claude-tailscale-install.XXXXXX")"
+  waitForPackageManagerLock
+  if ! curl -fsSL https://tailscale.com/install.sh | sh >"$installerLog" 2>&1; then
+    noteWarned "Tailscale" "official installer failed: $(lastLogLine "$installerLog")"
+    rm -f "$installerLog"
     return 0
   fi
+  rm -f "$installerLog"
   refreshSessionPath
   if ! command -v tailscale >/dev/null 2>&1; then
     noteWarned "Tailscale" "installed, but not on PATH yet"
@@ -599,17 +748,22 @@ installGlissaServer() {
     noteWarned "glissa server" "npm not on PATH"
     return 0
   fi
+  local npmLog
+  npmLog="$(mktemp "${TMPDIR:-/tmp}/claude-glissa-npm.XXXXXX")"
   writeLine " .. " "$colorYellow" "glissa deps" "npm ci"
-  if ! (cd "$glissaServerRepoDir" && npm ci --no-audit --no-fund --loglevel=error >/dev/null); then
-    noteWarned "glissa deps" "npm ci failed"
+  if ! (cd "$glissaServerRepoDir" && npm ci --no-audit --no-fund --loglevel=error >"$npmLog" 2>&1); then
+    noteWarned "glissa deps" "npm ci failed: $(lastLogLine "$npmLog")"
+    rm -f "$npmLog"
     return 0
   fi
   notePresent "glissa deps" "installed"
   writeLine " .. " "$colorYellow" "glissa build" "npm run build"
-  if ! (cd "$glissaServerRepoDir" && npm run build >/dev/null); then
-    noteWarned "glissa build" "build failed"
+  if ! (cd "$glissaServerRepoDir" && npm run build >"$npmLog" 2>&1); then
+    noteWarned "glissa build" "build failed: $(lastLogLine "$npmLog")"
+    rm -f "$npmLog"
     return 0
   fi
+  rm -f "$npmLog"
   notePresent "glissa build" "built"
   if [[ -f "$glissaConfigDest" ]]; then
     notePresent "glissa server config" "exists, runtime state kept"
@@ -737,6 +891,24 @@ readPackageList() {
     return 0
   fi
   sed '1s/^\xEF\xBB\xBF//' "$packageFile" | sed '/^[[:space:]]*$/d'
+}
+
+npmPackageName() {
+  local packageEntry="$1"
+  if [[ "$packageEntry" == *=* ]]; then
+    printf '%s\n' "${packageEntry%%=*}"
+    return 0
+  fi
+  printf '%s\n' "$packageEntry"
+}
+
+npmPackageSource() {
+  local packageEntry="$1"
+  if [[ "$packageEntry" == *=* ]]; then
+    printf '%s\n' "${packageEntry#*=}"
+    return 0
+  fi
+  printf '%s\n' "$packageEntry"
 }
 
 listGlobalNpmPackages() {
@@ -964,7 +1136,7 @@ fi
 if stepEnabled "software"; then
   installPackageTool "git" "git" "git"
   installPackageTool "GitHub CLI" "gh" "gh"
-  installPackageTool "Node.js" "node" "node"
+  installNodeJs
   installPackageTool "Python" "python3" "python"
   installPackageTool "VSCodium" "codium" "vscodium"
   installClaudeCode
@@ -1130,7 +1302,8 @@ if stepEnabled "npm-globals"; then
     mapfile -t wantedPackages < <(readPackageList "$npmGlobals")
     mapfile -t installedPackages < <(listGlobalNpmPackages)
     missingPackages=()
-    for packageName in "${wantedPackages[@]}"; do
+    for packageEntry in "${wantedPackages[@]}"; do
+      packageName="$(npmPackageName "$packageEntry")"
       packageFound=0
       for installedPackage in "${installedPackages[@]}"; do
         if [[ "$installedPackage" == "$packageName" ]]; then
@@ -1138,16 +1311,18 @@ if stepEnabled "npm-globals"; then
         fi
       done
       if ((packageFound == 0)); then
-        missingPackages+=("$packageName")
+        missingPackages+=("$packageEntry")
       fi
     done
     if ((${#missingPackages[@]} == 0)); then
       notePresent "packages" "all ${#wantedPackages[@]} present"
     fi
-    for packageName in "${missingPackages[@]}"; do
-      writeLine " .. " "$colorYellow" "$packageName" "npm install -g"
+    for packageEntry in "${missingPackages[@]}"; do
+      packageName="$(npmPackageName "$packageEntry")"
+      packageSource="$(npmPackageSource "$packageEntry")"
+      writeLine " .. " "$colorYellow" "$packageName" "npm install -g $packageSource"
       npmInstallLog="$(mktemp "${TMPDIR:-/tmp}/claude-npm-install.XXXXXX")"
-      if npm install -g "$packageName" --loglevel=error >"$npmInstallLog" 2>&1; then
+      if npm install -g "$packageSource" --loglevel=error >"$npmInstallLog" 2>&1; then
         rm -f "$npmInstallLog"
         noteInstalled "$packageName" "installed"
         continue
