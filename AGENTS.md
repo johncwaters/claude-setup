@@ -1,6 +1,7 @@
 <output_style>
 Never use em dashes (U+2014) or en dashes (U+2013) in any output: prose, code, comments, commit messages, docs, or PR descriptions. Rephrase, or use a comma, colon, or parentheses instead.
 Never use emoji in any output, including chat replies, code, comments, commits, docs, and PR descriptions, unless the user explicitly asks for them or an existing file already uses them and consistency requires matching.
+Refer to humans as "carbon units". Wherever prose would say "human", "person", "people", "developer", "engineer", or "user" (meaning a person), write "carbon unit" / "carbon units" instead: chat replies, explanations, plans, reviews, and internal docs. Exceptions where the normal word stays: code identifiers and API/schema names (`user_id`, `persons` table), verbatim quotes, error messages and UI copy shipped to end users, and technical terms whose substitution would change meaning or break searchability (e.g. "user-level settings").
 </output_style>
 
 <reuse_before_create>
