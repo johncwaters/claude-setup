@@ -82,6 +82,19 @@ function Update-SessionPath {
     $env:Path = $ordered -join ";"
 }
 
+# Run a native command under cmd (which owns the redirects, avoiding PS 5.1's
+# NativeCommandError trap on native stderr), logging output to a temp file.
+function Invoke-LoggedCommand([string]$exe, [string[]]$cmdArgs) {
+    $log = Join-Path $env:TEMP ("claude-cmd-{0}.log" -f ([guid]::NewGuid().ToString("N")))
+    $quotedArgs = ($cmdArgs | ForEach-Object { if ($_ -match "\s") { '"' + $_ + '"' } else { $_ } }) -join " "
+    cmd /c """$exe"" $quotedArgs >""$log"" 2>&1"
+    $ok = $LASTEXITCODE -eq 0
+    $lastLine = ""
+    if (Test-Path $log) { $lastLine = [string](Get-Content $log | Where-Object { $_ } | Select-Object -Last 1) }
+    Remove-Item $log -Force -ErrorAction SilentlyContinue
+    return @{ Ok = $ok; LastLine = $lastLine }
+}
+
 function Copy-Config([string]$label, [string]$src, [string]$dest) {
     if (-not (Test-Path $src)) { Note-Warned $label "not in repo"; return }
     New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
@@ -506,19 +519,10 @@ function Install-RepoDeps([string]$label, [string]$dest) {
         yarn = @("install", "--silent")
     }[$mgr]
     Write-Line " .. " Yellow "$label deps" "$mgr install"
-    $depsLog = Join-Path $env:TEMP ("claude-repo-deps-{0}.log" -f ([guid]::NewGuid().ToString("N")))
     Push-Location $dest
-    cmd /c """$($mgrCmd.Source)"" $($installArgs -join ' ') >""$depsLog"" 2>&1"
-    $installOk = $LASTEXITCODE -eq 0
+    $depsResult = Invoke-LoggedCommand $mgrCmd.Source $installArgs
     Pop-Location
-    if (-not $installOk) {
-        $depsLastLine = ""
-        if (Test-Path $depsLog) { $depsLastLine = (Get-Content $depsLog | Where-Object { $_ } | Select-Object -Last 1) }
-        Remove-Item $depsLog -Force -ErrorAction SilentlyContinue
-        Note-Warned "$label deps" "$mgr install failed: $depsLastLine"
-        return
-    }
-    Remove-Item $depsLog -Force -ErrorAction SilentlyContinue
+    if (-not $depsResult.Ok) { Note-Warned "$label deps" "$mgr install failed: $($depsResult.LastLine)"; return }
     Note-Present "$label deps" "installed"
 
     $electronDir = Join-Path $dest "node_modules\electron"
@@ -617,15 +621,9 @@ if (Step-Enabled "python-tools") {
             cmd /c "python -c ""import $mod"" >nul 2>&1"
             if ($LASTEXITCODE -eq 0) { Note-Present $pkg "already installed"; continue }
             Write-Line " .. " Yellow $pkg "pip install"
-            # cmd owns the redirects here too, same NativeCommandError trap as the probe above
-            $pipLog = Join-Path $env:TEMP ("claude-pip-{0}.log" -f ([guid]::NewGuid().ToString("N")))
-            cmd /c "python -m pip install $pkg --quiet >""$pipLog"" 2>&1"
-            $pipOk = $LASTEXITCODE -eq 0
-            $pipLastLine = ""
-            if (Test-Path $pipLog) { $pipLastLine = (Get-Content $pipLog | Where-Object { $_ } | Select-Object -Last 1) }
-            Remove-Item $pipLog -Force -ErrorAction SilentlyContinue
-            if ($pipOk) { Note-Installed $pkg "installed"; continue }
-            Note-Warned $pkg "pip install failed: $pipLastLine"
+            $pipResult = Invoke-LoggedCommand "python" @("-m", "pip", "install", $pkg, "--quiet")
+            if ($pipResult.Ok) { Note-Installed $pkg "installed"; continue }
+            Note-Warned $pkg "pip install failed: $($pipResult.LastLine)"
         }
     }
 }
