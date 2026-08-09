@@ -298,6 +298,40 @@ commitDoc="$(cat "$claudeHome/commands/commit.md")"
 assertNoMatch "commit.md carries no Windows separators in the runner path" 'compiled-commit\\runner' "$commitDoc"
 assertMatch "commit.md points at the portable runner path" 'compiled-commit/runner\.py' "$commitDoc"
 
+phase "gitconfig prompt"
+
+gitPromptHome="/tmp/gitprompt-home"
+mkdir -p "$gitPromptHome"
+(
+  export HOME="$gitPromptHome"
+  bootstrapCheckout "$gitPromptHome/.claude"
+) >/dev/null 2>&1
+gitPromptRaw="$(mktemp)"
+printf 'Prompt Carbon\nprompt@example.com\n' | HOME="$gitPromptHome" CLAUDE_SETUP_ASSUME_INTERACTIVE=1 bash "$gitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$gitPromptRaw" 2>&1
+gitPromptStatus="${PIPESTATUS[1]}"
+gitPromptOutput="$(stripColor < "$gitPromptRaw")"
+rm -f "$gitPromptRaw"
+assertOk "gitconfig prompt apply completes" "$gitPromptStatus"
+assertFile "gitconfig prompt writes ~/.gitconfig" "$gitPromptHome/.gitconfig"
+assertMatch "gitconfig prompt writes the entered name" "name = Prompt Carbon" "$(cat "$gitPromptHome/.gitconfig" 2>/dev/null)"
+assertMatch "gitconfig prompt writes the entered email" "email = prompt@example.com" "$(cat "$gitPromptHome/.gitconfig" 2>/dev/null)"
+assertNoMatch "gitconfig prompt removes the placeholder header" "Placeholder identity" "$(cat "$gitPromptHome/.gitconfig" 2>/dev/null)"
+
+blankGitPromptHome="/tmp/gitprompt-blank-home"
+mkdir -p "$blankGitPromptHome"
+(
+  export HOME="$blankGitPromptHome"
+  bootstrapCheckout "$blankGitPromptHome/.claude"
+) >/dev/null 2>&1
+blankGitPromptRaw="$(mktemp)"
+printf '\nblank@example.com\n' | HOME="$blankGitPromptHome" CLAUDE_SETUP_ASSUME_INTERACTIVE=1 bash "$blankGitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$blankGitPromptRaw" 2>&1
+blankGitPromptStatus="${PIPESTATUS[1]}"
+blankGitPromptOutput="$(stripColor < "$blankGitPromptRaw")"
+rm -f "$blankGitPromptRaw"
+assertOk "blank gitconfig prompt apply completes" "$blankGitPromptStatus"
+assertNoFile "blank gitconfig prompt writes no ~/.gitconfig" "$blankGitPromptHome/.gitconfig"
+assertMatch "blank gitconfig prompt keeps the placeholder warning" "placeholder identity, edit setup/git/.gitconfig first" "$blankGitPromptOutput"
+
 # ---------------------------------------------------------------------------
 # Full mode installs node through apply.sh itself, so only the fast suite has to
 # put it there by hand to reach the deferred render.

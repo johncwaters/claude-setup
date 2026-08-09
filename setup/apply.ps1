@@ -39,6 +39,25 @@ function Note-Present([string]$label, [string]$note)   { Write-Line " -- " DarkG
 function Note-Warned([string]$label, [string]$note)    { Write-Line "warn" Red      $label $note; $counts.warned++ }
 function Note-Skipped([string]$label) { Write-Line " -- " DarkGray $label "skipped ($Profile profile)" }
 function Step-Enabled([string]$name) { return $steps -contains $name }
+function Can-PromptUser {
+    if ($env:CLAUDE_SETUP_ASSUME_INTERACTIVE -eq "1") { return $true }
+    if (-not [Environment]::UserInteractive) { return $false }
+    if (-not $Host) { return $false }
+    if (-not $Host.UI) { return $false }
+    return $true
+}
+function Prompt-YesNo([string]$question) {
+    if (-not (Can-PromptUser)) { return $false }
+    try {
+        $answer = (Read-Host "$question (y/N)").Trim()
+    } catch {
+        return $false
+    }
+    $normalizedAnswer = $answer.ToLowerInvariant()
+    if ($normalizedAnswer -eq "y") { return $true }
+    if ($normalizedAnswer -eq "yes") { return $true }
+    return $false
+}
 function Get-NpmPackageName([string]$entry) {
     if ($entry -match "=") { return ($entry -split "=", 2)[0] }
     return $entry
@@ -82,6 +101,54 @@ function Install-Tailscale {
     Update-SessionPath
     if (Get-Command tailscale -ErrorAction SilentlyContinue) { Note-Installed "Tailscale" "installed"; return }
     Note-Warned "Tailscale" "installed, but open a new shell for PATH"
+}
+
+function Test-GithubAuthed {
+    cmd /c "gh auth status >NUL 2>NUL"
+    if ($LASTEXITCODE -eq 0) { return $true }
+    return $false
+}
+
+function Ensure-GithubAuth {
+    Update-SessionPath
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return }
+    if (Test-GithubAuthed) { Note-Present "GitHub auth" "logged in"; return }
+    if (Prompt-YesNo "Log in to GitHub now (gh auth login)?") {
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            gh auth login
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if (Test-GithubAuthed) { Note-Applied "GitHub auth" "logged in"; return }
+        Note-Warned "GitHub auth" "gh auth login did not complete, run it again later"
+        return
+    }
+    Note-Warned "GitHub auth" "checklist: run gh auth login"
+}
+
+function Test-TailscaleAuthed {
+    cmd /c "tailscale status >NUL 2>NUL"
+    if ($LASTEXITCODE -eq 0) { return $true }
+    return $false
+}
+
+function Ensure-TailscaleAuth {
+    Update-SessionPath
+    if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) { return }
+    if (Test-TailscaleAuthed) { return }
+    if (Prompt-YesNo "Authenticate Tailscale now (tailscale up)?") {
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            tailscale up
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if (Test-TailscaleAuthed) { Note-Applied "Tailscale auth" "authenticated"; return }
+    }
+    Note-Warned "Tailscale auth" "checklist: run tailscale up once"
 }
 
 # Back up a soon-to-be-overwritten rendered file the first time a machine adopts a
@@ -232,15 +299,47 @@ if (Step-Enabled "glissa") {
 }
 if (-not (Step-Enabled "glissa")) { Note-Skipped "glissa config" }
 if (Step-Enabled "gitconfig") {
-    # The tracked gitconfig ships a placeholder identity so a fresh clone cannot make
-    # someone commit under the repo owner's name. Refuse to install it until it is edited.
     $gitConfigSrc = Join-Path $setupDir "git\.gitconfig"
     $gitConfigIsPlaceholder = $false
     if (Test-Path $gitConfigSrc) {
         $gitConfigText = Get-Content $gitConfigSrc -Raw
         if ($gitConfigText -match "you@example\.com" -or $gitConfigText -match "Your Name") { $gitConfigIsPlaceholder = $true }
     }
-    if ($gitConfigIsPlaceholder) { Note-Warned "gitconfig" "placeholder identity, edit setup/git/.gitconfig first" }
+    if ($gitConfigIsPlaceholder) {
+        $gitCommitName = ""
+        $gitCommitEmail = ""
+        if (Can-PromptUser) {
+            try {
+                $gitCommitName = (Read-Host "Git commit name").Trim()
+                $gitCommitEmail = (Read-Host "Git commit email").Trim()
+            } catch {
+                $gitCommitName = ""
+                $gitCommitEmail = ""
+            }
+        }
+        if ($gitCommitName -and $gitCommitEmail) {
+            $tempGitConfig = Join-Path $env:TEMP ("claude-gitconfig-{0}.tmp" -f ([guid]::NewGuid().ToString("N")))
+            $renderedGitConfig = New-Object System.Collections.Generic.List[string]
+            $isInHeader = $true
+            foreach ($gitConfigLine in (Get-Content $gitConfigSrc)) {
+                if ($isInHeader -and $gitConfigLine.StartsWith("#")) { continue }
+                $isInHeader = $false
+                if ($gitConfigLine -match "^\s*name\s*=\s*Your Name\s*$") {
+                    $renderedGitConfig.Add("`tname = $gitCommitName")
+                    continue
+                }
+                if ($gitConfigLine -match "^\s*email\s*=\s*you@example\.com\s*$") {
+                    $renderedGitConfig.Add("`temail = $gitCommitEmail")
+                    continue
+                }
+                $renderedGitConfig.Add($gitConfigLine)
+            }
+            [System.IO.File]::WriteAllLines($tempGitConfig, $renderedGitConfig)
+            Copy-Config "gitconfig" $tempGitConfig (Join-Path $env:USERPROFILE ".gitconfig")
+            Remove-Item $tempGitConfig -Force -ErrorAction SilentlyContinue
+        }
+        if ((-not $gitCommitName) -or (-not $gitCommitEmail)) { Note-Warned "gitconfig" "placeholder identity, edit setup/git/.gitconfig first" }
+    }
     if (-not $gitConfigIsPlaceholder) {
         Copy-Config "gitconfig"        $gitConfigSrc                                     (Join-Path $env:USERPROFILE ".gitconfig")
     }
@@ -284,6 +383,7 @@ if (-not (Step-Enabled "software")) { Note-Skipped "Tools" }
 if (Step-Enabled "software") {
     Install-WingetTool "git"      "git"    "Git.Git"
     Install-WingetTool "GitHub CLI" "gh"   "GitHub.cli"
+    Ensure-GithubAuth
     Install-WingetTool "Node.js"  "node"   "OpenJS.NodeJS"
     Install-WingetTool "VSCodium" "codium" "VSCodium.VSCodium"
     if (Get-Command claude -ErrorAction SilentlyContinue) { Note-Present "Claude Code" "already installed" }
@@ -297,6 +397,7 @@ if (Step-Enabled "software") {
 }
 if (-not (Step-Enabled "tailscale")) { Note-Skipped "Tailscale" }
 if (Step-Enabled "tailscale") { Install-Tailscale }
+if (Step-Enabled "tailscale") { Ensure-TailscaleAuth }
 
 # node may have just been installed above; retry a settings render that was deferred
 if ($retrySettingsRender) { Invoke-SettingsRender }

@@ -154,7 +154,7 @@ Linux needs Docker plus Git Bash (on Windows) or any Linux shell.
 Nothing secret syncs through this repo, so log in fresh:
 
 - [ ] `claude` (first launch prompts for Anthropic login)
-- [ ] `gh auth login` (GitHub CLI; git pushes ride on this via https)
+- [ ] `gh auth login` (apply offers this interactively after installing GitHub CLI; non-interactive runs still warn)
 - [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for Codex routing)
 - [ ] `grok login` (Grok Build CLI; grok.com sign-in, or set `XAI_API_KEY`; manual use only, not in routing)
 - [ ] `claude mcp add --transport http posthog https://mcp.posthog.com/mcp -s user` (PostHog MCP; OAuth browser login on first use)

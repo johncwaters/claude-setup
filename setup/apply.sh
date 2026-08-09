@@ -145,6 +145,29 @@ refreshSessionPath() {
   hash -r 2>/dev/null || true
 }
 
+canPromptUser() {
+  [[ -t 0 || "${CLAUDE_SETUP_ASSUME_INTERACTIVE:-}" == "1" ]]
+}
+
+promptValue() {
+  local question="$1"
+  local answer=""
+  read -r -p "$question " answer || true
+  answer="${answer#"${answer%%[![:space:]]*}"}"
+  answer="${answer%"${answer##*[![:space:]]}"}"
+  printf '%s\n' "$answer"
+}
+
+promptYesNo() {
+  local question="$1"
+  local answer=""
+  read -r -p "$question (y/N) " answer || return 1
+  answer="${answer#"${answer%%[![:space:]]*}"}"
+  answer="${answer%"${answer##*[![:space:]]}"}"
+  answer="${answer,,}"
+  [[ "$answer" == "y" || "$answer" == "yes" ]]
+}
+
 # cmp lives in diffutils, which minimal images (Fedora, openSUSE) do not ship. A
 # missing cmp used to read as "files differ", so every run rewrote every file.
 # sha256sum is coreutils, so it is present wherever cp and mkdir are.
@@ -656,7 +679,40 @@ warnUnlessTailscaleAuthed() {
   if isTailscaleAuthed; then
     return 0
   fi
+  if canPromptUser && promptYesNo "Authenticate Tailscale now (sudo tailscale up)?"; then
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+      tailscale up || true
+    fi
+    if [[ "${EUID:-$(id -u)}" -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+      sudo tailscale up || true
+    fi
+    if isTailscaleAuthed; then
+      noteApplied "Tailscale auth" "authenticated"
+      return 0
+    fi
+  fi
   noteWarned "Tailscale auth" "checklist: run sudo tailscale up once"
+}
+
+ensureGithubAuth() {
+  refreshSessionPath
+  if ! command -v gh >/dev/null 2>&1; then
+    return 0
+  fi
+  if gh auth status >/dev/null 2>&1; then
+    notePresent "GitHub auth" "logged in"
+    return 0
+  fi
+  if canPromptUser && promptYesNo "Log in to GitHub now (gh auth login)?"; then
+    gh auth login || true
+    if gh auth status >/dev/null 2>&1; then
+      noteApplied "GitHub auth" "logged in"
+      return 0
+    fi
+    noteWarned "GitHub auth" "gh auth login did not complete, run it again later"
+    return 0
+  fi
+  noteWarned "GitHub auth" "checklist: run gh auth login"
 }
 
 installTailscaleLinux() {
@@ -773,6 +829,41 @@ readGlissaRemotePort() {
   node -p "String((require(process.argv[1]).remote || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
 }
 
+readTailscaleDnsName() {
+  if ! command -v tailscale >/dev/null 2>&1; then
+    return 0
+  fi
+  tailscale status --json 2>/dev/null | node -e '
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+const status = JSON.parse(input);
+const dnsName = String((status.Self || {}).DNSName || "").replace(/\.$/, "");
+if (dnsName) process.stdout.write(dnsName);
+' 2>/dev/null || true
+}
+
+setGlissaPublicHost() {
+  local configPath="$1"
+  local host="$2"
+  local tempConfig
+  tempConfig="$(mktemp "$(dirname -- "$configPath")/config.XXXXXX")"
+  if ! node - "$configPath" "$host" "$tempConfig" <<'NODE'; then
+const fs = require("fs");
+const configPath = process.argv[2];
+const host = process.argv[3];
+const tempConfig = process.argv[4];
+const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+config.remote = config.remote || {};
+config.remote.publicHost = host;
+config.remote.allowedOrigins = [`https://${host}`];
+fs.writeFileSync(tempConfig, `${JSON.stringify(config, null, 2)}\n`);
+NODE
+    rm -f "$tempConfig"
+    return 1
+  fi
+  mv -f "$tempConfig" "$configPath"
+}
+
 configureGlissaServe() {
   local remotePort
   if ! command -v tailscale >/dev/null 2>&1; then
@@ -855,6 +946,19 @@ installGlissaServer() {
   fi
   if [[ -f "$glissaConfigDest" ]]; then
     chmod 600 "$glissaConfigDest" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
+  fi
+  if [[ -f "$glissaConfigDest" ]] && grep -q "CHANGEME" "$glissaConfigDest"; then
+    glissaPublicHost=""
+    if isTailscaleAuthed; then
+      glissaPublicHost="$(readTailscaleDnsName)"
+    fi
+    if [[ -z "$glissaPublicHost" ]] && canPromptUser; then
+      glissaPublicHost="$(promptValue "Tailnet hostname for this box (e.g. myhost.tailnet-name.ts.net)")"
+    fi
+    if [[ -n "$glissaPublicHost" ]] && setGlissaPublicHost "$glissaConfigDest" "$glissaPublicHost"; then
+      chmod 600 "$glissaConfigDest" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
+      noteApplied "glissa server config" "publicHost $glissaPublicHost"
+    fi
   fi
   if [[ -f "$glissaConfigDest" ]] && grep -q "CHANGEME" "$glissaConfigDest"; then
     noteWarned "glissa server config" "publicHost/allowedOrigins still say CHANGEME, edit ~/.glissa/config.json before remote access works"
@@ -1158,7 +1262,28 @@ if stepEnabled "gitconfig"; then
     gitConfigIsPlaceholder=1
   fi
   if ((gitConfigIsPlaceholder == 1)); then
-    noteWarned "gitconfig" "placeholder identity, edit setup/git/.gitconfig first"
+    gitCommitName=""
+    gitCommitEmail=""
+    if canPromptUser; then
+      gitCommitName="$(promptValue "Git commit name")"
+      gitCommitEmail="$(promptValue "Git commit email")"
+    fi
+    if [[ -n "$gitCommitName" && -n "$gitCommitEmail" ]]; then
+      tempGitConfig="$(mktemp "${TMPDIR:-/tmp}/claude-gitconfig.XXXXXX")"
+      awk -v gitCommitName="$gitCommitName" -v gitCommitEmail="$gitCommitEmail" '
+        BEGIN { inHeader = 1 }
+        inHeader && /^#/ { next }
+        { inHeader = 0 }
+        /^[[:space:]]*name[[:space:]]*=[[:space:]]*Your Name[[:space:]]*$/ { print "\tname = " gitCommitName; next }
+        /^[[:space:]]*email[[:space:]]*=[[:space:]]*you@example\.com[[:space:]]*$/ { print "\temail = " gitCommitEmail; next }
+        { print }
+      ' "$gitConfigSrc" > "$tempGitConfig"
+      copyConfig "gitconfig" "$tempGitConfig" "$HOME/.gitconfig"
+      rm -f "$tempGitConfig"
+    fi
+    if [[ -z "$gitCommitName" || -z "$gitCommitEmail" ]]; then
+      noteWarned "gitconfig" "placeholder identity, edit setup/git/.gitconfig first"
+    fi
   fi
   if ((gitConfigIsPlaceholder == 0)); then
     copyConfig "gitconfig" "$gitConfigSrc" "$HOME/.gitconfig"
@@ -1215,6 +1340,7 @@ fi
 if stepEnabled "software"; then
   installPackageTool "git" "git" "git"
   installPackageTool "GitHub CLI" "gh" "gh"
+  ensureGithubAuth
   installNodeJs
   installPackageTool "Python" "python3" "python"
   installPackageTool "VSCodium" "codium" "vscodium"
