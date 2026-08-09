@@ -129,6 +129,8 @@ The dashboard scans the projects listed in `~/.glissa/config.json`, so those pat
 
 Append ` nodeps` to a `repos.txt` entry (`Projects\card-harbor=<url> nodeps`) to clone and sync that repo without ever running its dependency install, which is how a headless box opts out of a native build it cannot use, such as an electron app's. The Linux script honors the flag; `apply.ps1` strips it and still installs deps. One repo failing at any stage (clone, pull, branch sync, deps) warns and the loop continues to the next, and `setup/test/suite.sh` pins that.
 
+Apply never creates or pushes a `develop` branch in a repo you do not own. Ownership is the GitHub owner segment of this checkout's own origin (`johncwaters`), and an entry whose origin names anyone else is cloned, pulled, and dep-installed as usual but reports `develop sync skipped (not your repo)`. If that owner cannot be read, every repo is treated as someone else's rather than as yours.
+
 To pair a phone, mint a single-use URL on the server with `node ~/Projects/glissa/bin/glissa.js pair` (apply offers this at the end of the step on an interactive run) and open it on the device over the tailnet HTTPS host. `glissa pair --list` and `glissa pair --revoke <id>` manage the paired devices from there.
 
 All of the above is pinned by `setup/test/suite.sh`: the remote config fill, the drift repair, serve targeting the remote port, unit rendering and restart-on-change, the health probes, and the GitHub-source CLI install each have assertions there, so this section describes checked behavior rather than intent.

@@ -10,6 +10,7 @@ countsPresent=0
 countsWarned=0
 retrySettingsRender=0
 aptUpdated=0
+operatorGitHubOwner=""
 detectedPackageManager=""
 minimumNodeMajor=20
 nodeSourceMajor=22
@@ -1386,6 +1387,19 @@ syncDevelopBranch() {
   local dest="$2"
   local hasLocalDevelopBranch=0
   local hasRemoteDevelopBranch=0
+  local repoOwner
+  # Never create or push a branch in a repo the operator does not own. The develop
+  # first workflow is meaningless on a repo whose main they cannot promote to, and
+  # apply once pushed develop to two repos that merely happened to be clonable.
+  if [[ -z "$operatorGitHubOwner" ]]; then
+    noteWarned "$label develop" "develop sync skipped (cannot tell which GitHub owner is yours)"
+    return 0
+  fi
+  repoOwner="$(parseGitHubOwner "$(git -C "$dest" remote get-url origin 2>/dev/null)")" || repoOwner=""
+  if [[ "$repoOwner" != "$operatorGitHubOwner" ]]; then
+    notePresent "$label develop" "develop sync skipped (not your repo)"
+    return 0
+  fi
   # An empty clone has an unborn HEAD, and "git branch develop" against it exits
   # 128, which used to take the whole apply down with it under set -e.
   if ! git -C "$dest" rev-parse --verify -q HEAD >/dev/null 2>&1; then
@@ -1521,6 +1535,32 @@ installRepoDepsUnlessSkipped() {
     return 0
   fi
   installRepoDeps "$label" "$dest"
+}
+
+parseGitHubOwner() {
+  local url="$1"
+  if [[ "$url" =~ ^https://github\.com/([^/]+)/. ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$url" =~ ^ssh://git@github\.com/([^/]+)/. ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$url" =~ ^git@github\.com:([^/]+)/. ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+# This checkout's own origin is by definition the operator's, so its owner is who we
+# are allowed to push to. Anything unparseable or non-github yields nothing, and the
+# caller treats "nothing" as "own no repos" rather than as "own them all".
+resolveOperatorGitHubOwner() {
+  local originUrl
+  originUrl="$(git -C "$repoRoot" remote get-url origin 2>/dev/null)" || return 1
+  parseGitHubOwner "$originUrl"
 }
 
 # Returns non-zero when this entry did not get through clone or pull. Branch sync
@@ -1974,6 +2014,7 @@ if stepEnabled "repos"; then
     fi
   fi
   if [[ -f "$repoFile" ]] && command -v git >/dev/null 2>&1; then
+    operatorGitHubOwner="$(resolveOperatorGitHubOwner)" || operatorGitHubOwner=""
     # read the list up front: git and npm inherit stdin, and a credential prompt would
     # otherwise swallow the remaining repo lines
     mapfile -t repoLines < "$repoFile"

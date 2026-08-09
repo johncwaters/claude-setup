@@ -935,8 +935,24 @@ exit 0
 STUB
 chmod +x "$reposBin/npm"
 
+# The ownership rule reads "git remote get-url", and a real github url cannot be cloned
+# offline, so ONLY that lookup is faked and everything else is the real git. Ownership
+# follows the directory name: foreign* belongs to someone else, everything else to us.
+cat >"$reposBin/git" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-C" && "${3:-}" == "remote" && "${4:-}" == "get-url" ]]; then
+  case "$(basename -- "$2")" in
+    foreign*) printf 'https://github.com/someoneelse/%s.git\n' "$(basename -- "$2")" ;;
+    *) printf 'https://github.com/testowner/%s.git\n' "$(basename -- "$2")" ;;
+  esac
+  exit 0
+fi
+exec /usr/bin/git "$@"
+STUB
+chmod +x "$reposBin/git"
+
 git init -q --bare "$reposOrigins/emptyrepo.git"
-for reposFixture in faildeps followrepo nodepsrepo badflagrepo; do
+for reposFixture in faildeps followrepo nodepsrepo badflagrepo ownedrepo foreignrepo; do
   git init -q --bare "$reposOrigins/$reposFixture.git"
   git init -q "$reposHome/src-$reposFixture"
   printf '{"name":"%s","version":"1.0.0"}\n' "$reposFixture" > "$reposHome/src-$reposFixture/package.json"
@@ -947,6 +963,8 @@ done
 
 cat >"$reposHome/.claude/setup/repos.txt" <<REPOS
 work/emptyrepo=$reposOrigins/emptyrepo.git
+work/ownedrepo=$reposOrigins/ownedrepo.git
+work/foreignrepo=$reposOrigins/foreignrepo.git
 work/faildeps=$reposOrigins/faildeps.git
 work/nodepsrepo=$reposOrigins/nodepsrepo.git nodeps
 work/badflagrepo=$reposOrigins/badflagrepo.git no-deps
@@ -965,6 +983,40 @@ assertMatch "a nodeps repo reports the skip" "nodepsrepo deps +skipped \(nodeps\
 assertNoMatch "a nodeps repo attempts no install" "nodepsrepo deps +npm install" "$reposOutput"
 assertMatch "an unrecognized flag warns" "badflagrepo +unknown repos.txt flag ignored: no-deps" "$reposOutput"
 assertMatch "an unrecognized flag still installs deps" "badflagrepo deps +npm install failed" "$reposOutput"
+
+# ---------------------------------------------------------------------------
+phase "develop is never pushed to a repo the operator does not own"
+
+# apply once created and pushed develop to two repos the operator merely had access to.
+# "rev-parse --abbrev-ref develop" echoes "develop" even when the branch is missing, so
+# absence is checked with "branch --list", which prints nothing when there is no match.
+assertEquals "an owned repo still gets develop" "develop" "$(git -C "$reposHome/work/ownedrepo" branch --list --format='%(refname:short)' develop)"
+assertMatch "an owned repo reports the push" "ownedrepo develop +created and pushed" "$reposOutput"
+assertMatch "a foreign repo reports the skip" "foreignrepo develop +develop sync skipped \(not your repo\)" "$reposOutput"
+assertEquals "a foreign repo gets no develop branch" "" "$(git -C "$reposHome/work/foreignrepo" branch --list develop)"
+assertDir "a foreign repo is still cloned" "$reposHome/work/foreignrepo/.git"
+
+ownerlessHome="$(mktemp -d)"
+ownerlessOrigins="$ownerlessHome/origins"
+mkdir -p "$ownerlessOrigins"
+(
+  export HOME="$ownerlessHome"
+  bootstrapCheckout "$ownerlessHome/.claude"
+) >/dev/null 2>&1
+printf '%s\n' '{ "steps": ["repos"], "vscodiumExtensionSync": "exact" }' > "$ownerlessHome/.claude/profiles/work/profile.json"
+git init -q --bare "$ownerlessOrigins/plainrepo.git"
+git init -q "$ownerlessHome/src-plainrepo"
+printf 'plain\n' > "$ownerlessHome/src-plainrepo/readme.md"
+git -C "$ownerlessHome/src-plainrepo" add -A
+git -C "$ownerlessHome/src-plainrepo" commit -qm init
+git -C "$ownerlessHome/src-plainrepo" push -q "$ownerlessOrigins/plainrepo.git" master
+printf 'work/plainrepo=%s\n' "$ownerlessOrigins/plainrepo.git" > "$ownerlessHome/.claude/setup/repos.txt"
+
+# This checkout's origin is a local path, so the operator's owner cannot be read.
+ownerlessOutput="$(HOME="$ownerlessHome" bash "$ownerlessHome/.claude/setup/apply.sh" --profile work 2>&1 | stripColor)"
+assertMatch "an unreadable operator owner warns" "plainrepo develop +develop sync skipped \(cannot tell which GitHub owner is yours\)" "$ownerlessOutput"
+assertEquals "an unreadable operator owner creates no develop" "" "$(git -C "$ownerlessHome/work/plainrepo" branch --list develop)"
+assertDir "an unreadable operator owner still clones" "$ownerlessHome/work/plainrepo/.git"
 
 if [[ "$suiteMode" != "full" ]]; then
   printf '\n%s passed, %s failed (fast mode)\n' "$passCount" "$failCount"
@@ -996,7 +1048,9 @@ assertMinimum "installs a node the glissa build can run" 20 "$(node -v 2>/dev/nu
 assertRenderedSettings "$claudeHome/settings.json"
 assertMatch "reports VSCodium as needing a manual install" "vscodium.com" "$fullOutput"
 assertDir "clones the repo listed in repos.txt" "$HOME/work/clonedrepo/.git"
-assertEquals "creates develop in the cloned repo" "develop" "$(git -C "$HOME/work/clonedrepo" rev-parse --abbrev-ref develop 2>/dev/null)"
+# The suite's checkout origin is a local path, so the operator's owner is unreadable
+# and the ownership rule fails safe: clone yes, develop no.
+assertEquals "creates no develop when the owner is unreadable" "" "$(git -C "$HOME/work/clonedrepo" branch --list develop)"
 assertFile "installs the fonts" "$HOME/.local/share/fonts/CommitMono-400-Regular.otf"
 assertNoMatch "biome never reports installed and failed together" 'biome +npm install failed' "$fullOutput"
 

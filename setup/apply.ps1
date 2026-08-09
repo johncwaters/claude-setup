@@ -22,6 +22,7 @@ $setupDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent $setupDir
 $counts = @{ applied = 0; installed = 0; present = 0; warned = 0 }
 $retrySettingsRender = $false
+$operatorGitHubOwner = ""
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
 function Write-Section([string]$title) {
@@ -477,7 +478,32 @@ if (Step-Enabled "biome") {
 }
 
 # glissa requires a develop branch in every project repo
+function Get-GitHubOwner([string]$url) {
+    if ($url -match "^https://github\.com/([^/]+)/.") { return $Matches[1] }
+    if ($url -match "^ssh://git@github\.com/([^/]+)/.") { return $Matches[1] }
+    if ($url -match "^git@github\.com:([^/]+)/.") { return $Matches[1] }
+    return ""
+}
+
+# This checkout's own origin is by definition the operator's, so its owner is who we
+# are allowed to push to. Unparseable or non-github yields "", which means own nothing.
+function Get-OperatorGitHubOwner() {
+    $originUrl = git -C $repoRoot remote get-url origin 2>$null
+    if ($LASTEXITCODE -ne 0) { return "" }
+    return Get-GitHubOwner $originUrl
+}
+
 function Sync-DevelopBranch([string]$label, [string]$dest) {
+    # Never create or push a branch in a repo the operator does not own.
+    if (-not $script:operatorGitHubOwner) {
+        Note-Warned "$label develop" "develop sync skipped (cannot tell which GitHub owner is yours)"
+        return
+    }
+    $repoOwner = Get-GitHubOwner (git -C $dest remote get-url origin 2>$null)
+    if ($repoOwner -ne $script:operatorGitHubOwner) {
+        Note-Present "$label develop" "develop sync skipped (not your repo)"
+        return
+    }
     git -C $dest rev-parse --verify -q refs/heads/develop | Out-Null
     $hasLocal = $LASTEXITCODE -eq 0
     git -C $dest rev-parse --verify -q refs/remotes/origin/develop | Out-Null
@@ -551,6 +577,7 @@ if (Step-Enabled "repos") {
     }
     if (-not (Test-Path $repoFile)) { Note-Warned "repos" "no repos.txt or repos.example.txt" }
     if ((Test-Path $repoFile) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+        $script:operatorGitHubOwner = Get-OperatorGitHubOwner
         foreach ($line in (Get-Content $repoFile | Where-Object { $_ -match "=" -and $_ -notmatch "^\s*#" })) {
             $rel, $url = $line -split "=", 2
             # trailing flags (e.g. "nodeps") are Linux-only; strip them so the url stays clonable here
