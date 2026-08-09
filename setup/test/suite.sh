@@ -678,6 +678,8 @@ if [[ "$suiteMode" != "full" ]]; then
   assertNoMatch "auto-detect removes CHANGEME" "CHANGEME" "$(cat "$autoConfig")"
   assertEquals "auto-detect keeps config private" "600" "$(stat -c %a "$autoConfig")"
   assertEquals "tailscale serve targets remote.port" "serve --bg 3001" "$(cat "$autoServeLog")"
+  assertNoMatch "server profile runs the repos step" "Repos +skipped" "$autoOutput"
+  assertMatch "a server with no repos.txt falls back to the example list" "repos +no repos.txt, using repos.example.txt" "$autoOutput"
 
   autoConfigDigestBefore="$(sha256sum < "$autoConfig" | cut -d' ' -f1)"
   autoRerunOutput="$(TAILSCALE_SERVE_LOG="$autoServeLog" runGlissaServerApply "$autoHome" "$autoBin")"

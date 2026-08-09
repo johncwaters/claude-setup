@@ -42,7 +42,7 @@ Each machine adopts one profile, `personal`, `work`, or `server`, and apply runs
 
 - `personal` runs the full set: workflow config and settings render, VSCodium config, glissa, gitconfig, Codex AGENTS.md, Windows Terminal, software installs, fonts, project repos, npm globals, python tools, and VSCodium extensions.
 - `work` runs a focused set: workflow config and settings render, VSCodium config, fonts, the biome hook dependency, python tools, and VSCodium extensions. It skips all software installs, project repos, npm globals sync, glissa, gitconfig, and Windows Terminal.
-- `server` runs the headless Linux set: workflow config and settings render, gitconfig, Codex AGENTS.md, software installs, Tailscale, Glissa server provisioning (`glissa-server`, see Glissa server below), npm globals, and python tools. It skips desktop-only VSCodium, fonts, terminal styling, and project repo sync. It also skips the `glissa` config-copy step, which is personal only: on a server the config comes from `glissa-server`, which seeds `~/.glissa/config.json` itself and then keeps the runtime state that accumulates there.
+- `server` runs the headless Linux set: workflow config and settings render, gitconfig, Codex AGENTS.md, software installs, Tailscale, Glissa server provisioning (`glissa-server`, see Glissa server below), project repos, npm globals, and python tools. It skips desktop-only VSCodium, fonts, and terminal styling. It also skips the `glissa` config-copy step, which is personal only: on a server the config comes from `glissa-server`, which seeds `~/.glissa/config.json` itself and then keeps the runtime state that accumulates there.
 
 The work profile installs nothing beyond biome and the pip tools, so it assumes git, node, and python are already on the machine. When node is missing, apply warns instead of failing and `settings.json` gets rendered on the next run after node is installed.
 
@@ -124,6 +124,8 @@ The manual equivalent, when you want those four things without the rest of apply
 ```bash
 cd ~/Projects/glissa && git pull --ff-only && npm ci && npm run build && systemctl --user restart glissa
 ```
+
+The dashboard scans the projects listed in `~/.glissa/config.json`, so those paths have to match where the `repos` step puts its clones, which is `~/Projects/<name>` (an entry reads `Projects\glissa=<url>` and the backslashes are translated on Linux). The `repos` step runs on servers, but the list it really wants, `setup/repos.txt`, is gitignored because the clone urls are private, so a fresh box falls back to the tracked `setup/repos.example.txt` and clones glissa alone. Put your own `setup/repos.txt` on the server before expecting the other project repos to arrive; a missing list is a warning, never a failure.
 
 To pair a phone, mint a single-use URL on the server with `node ~/Projects/glissa/bin/glissa.js pair` (apply offers this at the end of the step on an interactive run) and open it on the device over the tailnet HTTPS host. `glissa pair --list` and `glissa pair --revoke <id>` manage the paired devices from there.
 
