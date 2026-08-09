@@ -285,13 +285,64 @@ STUB
   chmod +x "$fixtureBin/tailscale"
 }
 
+installCurlFixture() {
+  local fixtureBin="$1"
+  cat >"$fixtureBin/curl" <<'STUB'
+#!/usr/bin/env bash
+url="${@: -1}"
+printf '%s\n' "$url" >>"${CURL_LOG:-/tmp/curl.log}"
+if [[ -n "${GLISSA_CURL_FAIL_CONTAINS:-}" && "$url" == *"$GLISSA_CURL_FAIL_CONTAINS"* ]]; then
+  exit 7
+fi
+status="${GLISSA_CURL_STATUS:-200}"
+if [[ "$url" == https://* && -n "${GLISSA_CURL_HTTPS_STATUS:-}" ]]; then
+  status="$GLISSA_CURL_HTTPS_STATUS"
+fi
+if [[ "$url" == *":3000/"* && -n "${GLISSA_CURL_LOCAL_STATUS:-}" ]]; then
+  status="$GLISSA_CURL_LOCAL_STATUS"
+fi
+if [[ "$url" == *":3001/"* && -n "${GLISSA_CURL_REMOTE_STATUS:-}" ]]; then
+  status="$GLISSA_CURL_REMOTE_STATUS"
+fi
+printf '%s' "$status"
+STUB
+  chmod +x "$fixtureBin/curl"
+}
+
+installSystemdFixture() {
+  local fixtureBin="$1"
+  cat >"$fixtureBin/systemctl" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${SYSTEMCTL_LOG:-/tmp/systemctl.log}"
+exit 0
+STUB
+  cat >"$fixtureBin/loginctl" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${LOGINCTL_LOG:-/tmp/loginctl.log}"
+if [[ "${1:-}" == "show-user" ]]; then
+  printf 'yes\n'
+fi
+exit 0
+STUB
+  chmod +x "$fixtureBin/systemctl" "$fixtureBin/loginctl"
+  runSuiteRootCommand mkdir -p /run/systemd/system
+}
+
 runGlissaServerApply() {
   local fixtureHome="$1"
   local fixtureBin="$2"
   local promptInput="${CLAUDE_SETUP_TTY_INPUT:-}"
   local serveLog="${TAILSCALE_SERVE_LOG:-}"
+  local curlLog="${CURL_LOG:-}"
+  local curlStatus="${GLISSA_CURL_STATUS:-}"
+  local curlHttpsStatus="${GLISSA_CURL_HTTPS_STATUS:-}"
+  local curlLocalStatus="${GLISSA_CURL_LOCAL_STATUS:-}"
+  local curlRemoteStatus="${GLISSA_CURL_REMOTE_STATUS:-}"
+  local curlFailContains="${GLISSA_CURL_FAIL_CONTAINS:-}"
+  local systemctlLog="${SYSTEMCTL_LOG:-}"
+  local loginctlLog="${LOGINCTL_LOG:-}"
   shift 2
-  HOME="$fixtureHome" GIT_CONFIG_GLOBAL="$fixtureHome/.gitconfig" PATH="$fixtureBin:/usr/bin:/bin" CLAUDE_SETUP_TTY_INPUT="$promptInput" TAILSCALE_SERVE_LOG="$serveLog" bash "$fixtureHome/.claude/setup/apply.sh" --profile server "$@" 2>&1 | stripColor
+  HOME="$fixtureHome" GIT_CONFIG_GLOBAL="$fixtureHome/.gitconfig" PATH="$fixtureBin:/usr/bin:/bin" CLAUDE_SETUP_TTY_INPUT="$promptInput" TAILSCALE_SERVE_LOG="$serveLog" CURL_LOG="$curlLog" GLISSA_CURL_STATUS="$curlStatus" GLISSA_CURL_HTTPS_STATUS="$curlHttpsStatus" GLISSA_CURL_LOCAL_STATUS="$curlLocalStatus" GLISSA_CURL_REMOTE_STATUS="$curlRemoteStatus" GLISSA_CURL_FAIL_CONTAINS="$curlFailContains" SYSTEMCTL_LOG="$systemctlLog" LOGINCTL_LOG="$loginctlLog" bash "$fixtureHome/.claude/setup/apply.sh" --profile server "$@" 2>&1 | stripColor
 }
 
 printf 'suite mode: %s\n' "$suiteMode"
@@ -618,6 +669,7 @@ if [[ "$suiteMode" != "full" ]]; then
   autoServeLog="$autoHome/tailscale-serve.log"
   prepareGlissaServerFixture "$autoHome" "$autoBin"
   installTailscaleFixture "$autoBin" "server.machine.tailnet.ts.net"
+  installCurlFixture "$autoBin"
   autoOutput="$(TAILSCALE_SERVE_LOG="$autoServeLog" runGlissaServerApply "$autoHome" "$autoBin")"
   autoConfig="$autoHome/.glissa/config.json"
   assertMatch "auto-detect reports the public host" "glissa remote config +publicHost server.machine.tailnet.ts.net \(auto-detected\)" "$autoOutput"
@@ -637,11 +689,7 @@ if [[ "$suiteMode" != "full" ]]; then
   manualHome="$(mktemp -d)"
   manualBin="$(mktemp -d)"
   prepareGlissaServerFixture "$manualHome" "$manualBin"
-  cat >"$manualBin/curl" <<'STUB'
-#!/usr/bin/env bash
-exit 1
-STUB
-  chmod +x "$manualBin/curl"
+  installCurlFixture "$manualBin"
   manualOutput="$(runGlissaServerApply "$manualHome" "$manualBin")"
   manualConfig="$manualHome/.glissa/config.json"
   assertMatch "missing tailscale keeps the checklist warning" "publicHost/allowedOrigins still say CHANGEME" "$manualOutput"
@@ -653,6 +701,7 @@ STUB
   disabledServeLog="$disabledHome/tailscale-serve.log"
   prepareGlissaServerFixture "$disabledHome" "$disabledBin"
   installTailscaleFixture "$disabledBin" "disabled.machine.tailnet.ts.net"
+  installCurlFixture "$disabledBin"
   # Every glissa fixture answer file starts with two blank lines: the server
   # profile runs the gitconfig step first, and with GIT_CONFIG_GLOBAL pointed at
   # the fixture's absent ~/.gitconfig its name/email prompts consume two answers
@@ -670,20 +719,43 @@ STUB
   portsAnswers="$portsHome/answers.txt"
   prepareGlissaServerFixture "$portsHome" "$portsBin"
   installTailscaleFixture "$portsBin" "ports.machine.tailnet.ts.net"
-  printf '\n\nY\n2\ncustom.tailnet.ts.net\nabc\n3000\n3000\n3000\n4444\n3000\nn\n' > "$portsAnswers"
+  installCurlFixture "$portsBin"
+  printf '\n\nY\n2\nBoxOfHolding\ncustom.tailnet.ts.net\nabc\n3000\n3000\n3000\n4444\n3000\nn\n' > "$portsAnswers"
   portsOutput="$(CLAUDE_SETUP_TTY_INPUT="$portsAnswers" runGlissaServerApply "$portsHome" "$portsBin")"
   portsConfig="$portsHome/.glissa/config.json"
+  assertMatch "dotless menu hostname is rejected" "pairing and TLS need the full name" "$portsOutput"
   assertMatch "invalid remote port is rejected" "remote port must be 1-65535" "$portsOutput"
   assertMatch "equal ports are rejected" "remote.port must differ from port" "$portsOutput"
   assertEquals "valid remote port is accepted" "4444" "$(jsonField "$portsConfig" 'config.remote.port')"
   assertEquals "valid local port is accepted" "3000" "$(jsonField "$portsConfig" 'config.port')"
   assertEquals "typed hostname is accepted" "custom.tailnet.ts.net" "$(jsonField "$portsConfig" 'config.remote.publicHost')"
 
+  noDetectHostHome="$(mktemp -d)"
+  noDetectHostBin="$(mktemp -d)"
+  noDetectHostAnswers="$noDetectHostHome/answers.txt"
+  prepareGlissaServerFixture "$noDetectHostHome" "$noDetectHostBin"
+  installCurlFixture "$noDetectHostBin"
+  printf '\n\nY\nBoxOfHolding\nbox.tailnet-name.ts.net\n\n\nn\n' > "$noDetectHostAnswers"
+  noDetectHostOutput="$(CLAUDE_SETUP_TTY_INPUT="$noDetectHostAnswers" runGlissaServerApply "$noDetectHostHome" "$noDetectHostBin")"
+  assertMatch "dotless no-detection hostname is rejected" "pairing and TLS need the full name" "$noDetectHostOutput"
+  assertEquals "valid no-detection hostname is accepted" "box.tailnet-name.ts.net" "$(jsonField "$noDetectHostHome/.glissa/config.json" 'config.remote.publicHost')"
+
+  dotlessOnlyHome="$(mktemp -d)"
+  dotlessOnlyBin="$(mktemp -d)"
+  dotlessOnlyAnswers="$dotlessOnlyHome/answers.txt"
+  prepareGlissaServerFixture "$dotlessOnlyHome" "$dotlessOnlyBin"
+  installCurlFixture "$dotlessOnlyBin"
+  printf '\n\nY\nBoxOne\nBoxTwo\nBoxThree\n' > "$dotlessOnlyAnswers"
+  dotlessOnlyOutput="$(CLAUDE_SETUP_TTY_INPUT="$dotlessOnlyAnswers" runGlissaServerApply "$dotlessOnlyHome" "$dotlessOnlyBin")"
+  assertMatch "three dotless hostnames warn about CHANGEME" "publicHost/allowedOrigins still say CHANGEME" "$dotlessOnlyOutput"
+  assertMatch "three dotless hostnames preserve CHANGEME" "CHANGEME" "$(cat "$dotlessOnlyHome/.glissa/config.json")"
+
   wordNoHome="$(mktemp -d)"
   wordNoBin="$(mktemp -d)"
   wordNoAnswers="$wordNoHome/answers.txt"
   prepareGlissaServerFixture "$wordNoHome" "$wordNoBin"
   installTailscaleFixture "$wordNoBin" "wordno.machine.tailnet.ts.net"
+  installCurlFixture "$wordNoBin"
   printf '\n\nno\n' > "$wordNoAnswers"
   wordNoOutput="$(CLAUDE_SETUP_TTY_INPUT="$wordNoAnswers" runGlissaServerApply "$wordNoHome" "$wordNoBin")"
   assertMatch "a typed word no disables remote access" "glissa remote config +remote access disabled" "$wordNoOutput"
@@ -694,6 +766,7 @@ STUB
   badChoiceAnswers="$badChoiceHome/answers.txt"
   prepareGlissaServerFixture "$badChoiceHome" "$badChoiceBin"
   installTailscaleFixture "$badChoiceBin" "badchoice.machine.tailnet.ts.net"
+  installCurlFixture "$badChoiceBin"
   printf '\n\nY\n4\n' > "$badChoiceAnswers"
   badChoiceOutput="$(CLAUDE_SETUP_TTY_INPUT="$badChoiceAnswers" runGlissaServerApply "$badChoiceHome" "$badChoiceBin")"
   badChoiceConfig="$badChoiceHome/.glissa/config.json"
@@ -706,21 +779,132 @@ STUB
   mintAnswers="$mintHome/answers.txt"
   prepareGlissaServerFixture "$mintHome" "$mintBin"
   installTailscaleFixture "$mintBin" "mint.machine.tailnet.ts.net"
+  installCurlFixture "$mintBin"
   printf '\n\nY\n1\n\n\ny\n' > "$mintAnswers"
   mintOutput="$(CLAUDE_SETUP_TTY_INPUT="$mintAnswers" runGlissaServerApply "$mintHome" "$mintBin")"
   assertMatch "minting prints the pairing URL" "https://paired.example/pair" "$mintOutput"
-  assertMatch "minting still reminds about claude login" "glissa checklist +claude login on the box" "$mintOutput"
+  assertMatch "minting without credentials warns about claude login" "claude +run claude login on the box" "$mintOutput"
 
   customPortHome="$(mktemp -d)"
   customPortBin="$(mktemp -d)"
   customPortAnswers="$customPortHome/answers.txt"
   prepareGlissaServerFixture "$customPortHome" "$customPortBin"
   installTailscaleFixture "$customPortBin" "customport.machine.tailnet.ts.net"
+  installCurlFixture "$customPortBin"
   mkdir -p "$customPortHome/.glissa"
   node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 8080; fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2));' "$customPortHome/.claude/setup/glissa/config.server.example.json" "$customPortHome/.glissa/config.json"
   printf '\n\nn\n' > "$customPortAnswers"
   CLAUDE_SETUP_TTY_INPUT="$customPortAnswers" runGlissaServerApply "$customPortHome" "$customPortBin" >/dev/null
   assertEquals "declining remote keeps a customized local port" "8080" "$(jsonField "$customPortHome/.glissa/config.json" 'config.port')"
+
+  driftHome="$(mktemp -d)"
+  driftBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$driftHome" "$driftBin"
+  installTailscaleFixture "$driftBin" "fresh.machine.tailnet.ts.net"
+  installCurlFixture "$driftBin"
+  mkdir -p "$driftHome/.glissa"
+  node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 9090; config.remote.enabled = true; config.remote.port = 9091; config.remote.publicHost = "old.machine.tailnet.ts.net"; config.remote.allowedOrigins = ["https://old.machine.tailnet.ts.net"]; fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2));' "$driftHome/.claude/setup/glissa/config.server.example.json" "$driftHome/.glissa/config.json"
+  driftOutput="$(runGlissaServerApply "$driftHome" "$driftBin")"
+  assertMatch "non-interactive drift warns" "publicHost old.machine.tailnet.ts.net but the tailnet reports fresh.machine.tailnet.ts.net" "$driftOutput"
+  assertEquals "non-interactive drift leaves publicHost untouched" "old.machine.tailnet.ts.net" "$(jsonField "$driftHome/.glissa/config.json" 'config.remote.publicHost')"
+  assertEquals "non-interactive drift leaves origins untouched" '["https://old.machine.tailnet.ts.net"]' "$(jsonField "$driftHome/.glissa/config.json" 'JSON.stringify(config.remote.allowedOrigins)')"
+
+  driftYesHome="$(mktemp -d)"
+  driftYesBin="$(mktemp -d)"
+  driftYesAnswers="$driftYesHome/answers.txt"
+  prepareGlissaServerFixture "$driftYesHome" "$driftYesBin"
+  installTailscaleFixture "$driftYesBin" "new.machine.tailnet.ts.net"
+  installCurlFixture "$driftYesBin"
+  mkdir -p "$driftYesHome/.glissa"
+  node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 9090; config.remote.enabled = true; config.remote.port = 9091; config.remote.publicHost = "old.machine.tailnet.ts.net"; config.remote.allowedOrigins = ["https://old.machine.tailnet.ts.net"]; fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2));' "$driftYesHome/.claude/setup/glissa/config.server.example.json" "$driftYesHome/.glissa/config.json"
+  printf '\n\ny\nn\n' > "$driftYesAnswers"
+  driftYesOutput="$(CLAUDE_SETUP_TTY_INPUT="$driftYesAnswers" runGlissaServerApply "$driftYesHome" "$driftYesBin")"
+  assertMatch "interactive drift repair reports update" "publicHost new.machine.tailnet.ts.net \(tailnet drift repaired\)" "$driftYesOutput"
+  assertEquals "interactive drift rewrites publicHost" "new.machine.tailnet.ts.net" "$(jsonField "$driftYesHome/.glissa/config.json" 'config.remote.publicHost')"
+  assertEquals "interactive drift rewrites origins" '["https://new.machine.tailnet.ts.net"]' "$(jsonField "$driftYesHome/.glissa/config.json" 'JSON.stringify(config.remote.allowedOrigins)')"
+  assertEquals "interactive drift preserves local port" "9090" "$(jsonField "$driftYesHome/.glissa/config.json" 'config.port')"
+  assertEquals "interactive drift preserves remote port" "9091" "$(jsonField "$driftYesHome/.glissa/config.json" 'config.remote.port')"
+
+  # A config rewrite must restart the service even when the unit file is
+  # unchanged: run once to install the unit, reintroduce drift, run again.
+  installSystemdFixture "$driftYesBin"
+  node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 3000; config.remote.port = 3001; fs.writeFileSync(process.argv[1], JSON.stringify(config, null, 2));' "$driftYesHome/.glissa/config.json"
+  driftYesUnitLog="$driftYesHome/systemctl-install.log"
+  printf '\n\nn\n' > "$driftYesAnswers"
+  SYSTEMCTL_LOG="$driftYesUnitLog" GLISSA_CURL_LOCAL_STATUS=200 GLISSA_CURL_REMOTE_STATUS=401 CLAUDE_SETUP_TTY_INPUT="$driftYesAnswers" runGlissaServerApply "$driftYesHome" "$driftYesBin" >/dev/null
+  node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.remote.publicHost = "old.machine.tailnet.ts.net"; config.remote.allowedOrigins = ["https://old.machine.tailnet.ts.net"]; fs.writeFileSync(process.argv[1], JSON.stringify(config, null, 2));' "$driftYesHome/.glissa/config.json"
+  driftYesRestartLog="$driftYesHome/systemctl-rewrite.log"
+  printf '\n\ny\nn\n' > "$driftYesAnswers"
+  driftRestartOutput="$(SYSTEMCTL_LOG="$driftYesRestartLog" GLISSA_CURL_LOCAL_STATUS=200 GLISSA_CURL_REMOTE_STATUS=401 CLAUDE_SETUP_TTY_INPUT="$driftYesAnswers" runGlissaServerApply "$driftYesHome" "$driftYesBin")"
+  assertMatch "unchanged unit is reported up to date" "glissa service +up to date" "$driftRestartOutput"
+  assertMatch "config rewrite restarts the running service" "restart glissa" "$(cat "$driftYesRestartLog" 2>/dev/null)"
+
+  tlsFailHome="$(mktemp -d)"
+  tlsFailBin="$(mktemp -d)"
+  tlsFailServeLog="$tlsFailHome/tailscale-serve.log"
+  prepareGlissaServerFixture "$tlsFailHome" "$tlsFailBin"
+  installTailscaleFixture "$tlsFailBin" "tlsfail.machine.tailnet.ts.net"
+  installCurlFixture "$tlsFailBin"
+  tlsFailOutput="$(TAILSCALE_SERVE_LOG="$tlsFailServeLog" GLISSA_CURL_FAIL_CONTAINS="https://tlsfail.machine.tailnet.ts.net/" runGlissaServerApply "$tlsFailHome" "$tlsFailBin")"
+  assertMatch "https probe failure names tailscale certificate fix" "enable MagicDNS and HTTPS Certificates in the Tailscale admin console" "$tlsFailOutput"
+
+  tlsOkHome="$(mktemp -d)"
+  tlsOkBin="$(mktemp -d)"
+  tlsOkServeLog="$tlsOkHome/tailscale-serve.log"
+  prepareGlissaServerFixture "$tlsOkHome" "$tlsOkBin"
+  installTailscaleFixture "$tlsOkBin" "tlsok.machine.tailnet.ts.net"
+  installCurlFixture "$tlsOkBin"
+  tlsOkOutput="$(TAILSCALE_SERVE_LOG="$tlsOkServeLog" GLISSA_CURL_HTTPS_STATUS=401 runGlissaServerApply "$tlsOkHome" "$tlsOkBin")"
+  assertMatch "https probe accepts 401 as verified TLS" "remote access +TLS verified.*HTTP 401" "$tlsOkOutput"
+
+  servicePathHome="$(mktemp -d)"
+  servicePathBin="$(mktemp -d)"
+  servicePathSystemctlLog="$servicePathHome/systemctl.log"
+  servicePathLoginctlLog="$servicePathHome/loginctl.log"
+  prepareGlissaServerFixture "$servicePathHome" "$servicePathBin"
+  installCurlFixture "$servicePathBin"
+  installSystemdFixture "$servicePathBin"
+  SYSTEMCTL_LOG="$servicePathSystemctlLog" LOGINCTL_LOG="$servicePathLoginctlLog" GLISSA_CURL_LOCAL_STATUS=200 GLISSA_CURL_REMOTE_STATUS=401 runGlissaServerApply "$servicePathHome" "$servicePathBin" >/dev/null
+  assertMatch "rendered unit PATH includes claude stub directory" "Environment=PATH=$servicePathBin:" "$(cat "$servicePathHome/.config/systemd/user/glissa.service")"
+  assertMatch "changed unit restarts glissa" "restart glissa" "$(cat "$servicePathSystemctlLog")"
+
+  claudeLoggedInHome="$(mktemp -d)"
+  claudeLoggedInBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$claudeLoggedInHome" "$claudeLoggedInBin"
+  mkdir -p "$claudeLoggedInHome/.claude"
+  printf '{}\n' > "$claudeLoggedInHome/.claude/.credentials.json"
+  claudeLoggedInOutput="$(runGlissaServerApply "$claudeLoggedInHome" "$claudeLoggedInBin")"
+  assertMatch "claude credentials report logged in" "claude +installed and logged in" "$claudeLoggedInOutput"
+
+  claudeLoginHome="$(mktemp -d)"
+  claudeLoginBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$claudeLoginHome" "$claudeLoginBin"
+  claudeLoginOutput="$(runGlissaServerApply "$claudeLoginHome" "$claudeLoginBin")"
+  assertMatch "missing claude credentials warn to login" "claude +run claude login on the box" "$claudeLoginOutput"
+
+  claudePathHome="$(mktemp -d)"
+  claudePathBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$claudePathHome" "$claudePathBin"
+  installCurlFixture "$claudePathBin"
+  rm -f "$claudePathBin/claude"
+  claudePathOutput="$(runGlissaServerApply "$claudePathHome" "$claudePathBin")"
+  assertMatch "missing claude binary warns with PATH remedy" 'claude +not on PATH, run: export PATH="\$HOME/.local/bin:\$PATH" or re-run apply' "$claudePathOutput"
+
+  healthOkHome="$(mktemp -d)"
+  healthOkBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$healthOkHome" "$healthOkBin"
+  installCurlFixture "$healthOkBin"
+  installSystemdFixture "$healthOkBin"
+  GLISSA_CURL_LOCAL_STATUS=200 GLISSA_CURL_REMOTE_STATUS=401 runGlissaServerApply "$healthOkHome" "$healthOkBin" >/dev/null
+  assertMatch "health probe reports local listener" "glissa health +local listener serving" "$(GLISSA_CURL_LOCAL_STATUS=200 GLISSA_CURL_REMOTE_STATUS=401 runGlissaServerApply "$healthOkHome" "$healthOkBin")"
+
+  healthFailHome="$(mktemp -d)"
+  healthFailBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$healthFailHome" "$healthFailBin"
+  installCurlFixture "$healthFailBin"
+  installSystemdFixture "$healthFailBin"
+  healthFailOutput="$(GLISSA_CURL_FAIL_CONTAINS="127.0.0.1" runGlissaServerApply "$healthFailHome" "$healthFailBin")"
+  assertMatch "health probe failure gives journalctl hint" "journalctl --user -u glissa -n 20" "$healthFailOutput"
 fi
 
 if [[ "$suiteMode" != "full" ]]; then

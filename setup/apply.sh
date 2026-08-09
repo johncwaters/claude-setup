@@ -17,6 +17,8 @@ dpkgLockWaitSeconds=180
 packageInstallLog=""
 scriptStartSeconds="$SECONDS"
 promptInputOpen=0
+glissaRemoteSettingsRewritten=0
+glissaServeStarted=0
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$setupDir/.." && pwd)"
@@ -793,8 +795,17 @@ renderGlissaService() {
   local escapedNode
   local escapedHome
   local escapedPath
+  local claudePath
+  local claudeDir
   escapedNode="$(printf '%s' "$nodePath" | sed 's/[\/&]/\\&/g')"
   escapedHome="$(printf '%s' "$HOME" | sed 's/[\/&]/\\&/g')"
+  if claudePath="$(command -v claude 2>/dev/null)"; then
+    claudeDir="$(dirname -- "$claudePath")"
+    servicePath="$claudeDir:$servicePath"
+  fi
+  if ! command -v claude >/dev/null 2>&1 && [[ -d "$HOME/.local/bin" ]]; then
+    servicePath="$HOME/.local/bin:$servicePath"
+  fi
   escapedPath="$(printf '%s' "$servicePath" | sed 's/[\/&]/\\&/g')"
   sed \
     -e "s/__NODE__/$escapedNode/g" \
@@ -810,6 +821,7 @@ installGlissaService() {
   local nodePath
   local servicePath
   local tempService
+  local didInstallService=0
   if ! command -v systemctl >/dev/null 2>&1; then
     noteWarned "glissa service" "systemctl not on PATH, skipping service"
     return 0
@@ -840,6 +852,7 @@ installGlissaService() {
   if [[ -f "$tempService" ]]; then
     mv -f "$tempService" "$serviceDest"
     noteApplied "glissa service" "installed"
+    didInstallService=1
   fi
   if ! systemctl --user daemon-reload >/dev/null 2>&1; then
     noteWarned "glissa service" "systemctl --user daemon-reload failed"
@@ -849,7 +862,16 @@ installGlissaService() {
     noteWarned "glissa service" "enable/start failed"
     return 0
   fi
+  # A rewritten remote config needs a restart even when the unit is unchanged:
+  # the server reads config.remote only at boot.
+  if ((didInstallService == 1)) || ((glissaRemoteSettingsRewritten == 1)); then
+    if ! systemctl --user restart glissa >/dev/null 2>&1; then
+      noteWarned "glissa service" "restart failed"
+      return 0
+    fi
+  fi
   notePresent "glissa service" "enabled and started"
+  probeGlissaServiceHealth
   if ! command -v loginctl >/dev/null 2>&1; then
     noteWarned "glissa linger" "loginctl not on PATH"
     return 0
@@ -873,8 +895,95 @@ readGlissaLocalPort() {
   node -p "String((require(process.argv[1]) || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
 }
 
+readGlissaPublicHost() {
+  node -p "String(((require(process.argv[1]) || {}).remote || {}).publicHost || '')" "$HOME/.glissa/config.json" 2>/dev/null
+}
+
+readGlissaRemoteEnabled() {
+  node -p "String(((require(process.argv[1]) || {}).remote || {}).enabled !== false)" "$HOME/.glissa/config.json" 2>/dev/null
+}
+
 isGlissaRemoteEnabled() {
   [[ "$(node -p "String((require(process.argv[1]).remote || {}).enabled !== false)" "$HOME/.glissa/config.json" 2>/dev/null)" == "true" ]]
+}
+
+hasDottedGlissaHost() {
+  local publicHost="$1"
+  [[ "$publicHost" == *.* && "$publicHost" != *CHANGEME* ]]
+}
+
+probeHttpStatus() {
+  local url="$1"
+  local status
+  if ! command -v curl >/dev/null 2>&1; then
+    return 2
+  fi
+  status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url")" || return 1
+  printf '%s\n' "$status"
+}
+
+probeGlissaRemoteTls() {
+  local publicHost
+  local httpStatus
+  if ((glissaServeStarted == 0)); then
+    return 0
+  fi
+  publicHost="$(readGlissaPublicHost)"
+  if ! hasDottedGlissaHost "$publicHost"; then
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! httpStatus="$(probeHttpStatus "https://$publicHost/")"; then
+    noteWarned "remote access" "TLS probe failed for https://$publicHost/: enable MagicDNS and HTTPS Certificates in the Tailscale admin console at login.tailscale.com, DNS tab, then re-run"
+    return 0
+  fi
+  if [[ "$httpStatus" =~ ^[234][0-9][0-9]$ ]]; then
+    notePresent "remote access" "TLS verified for https://$publicHost/ (HTTP $httpStatus)"
+    return 0
+  fi
+  noteWarned "remote access" "TLS probe returned HTTP $httpStatus for https://$publicHost/"
+}
+
+probeGlissaLocalHttp() {
+  local label="$1"
+  local url="$2"
+  local expectedStatus="$3"
+  local hint="$4"
+  local attempt
+  local httpStatus
+  for attempt in {1..20}; do
+    if httpStatus="$(probeHttpStatus "$url")"; then
+      if [[ "$httpStatus" == "$expectedStatus" ]]; then
+        notePresent "$label" "$hint"
+        return 0
+      fi
+    fi
+    sleep 0.5
+  done
+  noteWarned "$label" "no expected HTTP $expectedStatus from $url, run: journalctl --user -u glissa -n 20"
+}
+
+probeGlissaServiceHealth() {
+  local localPort
+  local remotePort
+  if ! command -v curl >/dev/null 2>&1; then
+    return 0
+  fi
+  localPort="$(readGlissaLocalPort)"
+  if [[ ! "$localPort" =~ ^[0-9]+$ ]]; then
+    localPort=3000
+  fi
+  probeGlissaLocalHttp "glissa health" "http://127.0.0.1:$localPort/" "200" "local listener serving"
+  if ! isGlissaRemoteEnabled; then
+    return 0
+  fi
+  remotePort="$(readGlissaRemotePort)"
+  if [[ ! "$remotePort" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  probeGlissaLocalHttp "glissa remote health" "http://127.0.0.1:$remotePort/" "401" "remote listener auth-gated"
 }
 
 configureGlissaServe() {
@@ -906,6 +1015,7 @@ configureGlissaServe() {
   fi
   if tailscale serve --bg "$remotePort" >/dev/null 2>&1; then
     noteApplied "Tailscale serve" "remote port $remotePort"
+    glissaServeStarted=1
     return 0
   fi
   noteWarned "Tailscale serve" "serve failed, run: tailscale serve --bg $remotePort"
@@ -913,6 +1023,30 @@ configureGlissaServe() {
 
 warnGlissaRemotePlaceholder() {
   noteWarned "glissa server config" "publicHost/allowedOrigins still say CHANGEME, edit ~/.glissa/config.json before remote access works"
+}
+
+warnGlissaDottedHostRequired() {
+  local typedHost="$1"
+  noteWarned "glissa remote config" "publicHost '$typedHost' is not the full tailnet name; pairing and TLS need the full name, for example host.tailnet-name.ts.net"
+}
+
+promptGlissaDottedHost() {
+  local question="$1"
+  local attempt
+  local typedHost
+  glissaChosenHost=""
+  for attempt in 1 2 3; do
+    typedHost="$(promptValue "$question ")"
+    if [[ -z "$typedHost" ]]; then
+      return 1
+    fi
+    if hasDottedGlissaHost "$typedHost"; then
+      glissaChosenHost="$typedHost"
+      return 0
+    fi
+    warnGlissaDottedHostRequired "$typedHost"
+  done
+  return 1
 }
 
 isValidGlissaPort() {
@@ -1008,6 +1142,53 @@ promptGlissaPorts() {
   noteWarned "glissa remote config" "invalid ports, using defaults"
 }
 
+handleGlissaRemoteDrift() {
+  local configPath="$1"
+  local detectedHost="$2"
+  local configuredHost
+  local configuredHostLower
+  local detectedHostLower
+  local localPort
+  local remotePort
+  local remoteEnabled
+  if [[ -z "$detectedHost" ]]; then
+    notePresent "glissa remote config" "configured"
+    return 0
+  fi
+  configuredHost="$(readGlissaPublicHost)"
+  configuredHostLower="${configuredHost,,}"
+  detectedHostLower="${detectedHost,,}"
+  if [[ -z "$configuredHost" || "$configuredHostLower" == "$detectedHostLower" ]]; then
+    notePresent "glissa remote config" "configured"
+    return 0
+  fi
+  noteWarned "glissa remote config" "publicHost $configuredHost but the tailnet reports $detectedHost"
+  if ! canPromptUser; then
+    return 0
+  fi
+  if ! openPromptInput; then
+    return 0
+  fi
+  if ! promptYesNo "Update glissa publicHost to $detectedHost?"; then
+    return 0
+  fi
+  localPort="$(readGlissaLocalPort)"
+  if [[ ! "$localPort" =~ ^[0-9]+$ ]]; then
+    localPort=3000
+  fi
+  remotePort="$(readGlissaRemotePort)"
+  if [[ ! "$remotePort" =~ ^[0-9]+$ ]]; then
+    remotePort=3001
+  fi
+  remoteEnabled="$(readGlissaRemoteEnabled)"
+  if [[ "$remoteEnabled" != "true" && "$remoteEnabled" != "false" ]]; then
+    remoteEnabled="true"
+  fi
+  writeGlissaRemoteSettings "$configPath" "$remoteEnabled" "$localPort" "$remotePort" "$detectedHost" || return 0
+  glissaRemoteSettingsRewritten=1
+  noteApplied "glissa remote config" "publicHost $detectedHost (tailnet drift repaired)"
+}
+
 configureGlissaRemoteSettings() {
   local configPath="$HOME/.glissa/config.json"
   local detectedHost
@@ -1019,8 +1200,9 @@ configureGlissaRemoteSettings() {
   if [[ ! -f "$configPath" ]]; then
     return 0
   fi
+  detectedHost="$(detectGlissaTailnetHostname)"
   if ! grep -q "CHANGEME" "$configPath"; then
-    notePresent "glissa remote config" "configured"
+    handleGlissaRemoteDrift "$configPath" "$detectedHost"
     return 0
   fi
   # A pre-customized port survives the guided fill: existing config values are
@@ -1033,10 +1215,10 @@ configureGlissaRemoteSettings() {
   if [[ ! "$defaultRemotePort" =~ ^[0-9]+$ ]]; then
     defaultRemotePort=3001
   fi
-  detectedHost="$(detectGlissaTailnetHostname)"
   if ! canPromptUser; then
     if [[ -n "$detectedHost" ]]; then
       writeGlissaRemoteSettings "$configPath" "true" "$defaultLocalPort" "$defaultRemotePort" "$detectedHost" || return 0
+      glissaRemoteSettingsRewritten=1
       noteApplied "glissa remote config" "publicHost $detectedHost (auto-detected)"
       return 0
     fi
@@ -1050,6 +1232,7 @@ configureGlissaRemoteSettings() {
   enableAnswer="$(promptValue "Enable remote access over Tailscale? [Y/n] ")"
   if [[ "$enableAnswer" =~ ^[Nn][Oo]?$ ]]; then
     writeGlissaRemoteSettings "$configPath" "false" "$defaultLocalPort" "$defaultRemotePort" "" || return 0
+    glissaRemoteSettingsRewritten=1
     noteApplied "glissa remote config" "remote access disabled"
     return 0
   fi
@@ -1060,7 +1243,9 @@ configureGlissaRemoteSettings() {
       chosenHost="$detectedHost"
     fi
     if [[ "$hostChoice" == "2" ]]; then
-      chosenHost="$(promptValue "Remote hostname ")"
+      if promptGlissaDottedHost "Remote hostname"; then
+        chosenHost="$glissaChosenHost"
+      fi
     fi
     if [[ "$hostChoice" == "3" ]]; then
       warnGlissaRemotePlaceholder
@@ -1068,7 +1253,9 @@ configureGlissaRemoteSettings() {
     fi
   fi
   if [[ -z "$detectedHost" ]]; then
-    chosenHost="$(promptValue "Remote hostname ")"
+    if promptGlissaDottedHost "Remote hostname"; then
+      chosenHost="$glissaChosenHost"
+    fi
   fi
   # Covers an empty typed hostname and any unrecognized menu choice: the config
   # must never be written enabled with the CHANGEME placeholder still in place.
@@ -1078,6 +1265,7 @@ configureGlissaRemoteSettings() {
   fi
   promptGlissaPorts "$defaultRemotePort" "$defaultLocalPort"
   writeGlissaRemoteSettings "$configPath" "true" "$glissaChosenLocalPort" "$glissaChosenRemotePort" "$chosenHost" || return 0
+  glissaRemoteSettingsRewritten=1
   noteApplied "glissa remote config" "publicHost $chosenHost"
 }
 
@@ -1088,28 +1276,39 @@ glissaPublicHostIsConfigured() {
 offerGlissaPairingUrl() {
   local pairAnswer
   if ! canPromptUser; then
-    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    noteWarned "glissa checklist" "glissa pair per device"
     return 0
   fi
   if ! openPromptInput; then
-    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    noteWarned "glissa checklist" "glissa pair per device"
     return 0
   fi
   if ! glissaPublicHostIsConfigured; then
-    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    noteWarned "glissa checklist" "glissa pair per device"
     return 0
   fi
   pairAnswer="$(promptValue "Mint a pairing URL for your first device now? [y/N] ")"
   if [[ ! "$pairAnswer" =~ ^[Yy]$ ]]; then
-    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    noteWarned "glissa checklist" "glissa pair per device"
     return 0
   fi
   if ! node "$glissaServerRepoDir/bin/glissa.js" pair; then
     noteWarned "glissa pair" "pairing URL mint failed"
-    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    noteWarned "glissa checklist" "glissa pair per device"
     return 0
   fi
-  noteWarned "glissa checklist" "claude login on the box"
+}
+
+checkGlissaClaudeState() {
+  if ! command -v claude >/dev/null 2>&1; then
+    noteWarned "claude" "not on PATH, run: export PATH=\"\$HOME/.local/bin:\$PATH\" or re-run apply"
+    return 0
+  fi
+  if [[ ! -f "$HOME/.claude/.credentials.json" ]]; then
+    noteWarned "claude" "run claude login on the box"
+    return 0
+  fi
+  notePresent "claude" "installed and logged in"
 }
 
 installGlissaServer() {
@@ -1171,9 +1370,13 @@ installGlissaServer() {
   if [[ -f "$glissaConfigDest" ]]; then
     chmod 600 "$glissaConfigDest" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
   fi
+  glissaRemoteSettingsRewritten=0
+  glissaServeStarted=0
   configureGlissaRemoteSettings
   installGlissaService
   configureGlissaServe
+  probeGlissaRemoteTls
+  checkGlissaClaudeState
   offerGlissaPairingUrl
 }
 
