@@ -305,7 +305,19 @@ if (Step-Enabled "gitconfig") {
         $gitConfigText = Get-Content $gitConfigSrc -Raw
         if ($gitConfigText -match "you@example\.com" -or $gitConfigText -match "Your Name") { $gitConfigIsPlaceholder = $true }
     }
-    if ($gitConfigIsPlaceholder) {
+    $gitIdentityName = ""
+    $gitIdentityEmail = ""
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        $gitIdentityName = git config --global user.name
+        $gitIdentityEmail = git config --global user.email
+    }
+    $gitIdentityConfigured = [bool]($gitIdentityName -and $gitIdentityEmail)
+    # A machine whose global git identity is already set is not asked again, and
+    # its ~/.gitconfig is never overwritten from the placeholder template.
+    if ($gitConfigIsPlaceholder -and $gitIdentityConfigured) {
+        Note-Present "gitconfig" "identity already configured"
+    }
+    if ($gitConfigIsPlaceholder -and -not $gitIdentityConfigured) {
         $gitCommitName = ""
         $gitCommitEmail = ""
         if (Can-PromptUser) {

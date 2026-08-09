@@ -16,7 +16,7 @@ nodeSourceMajor=22
 dpkgLockWaitSeconds=180
 packageInstallLog=""
 scriptStartSeconds="$SECONDS"
-glissaPromptInputOpen=0
+promptInputOpen=0
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$setupDir/.." && pwd)"
@@ -147,13 +147,41 @@ refreshSessionPath() {
 }
 
 canPromptUser() {
-  [[ -t 0 || "${CLAUDE_SETUP_ASSUME_INTERACTIVE:-}" == "1" ]]
+  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    return 0
+  fi
+  [[ -r /dev/tty && -t 1 ]]
+}
+
+openPromptInput() {
+  if ((promptInputOpen == 1)); then
+    return 0
+  fi
+  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    # Test-only pty substitute for the container suite.
+    exec 9< "$CLAUDE_SETUP_TTY_INPUT"
+    promptInputOpen=1
+    return 0
+  fi
+  exec 9< /dev/tty
+  promptInputOpen=1
 }
 
 promptValue() {
   local question="$1"
   local answer=""
-  read -r -p "$question " answer || true
+  local renderedPrompt="$question"
+  if [[ ! "$renderedPrompt" =~ [[:space:]]$ ]]; then
+    renderedPrompt="$renderedPrompt "
+  fi
+  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    printf '%s\n' "$renderedPrompt" >&2
+    IFS= read -r answer <&9 || answer=""
+  fi
+  if [[ -z "${CLAUDE_SETUP_TTY_INPUT:-}" || ! -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    printf '%s' "$renderedPrompt" > /dev/tty
+    IFS= read -r answer <&9 || answer=""
+  fi
   answer="${answer#"${answer%%[![:space:]]*}"}"
   answer="${answer%"${answer##*[![:space:]]}"}"
   printf '%s\n' "$answer"
@@ -161,10 +189,8 @@ promptValue() {
 
 promptYesNo() {
   local question="$1"
-  local answer=""
-  read -r -p "$question (y/N) " answer || return 1
-  answer="${answer#"${answer%%[![:space:]]*}"}"
-  answer="${answer%"${answer##*[![:space:]]}"}"
+  local answer
+  answer="$(promptValue "$question (y/N)")"
   answer="${answer,,}"
   [[ "$answer" == "y" || "$answer" == "yes" ]]
 }
@@ -690,7 +716,7 @@ warnUnlessTailscaleAuthed() {
   if isTailscaleAuthed; then
     return 0
   fi
-  if canPromptUser && promptYesNo "Authenticate Tailscale now (sudo tailscale up)?"; then
+  if canPromptUser && openPromptInput && promptYesNo "Authenticate Tailscale now (sudo tailscale up)?"; then
     if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
       tailscale up || true
     fi
@@ -714,7 +740,7 @@ ensureGithubAuth() {
     notePresent "GitHub auth" "logged in"
     return 0
   fi
-  if canPromptUser && promptYesNo "Log in to GitHub now (gh auth login)?"; then
+  if canPromptUser && openPromptInput && promptYesNo "Log in to GitHub now (gh auth login)?"; then
     gh auth login || true
     if gh auth status >/dev/null 2>&1; then
       noteApplied "GitHub auth" "logged in"
@@ -886,41 +912,6 @@ warnGlissaRemotePlaceholder() {
   noteWarned "glissa server config" "publicHost/allowedOrigins still say CHANGEME, edit ~/.glissa/config.json before remote access works"
 }
 
-canPromptGlissaRemoteSettings() {
-  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
-    return 0
-  fi
-  [[ -r /dev/tty && -t 1 ]]
-}
-
-openGlissaPromptInput() {
-  if ((glissaPromptInputOpen == 1)); then
-    return 0
-  fi
-  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
-    # Test-only pty substitute for the container suite.
-    exec 9< "$CLAUDE_SETUP_TTY_INPUT"
-    glissaPromptInputOpen=1
-    return 0
-  fi
-  exec 9< /dev/tty
-  glissaPromptInputOpen=1
-}
-
-readGlissaPrompt() {
-  local prompt="$1"
-  local answer
-  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
-    printf '%s\n' "$prompt" >&2
-    IFS= read -r answer <&9 || answer=""
-    printf '%s' "$answer"
-    return 0
-  fi
-  printf '%s' "$prompt" > /dev/tty
-  IFS= read -r answer <&9 || answer=""
-  printf '%s' "$answer"
-}
-
 isValidGlissaPort() {
   local port="$1"
   if [[ ! "$port" =~ ^[0-9]+$ ]]; then
@@ -987,8 +978,8 @@ promptGlissaPorts() {
   glissaChosenRemotePort="$defaultRemotePort"
   glissaChosenLocalPort="$defaultLocalPort"
   for attempt in 1 2 3; do
-    remoteAnswer="$(readGlissaPrompt "Remote listener port [$defaultRemotePort] ")"
-    localAnswer="$(readGlissaPrompt "Local dashboard port [$defaultLocalPort] ")"
+    remoteAnswer="$(promptValue "Remote listener port [$defaultRemotePort] ")"
+    localAnswer="$(promptValue "Local dashboard port [$defaultLocalPort] ")"
     if [[ -z "$remoteAnswer" ]]; then
       remoteAnswer="$defaultRemotePort"
     fi
@@ -1040,7 +1031,7 @@ configureGlissaRemoteSettings() {
     defaultRemotePort=3001
   fi
   detectedHost="$(detectGlissaTailnetHostname)"
-  if ! canPromptGlissaRemoteSettings; then
+  if ! canPromptUser; then
     if [[ -n "$detectedHost" ]]; then
       writeGlissaRemoteSettings "$configPath" "true" "$defaultLocalPort" "$defaultRemotePort" "$detectedHost" || return 0
       noteApplied "glissa remote config" "publicHost $detectedHost (auto-detected)"
@@ -1049,11 +1040,11 @@ configureGlissaRemoteSettings() {
     warnGlissaRemotePlaceholder
     return 0
   fi
-  if ! openGlissaPromptInput; then
+  if ! openPromptInput; then
     warnGlissaRemotePlaceholder
     return 0
   fi
-  enableAnswer="$(readGlissaPrompt "Enable remote access over Tailscale? [Y/n] ")"
+  enableAnswer="$(promptValue "Enable remote access over Tailscale? [Y/n] ")"
   if [[ "$enableAnswer" =~ ^[Nn][Oo]?$ ]]; then
     writeGlissaRemoteSettings "$configPath" "false" "$defaultLocalPort" "$defaultRemotePort" "" || return 0
     noteApplied "glissa remote config" "remote access disabled"
@@ -1061,12 +1052,12 @@ configureGlissaRemoteSettings() {
   fi
   if [[ -n "$detectedHost" ]]; then
     printf '[1] %s\n[2] type a different hostname\n[3] skip for now\n' "$detectedHost"
-    hostChoice="$(readGlissaPrompt "Remote hostname [1] ")"
+    hostChoice="$(promptValue "Remote hostname [1] ")"
     if [[ -z "$hostChoice" || "$hostChoice" == "1" ]]; then
       chosenHost="$detectedHost"
     fi
     if [[ "$hostChoice" == "2" ]]; then
-      chosenHost="$(readGlissaPrompt "Remote hostname ")"
+      chosenHost="$(promptValue "Remote hostname ")"
     fi
     if [[ "$hostChoice" == "3" ]]; then
       warnGlissaRemotePlaceholder
@@ -1074,7 +1065,7 @@ configureGlissaRemoteSettings() {
     fi
   fi
   if [[ -z "$detectedHost" ]]; then
-    chosenHost="$(readGlissaPrompt "Remote hostname ")"
+    chosenHost="$(promptValue "Remote hostname ")"
   fi
   # Covers an empty typed hostname and any unrecognized menu choice: the config
   # must never be written enabled with the CHANGEME placeholder still in place.
@@ -1093,11 +1084,11 @@ glissaPublicHostIsConfigured() {
 
 offerGlissaPairingUrl() {
   local pairAnswer
-  if ! canPromptGlissaRemoteSettings; then
+  if ! canPromptUser; then
     noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
     return 0
   fi
-  if ! openGlissaPromptInput; then
+  if ! openPromptInput; then
     noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
     return 0
   fi
@@ -1105,7 +1096,7 @@ offerGlissaPairingUrl() {
     noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
     return 0
   fi
-  pairAnswer="$(readGlissaPrompt "Mint a pairing URL for your first device now? [y/N] ")"
+  pairAnswer="$(promptValue "Mint a pairing URL for your first device now? [y/N] ")"
   if [[ ! "$pairAnswer" =~ ^[Yy]$ ]]; then
     noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
     return 0
@@ -1476,10 +1467,25 @@ if stepEnabled "gitconfig"; then
   if [[ -f "$gitConfigSrc" ]] && grep -Eq 'you@example\.com|Your Name' "$gitConfigSrc"; then
     gitConfigIsPlaceholder=1
   fi
-  if ((gitConfigIsPlaceholder == 1)); then
+  gitIdentityName=""
+  gitIdentityEmail=""
+  if command -v git >/dev/null 2>&1; then
+    gitIdentityName="$(git config --global user.name 2>/dev/null || true)"
+    gitIdentityEmail="$(git config --global user.email 2>/dev/null || true)"
+  fi
+  gitIdentityConfigured=0
+  if [[ -n "$gitIdentityName" && -n "$gitIdentityEmail" ]]; then
+    gitIdentityConfigured=1
+  fi
+  # A machine whose global git identity is already set is not asked again, and
+  # its ~/.gitconfig is never overwritten from the placeholder template.
+  if ((gitConfigIsPlaceholder == 1)) && ((gitIdentityConfigured == 1)); then
+    notePresent "gitconfig" "identity already configured"
+  fi
+  if ((gitConfigIsPlaceholder == 1)) && ((gitIdentityConfigured == 0)); then
     gitCommitName=""
     gitCommitEmail=""
-    if canPromptUser; then
+    if canPromptUser && openPromptInput; then
       gitCommitName="$(promptValue "Git commit name")"
       gitCommitEmail="$(promptValue "Git commit email")"
     fi

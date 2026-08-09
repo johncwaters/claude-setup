@@ -291,7 +291,7 @@ runGlissaServerApply() {
   local promptInput="${CLAUDE_SETUP_TTY_INPUT:-}"
   local serveLog="${TAILSCALE_SERVE_LOG:-}"
   shift 2
-  HOME="$fixtureHome" PATH="$fixtureBin:/usr/bin:/bin" CLAUDE_SETUP_TTY_INPUT="$promptInput" TAILSCALE_SERVE_LOG="$serveLog" bash "$fixtureHome/.claude/setup/apply.sh" --profile server "$@" 2>&1 | stripColor
+  HOME="$fixtureHome" GIT_CONFIG_GLOBAL="$fixtureHome/.gitconfig" PATH="$fixtureBin:/usr/bin:/bin" CLAUDE_SETUP_TTY_INPUT="$promptInput" TAILSCALE_SERVE_LOG="$serveLog" bash "$fixtureHome/.claude/setup/apply.sh" --profile server "$@" 2>&1 | stripColor
 }
 
 printf 'suite mode: %s\n' "$suiteMode"
@@ -395,7 +395,9 @@ assertFile "copies VSCodium keybindings" "$HOME/.config/VSCodium/User/keybinding
 assertFile "copies Codex AGENTS.md" "$HOME/.codex/AGENTS.md"
 assertFile "seeds the glissa config" "$HOME/.glissa/config.json"
 assertNoFile "refuses to install the placeholder gitconfig" "$HOME/.gitconfig"
-assertMatch "warns about the placeholder identity" "placeholder identity" "$bootstrapOutput"
+# The suite exports GIT_CONFIG_GLOBAL with its own identity above, so this run
+# legitimately reports the identity as already configured instead of warning.
+assertMatch "reports the suite git identity as configured" "identity already configured" "$bootstrapOutput"
 assertMatch "reports Windows Terminal as not applicable" "not applicable on Linux" "$bootstrapOutput"
 assertMatch "stops before the install steps" "Installs skipped" "$bootstrapOutput"
 assertMatch "defers the settings render until node exists" "node not on PATH, will retry" "$bootstrapOutput"
@@ -414,10 +416,12 @@ mkdir -p "$gitPromptHome"
   bootstrapCheckout "$gitPromptHome/.claude"
 ) >/dev/null 2>&1
 gitPromptRaw="$(mktemp)"
-printf 'Prompt Carbon\nprompt@example.com\n' | HOME="$gitPromptHome" CLAUDE_SETUP_ASSUME_INTERACTIVE=1 bash "$gitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$gitPromptRaw" 2>&1
-gitPromptStatus="${PIPESTATUS[1]}"
+gitPromptAnswers="$(mktemp)"
+printf 'Prompt Carbon\nprompt@example.com\n' > "$gitPromptAnswers"
+HOME="$gitPromptHome" GIT_CONFIG_GLOBAL="$gitPromptHome/.gitconfig" CLAUDE_SETUP_TTY_INPUT="$gitPromptAnswers" bash "$gitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$gitPromptRaw" 2>&1
+gitPromptStatus="$?"
 gitPromptOutput="$(stripColor < "$gitPromptRaw")"
-rm -f "$gitPromptRaw"
+rm -f "$gitPromptRaw" "$gitPromptAnswers"
 assertOk "gitconfig prompt apply completes" "$gitPromptStatus"
 assertFile "gitconfig prompt writes ~/.gitconfig" "$gitPromptHome/.gitconfig"
 assertMatch "gitconfig prompt writes the entered name" "name = Prompt Carbon" "$(cat "$gitPromptHome/.gitconfig" 2>/dev/null)"
@@ -431,13 +435,36 @@ mkdir -p "$blankGitPromptHome"
   bootstrapCheckout "$blankGitPromptHome/.claude"
 ) >/dev/null 2>&1
 blankGitPromptRaw="$(mktemp)"
-printf '\nblank@example.com\n' | HOME="$blankGitPromptHome" CLAUDE_SETUP_ASSUME_INTERACTIVE=1 bash "$blankGitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$blankGitPromptRaw" 2>&1
-blankGitPromptStatus="${PIPESTATUS[1]}"
+blankGitPromptAnswers="$(mktemp)"
+printf '\nblank@example.com\n' > "$blankGitPromptAnswers"
+HOME="$blankGitPromptHome" GIT_CONFIG_GLOBAL="$blankGitPromptHome/.gitconfig" CLAUDE_SETUP_TTY_INPUT="$blankGitPromptAnswers" bash "$blankGitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$blankGitPromptRaw" 2>&1
+blankGitPromptStatus="$?"
 blankGitPromptOutput="$(stripColor < "$blankGitPromptRaw")"
-rm -f "$blankGitPromptRaw"
+rm -f "$blankGitPromptRaw" "$blankGitPromptAnswers"
 assertOk "blank gitconfig prompt apply completes" "$blankGitPromptStatus"
 assertNoFile "blank gitconfig prompt writes no ~/.gitconfig" "$blankGitPromptHome/.gitconfig"
 assertMatch "blank gitconfig prompt keeps the placeholder warning" "placeholder identity, edit setup/git/.gitconfig first" "$blankGitPromptOutput"
+
+configuredGitPromptHome="/tmp/gitprompt-configured-home"
+mkdir -p "$configuredGitPromptHome"
+(
+  export HOME="$configuredGitPromptHome"
+  bootstrapCheckout "$configuredGitPromptHome/.claude"
+) >/dev/null 2>&1
+printf '[user]\n\tname = Existing Carbon\n\temail = existing@example.com\n\t; keep = custom\n' > "$configuredGitPromptHome/.gitconfig"
+configuredGitDigestBefore="$(sha256sum < "$configuredGitPromptHome/.gitconfig" | cut -d' ' -f1)"
+configuredGitPromptRaw="$(mktemp)"
+configuredGitPromptAnswers="$(mktemp)"
+printf 'Should Never\nbe.read@example.com\n' > "$configuredGitPromptAnswers"
+HOME="$configuredGitPromptHome" GIT_CONFIG_GLOBAL="$configuredGitPromptHome/.gitconfig" CLAUDE_SETUP_TTY_INPUT="$configuredGitPromptAnswers" bash "$configuredGitPromptHome/.claude/setup/apply.sh" --skip-installs --profile personal >"$configuredGitPromptRaw" 2>&1
+configuredGitPromptStatus="$?"
+configuredGitPromptOutput="$(stripColor < "$configuredGitPromptRaw")"
+rm -f "$configuredGitPromptRaw" "$configuredGitPromptAnswers"
+configuredGitDigestAfter="$(sha256sum < "$configuredGitPromptHome/.gitconfig" | cut -d' ' -f1)"
+assertOk "configured identity apply completes" "$configuredGitPromptStatus"
+assertMatch "configured identity is reported present" "gitconfig +identity already configured" "$configuredGitPromptOutput"
+assertNoMatch "configured identity is never prompted" "Git commit name" "$configuredGitPromptOutput"
+assertEquals "configured identity leaves ~/.gitconfig untouched" "$configuredGitDigestBefore" "$configuredGitDigestAfter"
 
 # ---------------------------------------------------------------------------
 # Full mode installs node through apply.sh itself, so only the fast suite has to
@@ -626,7 +653,7 @@ STUB
   disabledServeLog="$disabledHome/tailscale-serve.log"
   prepareGlissaServerFixture "$disabledHome" "$disabledBin"
   installTailscaleFixture "$disabledBin" "disabled.machine.tailnet.ts.net"
-  printf 'n\n' > "$disabledAnswers"
+  printf '\n\nn\n' > "$disabledAnswers"
   disabledOutput="$(CLAUDE_SETUP_TTY_INPUT="$disabledAnswers" TAILSCALE_SERVE_LOG="$disabledServeLog" runGlissaServerApply "$disabledHome" "$disabledBin")"
   disabledConfig="$disabledHome/.glissa/config.json"
   assertMatch "disabled remote reports config update" "glissa remote config +remote access disabled" "$disabledOutput"
@@ -639,7 +666,7 @@ STUB
   portsAnswers="$portsHome/answers.txt"
   prepareGlissaServerFixture "$portsHome" "$portsBin"
   installTailscaleFixture "$portsBin" "ports.machine.tailnet.ts.net"
-  printf 'Y\n2\ncustom.tailnet.ts.net\nabc\n3000\n3000\n3000\n4444\n3000\nn\n' > "$portsAnswers"
+  printf '\n\nY\n2\ncustom.tailnet.ts.net\nabc\n3000\n3000\n3000\n4444\n3000\nn\n' > "$portsAnswers"
   portsOutput="$(CLAUDE_SETUP_TTY_INPUT="$portsAnswers" runGlissaServerApply "$portsHome" "$portsBin")"
   portsConfig="$portsHome/.glissa/config.json"
   assertMatch "invalid remote port is rejected" "remote port must be 1-65535" "$portsOutput"
@@ -653,7 +680,7 @@ STUB
   wordNoAnswers="$wordNoHome/answers.txt"
   prepareGlissaServerFixture "$wordNoHome" "$wordNoBin"
   installTailscaleFixture "$wordNoBin" "wordno.machine.tailnet.ts.net"
-  printf 'no\n' > "$wordNoAnswers"
+  printf '\n\nno\n' > "$wordNoAnswers"
   wordNoOutput="$(CLAUDE_SETUP_TTY_INPUT="$wordNoAnswers" runGlissaServerApply "$wordNoHome" "$wordNoBin")"
   assertMatch "a typed word no disables remote access" "glissa remote config +remote access disabled" "$wordNoOutput"
   assertEquals "a typed word no writes enabled false" "false" "$(jsonField "$wordNoHome/.glissa/config.json" 'config.remote.enabled')"
@@ -663,7 +690,7 @@ STUB
   badChoiceAnswers="$badChoiceHome/answers.txt"
   prepareGlissaServerFixture "$badChoiceHome" "$badChoiceBin"
   installTailscaleFixture "$badChoiceBin" "badchoice.machine.tailnet.ts.net"
-  printf 'Y\n4\n' > "$badChoiceAnswers"
+  printf '\n\nY\n4\n' > "$badChoiceAnswers"
   badChoiceOutput="$(CLAUDE_SETUP_TTY_INPUT="$badChoiceAnswers" runGlissaServerApply "$badChoiceHome" "$badChoiceBin")"
   badChoiceConfig="$badChoiceHome/.glissa/config.json"
   assertMatch "an unrecognized hostname choice warns about CHANGEME" "publicHost/allowedOrigins still say CHANGEME" "$badChoiceOutput"
@@ -675,7 +702,7 @@ STUB
   mintAnswers="$mintHome/answers.txt"
   prepareGlissaServerFixture "$mintHome" "$mintBin"
   installTailscaleFixture "$mintBin" "mint.machine.tailnet.ts.net"
-  printf 'Y\n1\n\n\ny\n' > "$mintAnswers"
+  printf '\n\nY\n1\n\n\ny\n' > "$mintAnswers"
   mintOutput="$(CLAUDE_SETUP_TTY_INPUT="$mintAnswers" runGlissaServerApply "$mintHome" "$mintBin")"
   assertMatch "minting prints the pairing URL" "https://paired.example/pair" "$mintOutput"
   assertMatch "minting still reminds about claude login" "glissa checklist +claude login on the box" "$mintOutput"
@@ -687,7 +714,7 @@ STUB
   installTailscaleFixture "$customPortBin" "customport.machine.tailnet.ts.net"
   mkdir -p "$customPortHome/.glissa"
   node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 8080; fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2));' "$customPortHome/.claude/setup/glissa/config.server.example.json" "$customPortHome/.glissa/config.json"
-  printf 'n\n' > "$customPortAnswers"
+  printf '\n\nn\n' > "$customPortAnswers"
   CLAUDE_SETUP_TTY_INPUT="$customPortAnswers" runGlissaServerApply "$customPortHome" "$customPortBin" >/dev/null
   assertEquals "declining remote keeps a customized local port" "8080" "$(jsonField "$customPortHome/.glissa/config.json" 'config.port')"
 fi
