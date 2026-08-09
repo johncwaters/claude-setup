@@ -909,6 +909,63 @@ if [[ "$suiteMode" != "full" ]]; then
   assertMatch "health probe failure gives journalctl hint" "journalctl --user -u glissa -n 20" "$healthFailOutput"
 fi
 
+# ---------------------------------------------------------------------------
+phase "repos loop survives a bad repo"
+
+# A production apply died here: an unborn HEAD made "git branch develop" exit 128
+# under set -e, so every repo after it was silently never cloned.
+reposHome="$(mktemp -d)"
+reposBin="$(mktemp -d)"
+reposOrigins="$reposHome/origins"
+mkdir -p "$reposOrigins"
+(
+  export HOME="$reposHome"
+  bootstrapCheckout "$reposHome/.claude"
+) >/dev/null 2>&1
+printf '%s\n' '{ "steps": ["repos"], "vscodiumExtensionSync": "exact" }' > "$reposHome/.claude/profiles/work/profile.json"
+
+# Deterministic failing install, so the assertion does not depend on the image's npm.
+cat >"$reposBin/npm" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "install" ]]; then
+  printf 'gyp ERR! build error: native module failed to compile\n' >&2
+  exit 1
+fi
+exit 0
+STUB
+chmod +x "$reposBin/npm"
+
+git init -q --bare "$reposOrigins/emptyrepo.git"
+for reposFixture in faildeps followrepo nodepsrepo badflagrepo; do
+  git init -q --bare "$reposOrigins/$reposFixture.git"
+  git init -q "$reposHome/src-$reposFixture"
+  printf '{"name":"%s","version":"1.0.0"}\n' "$reposFixture" > "$reposHome/src-$reposFixture/package.json"
+  git -C "$reposHome/src-$reposFixture" add -A
+  git -C "$reposHome/src-$reposFixture" commit -qm init
+  git -C "$reposHome/src-$reposFixture" push -q "$reposOrigins/$reposFixture.git" master
+done
+
+cat >"$reposHome/.claude/setup/repos.txt" <<REPOS
+work/emptyrepo=$reposOrigins/emptyrepo.git
+work/faildeps=$reposOrigins/faildeps.git
+work/nodepsrepo=$reposOrigins/nodepsrepo.git nodeps
+work/badflagrepo=$reposOrigins/badflagrepo.git no-deps
+work/followrepo=$reposOrigins/followrepo.git
+REPOS
+
+reposOutput="$(HOME="$reposHome" PATH="$reposBin:$PATH" bash "$reposHome/.claude/setup/apply.sh" --profile work 2>&1 | stripColor)"
+reposStatus="${PIPESTATUS[0]}"
+assertOk "a bad repo does not abort apply" "$reposStatus"
+assertMatch "an empty clone warns instead of dying" "emptyrepo develop +no commits yet" "$reposOutput"
+assertMatch "a failing deps install warns" "faildeps deps +npm install failed" "$reposOutput"
+assertDir "a repo listed after the failures is still cloned" "$reposHome/work/followrepo/.git"
+assertMatch "the run still prints its summary" "Done in" "$reposOutput"
+assertDir "a nodeps repo is still cloned" "$reposHome/work/nodepsrepo/.git"
+assertMatch "a nodeps repo reports the skip" "nodepsrepo deps +skipped \(nodeps\)" "$reposOutput"
+assertNoMatch "a nodeps repo attempts no install" "nodepsrepo deps +npm install" "$reposOutput"
+assertMatch "an unrecognized flag warns" "badflagrepo +unknown repos.txt flag ignored: no-deps" "$reposOutput"
+assertMatch "an unrecognized flag still installs deps" "badflagrepo deps +npm install failed" "$reposOutput"
+
 if [[ "$suiteMode" != "full" ]]; then
   printf '\n%s passed, %s failed (fast mode)\n' "$passCount" "$failCount"
   if ((failCount > 0)); then

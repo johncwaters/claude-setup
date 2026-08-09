@@ -553,6 +553,8 @@ if (Step-Enabled "repos") {
     if ((Test-Path $repoFile) -and (Get-Command git -ErrorAction SilentlyContinue)) {
         foreach ($line in (Get-Content $repoFile | Where-Object { $_ -match "=" -and $_ -notmatch "^\s*#" })) {
             $rel, $url = $line -split "=", 2
+            # trailing flags (e.g. "nodeps") are Linux-only; strip them so the url stays clonable here
+            $url = ($url.Trim() -split "\s+")[0]
             $dest = Join-Path $env:USERPROFILE $rel.Trim()
             $label = Split-Path $dest -Leaf
             if (-not (Test-Path $dest)) {

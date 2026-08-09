@@ -1386,6 +1386,12 @@ syncDevelopBranch() {
   local dest="$2"
   local hasLocalDevelopBranch=0
   local hasRemoteDevelopBranch=0
+  # An empty clone has an unborn HEAD, and "git branch develop" against it exits
+  # 128, which used to take the whole apply down with it under set -e.
+  if ! git -C "$dest" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+    noteWarned "$label develop" "no commits yet, skipping branch sync"
+    return 0
+  fi
   if git -C "$dest" rev-parse --verify -q refs/heads/develop >/dev/null; then
     hasLocalDevelopBranch=1
   fi
@@ -1393,12 +1399,18 @@ syncDevelopBranch() {
     hasRemoteDevelopBranch=1
   fi
   if ((hasLocalDevelopBranch == 0)) && ((hasRemoteDevelopBranch == 1)); then
-    git -C "$dest" branch -q --track develop origin/develop
+    if ! git -C "$dest" branch -q --track develop origin/develop; then
+      noteWarned "$label develop" "could not track origin/develop"
+      return 0
+    fi
     noteInstalled "$label develop" "tracking origin/develop"
     return 0
   fi
   if ((hasLocalDevelopBranch == 0)); then
-    git -C "$dest" branch -q develop
+    if ! git -C "$dest" branch -q develop; then
+      noteWarned "$label develop" "could not create develop"
+      return 0
+    fi
     if ! git -C "$dest" push -q -u origin develop; then
       noteWarned "$label develop" "created locally, push failed"
       return 0
@@ -1479,6 +1491,87 @@ installRepoDeps() {
     return 0
   fi
   noteWarned "$label electron" "binary download failed, run: node node_modules/electron/install.js"
+}
+
+repoEntryWantsDeps() {
+  local label="$1"
+  local entryFlags="$2"
+  local entryFlag
+  local sawNoDepsFlag=0
+  for entryFlag in $entryFlags; do
+    if [[ "$entryFlag" == "nodeps" ]]; then
+      sawNoDepsFlag=1
+      continue
+    fi
+    # a typo like "no-deps" would otherwise install deps against the author's intent
+    noteWarned "$label" "unknown repos.txt flag ignored: $entryFlag"
+  done
+  if ((sawNoDepsFlag == 1)); then
+    return 1
+  fi
+  return 0
+}
+
+installRepoDepsUnlessSkipped() {
+  local label="$1"
+  local dest="$2"
+  local entryFlags="$3"
+  if ! repoEntryWantsDeps "$label" "$entryFlags"; then
+    notePresent "$label deps" "skipped (nodeps)"
+    return 0
+  fi
+  installRepoDeps "$label" "$dest"
+}
+
+# Returns non-zero when this entry did not get through clone or pull. Branch sync
+# and dependency install report their own warnings and do not fail the entry.
+syncOneRepo() {
+  local repoLine="$1"
+  local relPath
+  local cloneField
+  local cloneUrl
+  local entryFlags
+  local dest
+  local label
+  relPath="${repoLine%%=*}"
+  cloneField="${repoLine#*=}"
+  relPath="${relPath#"${relPath%%[![:space:]]*}"}"
+  relPath="${relPath%"${relPath##*[![:space:]]}"}"
+  relPath="${relPath//\\//}"
+  # anything after the url is a space separated flag list, currently just "nodeps"
+  read -r cloneUrl entryFlags <<< "$cloneField"
+  if [[ -z "$cloneUrl" ]]; then
+    noteWarned "repos" "entry has no clone url: $repoLine"
+    return 1
+  fi
+  dest="$HOME/$relPath"
+  label="$(basename -- "$dest")"
+  if [[ ! -e "$dest" ]]; then
+    writeLine " .. " "$colorYellow" "$label" "cloning"
+    if ! mkdir -p "$(dirname -- "$dest")"; then
+      noteWarned "$label" "could not create parent directory"
+      return 1
+    fi
+    if ! git clone -q "$cloneUrl" "$dest"; then
+      noteWarned "$label" "clone failed"
+      return 1
+    fi
+    noteInstalled "$label" "cloned"
+    syncDevelopBranch "$label" "$dest"
+    installRepoDepsUnlessSkipped "$label" "$dest" "$entryFlags"
+    return 0
+  fi
+  if [[ ! -d "$dest/.git" ]]; then
+    noteWarned "$label" "exists but is not a git repo"
+    return 1
+  fi
+  if ! git -C "$dest" pull --ff-only -q; then
+    noteWarned "$label" "pull failed (dirty or diverged), resolve manually"
+    return 1
+  fi
+  notePresent "$label" "synced"
+  syncDevelopBranch "$label" "$dest"
+  installRepoDepsUnlessSkipped "$label" "$dest" "$entryFlags"
 }
 
 readPackageList() {
@@ -1891,38 +1984,12 @@ if stepEnabled "repos"; then
       if [[ "$repoLine" =~ ^[[:space:]]*# ]]; then
         continue
       fi
-      relPath="${repoLine%%=*}"
-      cloneUrl="${repoLine#*=}"
-      relPath="${relPath#"${relPath%%[![:space:]]*}"}"
-      relPath="${relPath%"${relPath##*[![:space:]]}"}"
-      cloneUrl="${cloneUrl#"${cloneUrl%%[![:space:]]*}"}"
-      cloneUrl="${cloneUrl%"${cloneUrl##*[![:space:]]}"}"
-      relPath="${relPath//\\//}"
-      dest="$HOME/$relPath"
-      label="$(basename -- "$dest")"
-      if [[ ! -e "$dest" ]]; then
-        writeLine " .. " "$colorYellow" "$label" "cloning"
-        mkdir -p "$(dirname -- "$dest")"
-        if ! git clone -q "$cloneUrl" "$dest"; then
-          noteWarned "$label" "clone failed"
-          continue
-        fi
-        noteInstalled "$label" "cloned"
-        syncDevelopBranch "$label" "$dest"
-        installRepoDeps "$label" "$dest"
-        continue
+      # The guarded call is what disables set -e for the whole entry and everything
+      # it calls, so one bad repo cannot abort apply.
+      warnedBeforeEntry="$countsWarned"
+      if ! syncOneRepo "$repoLine" && ((countsWarned == warnedBeforeEntry)); then
+        noteWarned "repos" "entry failed, continuing: $repoLine"
       fi
-      if [[ ! -d "$dest/.git" ]]; then
-        noteWarned "$label" "exists but is not a git repo"
-        continue
-      fi
-      if ! git -C "$dest" pull --ff-only -q; then
-        noteWarned "$label" "pull failed (dirty or diverged), resolve manually"
-        continue
-      fi
-      notePresent "$label" "synced"
-      syncDevelopBranch "$label" "$dest"
-      installRepoDeps "$label" "$dest"
     done
   fi
 fi
