@@ -16,6 +16,7 @@ nodeSourceMajor=22
 dpkgLockWaitSeconds=180
 packageInstallLog=""
 scriptStartSeconds="$SECONDS"
+glissaPromptInputOpen=0
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$setupDir/.." && pwd)"
@@ -675,6 +676,16 @@ isTailscaleAuthed() {
   tailscale status >/dev/null 2>&1
 }
 
+detectGlissaTailnetHostname() {
+  if ! command -v tailscale >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! isTailscaleAuthed; then
+    return 0
+  fi
+  tailscale status --json 2>/dev/null | node -e 'try { const status = JSON.parse(require("fs").readFileSync(0, "utf8")); const dnsName = String((status.Self || {}).DNSName || "").replace(/\.$/, ""); if (dnsName) process.stdout.write(dnsName); } catch {}' 2>/dev/null || true
+}
+
 warnUnlessTailscaleAuthed() {
   if isTailscaleAuthed; then
     return 0
@@ -829,45 +840,28 @@ readGlissaRemotePort() {
   node -p "String((require(process.argv[1]).remote || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
 }
 
-readTailscaleDnsName() {
-  if ! command -v tailscale >/dev/null 2>&1; then
-    return 0
-  fi
-  tailscale status --json 2>/dev/null | node -e '
-const fs = require("fs");
-const input = fs.readFileSync(0, "utf8");
-const status = JSON.parse(input);
-const dnsName = String((status.Self || {}).DNSName || "").replace(/\.$/, "");
-if (dnsName) process.stdout.write(dnsName);
-' 2>/dev/null || true
+readGlissaLocalPort() {
+  node -p "String((require(process.argv[1]) || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
 }
 
-setGlissaPublicHost() {
-  local configPath="$1"
-  local host="$2"
-  local tempConfig
-  tempConfig="$(mktemp "$(dirname -- "$configPath")/config.XXXXXX")"
-  if ! node - "$configPath" "$host" "$tempConfig" <<'NODE'; then
-const fs = require("fs");
-const configPath = process.argv[2];
-const host = process.argv[3];
-const tempConfig = process.argv[4];
-const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-config.remote = config.remote || {};
-config.remote.publicHost = host;
-config.remote.allowedOrigins = [`https://${host}`];
-fs.writeFileSync(tempConfig, `${JSON.stringify(config, null, 2)}\n`);
-NODE
-    rm -f "$tempConfig"
-    return 1
-  fi
-  mv -f "$tempConfig" "$configPath"
+isGlissaRemoteEnabled() {
+  [[ "$(node -p "String((require(process.argv[1]).remote || {}).enabled !== false)" "$HOME/.glissa/config.json" 2>/dev/null)" == "true" ]]
 }
 
 configureGlissaServe() {
   local remotePort
   if ! command -v tailscale >/dev/null 2>&1; then
     noteWarned "Tailscale serve" "tailscale not on PATH"
+    return 0
+  fi
+  if [[ ! -f "$HOME/.glissa/config.json" ]]; then
+    noteWarned "Tailscale serve" "could not read remote.port from ~/.glissa/config.json, skipping serve"
+    return 0
+  fi
+  # An operator who declined remote access must not get a serve proxy pointed at
+  # a listener glissa will refuse to open.
+  if ! isGlissaRemoteEnabled; then
+    notePresent "Tailscale serve" "skipped, glissa remote disabled"
     return 0
   fi
   # Serve must target remote.port (the auth-gated listener), never Glissa's local port:
@@ -886,6 +880,242 @@ configureGlissaServe() {
     return 0
   fi
   noteWarned "Tailscale serve" "serve failed, run: tailscale serve --bg $remotePort"
+}
+
+warnGlissaRemotePlaceholder() {
+  noteWarned "glissa server config" "publicHost/allowedOrigins still say CHANGEME, edit ~/.glissa/config.json before remote access works"
+}
+
+canPromptGlissaRemoteSettings() {
+  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    return 0
+  fi
+  [[ -r /dev/tty && -t 1 ]]
+}
+
+openGlissaPromptInput() {
+  if ((glissaPromptInputOpen == 1)); then
+    return 0
+  fi
+  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    # Test-only pty substitute for the container suite.
+    exec 9< "$CLAUDE_SETUP_TTY_INPUT"
+    glissaPromptInputOpen=1
+    return 0
+  fi
+  exec 9< /dev/tty
+  glissaPromptInputOpen=1
+}
+
+readGlissaPrompt() {
+  local prompt="$1"
+  local answer
+  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+    printf '%s\n' "$prompt" >&2
+    IFS= read -r answer <&9 || answer=""
+    printf '%s' "$answer"
+    return 0
+  fi
+  printf '%s' "$prompt" > /dev/tty
+  IFS= read -r answer <&9 || answer=""
+  printf '%s' "$answer"
+}
+
+isValidGlissaPort() {
+  local port="$1"
+  if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  ((port >= 1 && port <= 65535))
+}
+
+writeGlissaRemoteSettings() {
+  local configPath="$1"
+  local remoteEnabled="$2"
+  local localPort="$3"
+  local remotePort="$4"
+  local publicHost="$5"
+  local nodeStatus=0
+  node - "$configPath" "$remoteEnabled" "$localPort" "$remotePort" "$publicHost" <<'NODE' || nodeStatus=$?
+const fs = require("fs");
+const path = require("path");
+
+const [configPath, remoteEnabledText, localPortText, remotePortText, publicHost] = process.argv.slice(2);
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+} catch {
+  process.exit(2);
+}
+
+config.port = Number(localPortText);
+config.remote = config.remote && typeof config.remote === "object" ? config.remote : {};
+config.remote.enabled = remoteEnabledText === "true";
+config.remote.port = Number(remotePortText);
+if (!config.remote.enabled) {
+  config.remote.publicHost = "";
+  config.remote.allowedOrigins = [];
+}
+if (publicHost) {
+  config.remote.publicHost = publicHost;
+  config.remote.allowedOrigins = [`https://${publicHost}`];
+}
+
+const dir = path.dirname(configPath);
+const tempPath = path.join(dir, `.config.json.${process.pid}.tmp`);
+fs.writeFileSync(tempPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+fs.renameSync(tempPath, configPath);
+NODE
+  if ((nodeStatus == 0)); then
+    chmod 600 "$configPath" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
+    return 0
+  fi
+  if ((nodeStatus == 2)); then
+    noteWarned "glissa remote config" "config JSON is unreadable, leaving it unchanged"
+    return 1
+  fi
+  noteWarned "glissa remote config" "update failed, leaving it unchanged"
+  return 1
+}
+
+promptGlissaPorts() {
+  local defaultRemotePort="$1"
+  local defaultLocalPort="$2"
+  local attempt
+  local remoteAnswer
+  local localAnswer
+  glissaChosenRemotePort="$defaultRemotePort"
+  glissaChosenLocalPort="$defaultLocalPort"
+  for attempt in 1 2 3; do
+    remoteAnswer="$(readGlissaPrompt "Remote listener port [$defaultRemotePort] ")"
+    localAnswer="$(readGlissaPrompt "Local dashboard port [$defaultLocalPort] ")"
+    if [[ -z "$remoteAnswer" ]]; then
+      remoteAnswer="$defaultRemotePort"
+    fi
+    if [[ -z "$localAnswer" ]]; then
+      localAnswer="$defaultLocalPort"
+    fi
+    if ! isValidGlissaPort "$remoteAnswer"; then
+      noteWarned "glissa remote config" "remote port must be 1-65535"
+      continue
+    fi
+    if ! isValidGlissaPort "$localAnswer"; then
+      noteWarned "glissa remote config" "local port must be 1-65535"
+      continue
+    fi
+    if [[ "$remoteAnswer" == "$localAnswer" ]]; then
+      noteWarned "glissa remote config" "remote.port must differ from port"
+      continue
+    fi
+    glissaChosenRemotePort="$remoteAnswer"
+    glissaChosenLocalPort="$localAnswer"
+    return 0
+  done
+  noteWarned "glissa remote config" "invalid ports, using defaults"
+}
+
+configureGlissaRemoteSettings() {
+  local configPath="$HOME/.glissa/config.json"
+  local detectedHost
+  local enableAnswer
+  local hostChoice
+  local chosenHost=""
+  local defaultLocalPort
+  local defaultRemotePort
+  if [[ ! -f "$configPath" ]]; then
+    return 0
+  fi
+  if ! grep -q "CHANGEME" "$configPath"; then
+    notePresent "glissa remote config" "configured"
+    return 0
+  fi
+  # A pre-customized port survives the guided fill: existing config values are
+  # the defaults, the seeded 3000/3001 only back them up.
+  defaultLocalPort="$(readGlissaLocalPort)"
+  if [[ ! "$defaultLocalPort" =~ ^[0-9]+$ ]]; then
+    defaultLocalPort=3000
+  fi
+  defaultRemotePort="$(readGlissaRemotePort)"
+  if [[ ! "$defaultRemotePort" =~ ^[0-9]+$ ]]; then
+    defaultRemotePort=3001
+  fi
+  detectedHost="$(detectGlissaTailnetHostname)"
+  if ! canPromptGlissaRemoteSettings; then
+    if [[ -n "$detectedHost" ]]; then
+      writeGlissaRemoteSettings "$configPath" "true" "$defaultLocalPort" "$defaultRemotePort" "$detectedHost" || return 0
+      noteApplied "glissa remote config" "publicHost $detectedHost (auto-detected)"
+      return 0
+    fi
+    warnGlissaRemotePlaceholder
+    return 0
+  fi
+  if ! openGlissaPromptInput; then
+    warnGlissaRemotePlaceholder
+    return 0
+  fi
+  enableAnswer="$(readGlissaPrompt "Enable remote access over Tailscale? [Y/n] ")"
+  if [[ "$enableAnswer" =~ ^[Nn][Oo]?$ ]]; then
+    writeGlissaRemoteSettings "$configPath" "false" "$defaultLocalPort" "$defaultRemotePort" "" || return 0
+    noteApplied "glissa remote config" "remote access disabled"
+    return 0
+  fi
+  if [[ -n "$detectedHost" ]]; then
+    printf '[1] %s\n[2] type a different hostname\n[3] skip for now\n' "$detectedHost"
+    hostChoice="$(readGlissaPrompt "Remote hostname [1] ")"
+    if [[ -z "$hostChoice" || "$hostChoice" == "1" ]]; then
+      chosenHost="$detectedHost"
+    fi
+    if [[ "$hostChoice" == "2" ]]; then
+      chosenHost="$(readGlissaPrompt "Remote hostname ")"
+    fi
+    if [[ "$hostChoice" == "3" ]]; then
+      warnGlissaRemotePlaceholder
+      return 0
+    fi
+  fi
+  if [[ -z "$detectedHost" ]]; then
+    chosenHost="$(readGlissaPrompt "Remote hostname ")"
+  fi
+  # Covers an empty typed hostname and any unrecognized menu choice: the config
+  # must never be written enabled with the CHANGEME placeholder still in place.
+  if [[ -z "$chosenHost" ]]; then
+    warnGlissaRemotePlaceholder
+    return 0
+  fi
+  promptGlissaPorts "$defaultRemotePort" "$defaultLocalPort"
+  writeGlissaRemoteSettings "$configPath" "true" "$glissaChosenLocalPort" "$glissaChosenRemotePort" "$chosenHost" || return 0
+  noteApplied "glissa remote config" "publicHost $chosenHost"
+}
+
+glissaPublicHostIsConfigured() {
+  [[ "$(node -p "const remote = (require(process.argv[1]).remote || {}); const host = String(remote.publicHost || ''); String(Boolean(host && !host.includes('CHANGEME')))" "$HOME/.glissa/config.json" 2>/dev/null)" == "true" ]]
+}
+
+offerGlissaPairingUrl() {
+  local pairAnswer
+  if ! canPromptGlissaRemoteSettings; then
+    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    return 0
+  fi
+  if ! openGlissaPromptInput; then
+    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    return 0
+  fi
+  if ! glissaPublicHostIsConfigured; then
+    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    return 0
+  fi
+  pairAnswer="$(readGlissaPrompt "Mint a pairing URL for your first device now? [y/N] ")"
+  if [[ ! "$pairAnswer" =~ ^[Yy]$ ]]; then
+    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    return 0
+  fi
+  if ! node "$glissaServerRepoDir/bin/glissa.js" pair; then
+    noteWarned "glissa pair" "pairing URL mint failed"
+    noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+    return 0
+  fi
+  noteWarned "glissa checklist" "claude login on the box"
 }
 
 installGlissaServer() {
@@ -947,25 +1177,10 @@ installGlissaServer() {
   if [[ -f "$glissaConfigDest" ]]; then
     chmod 600 "$glissaConfigDest" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
   fi
-  if [[ -f "$glissaConfigDest" ]] && grep -q "CHANGEME" "$glissaConfigDest"; then
-    glissaPublicHost=""
-    if isTailscaleAuthed; then
-      glissaPublicHost="$(readTailscaleDnsName)"
-    fi
-    if [[ -z "$glissaPublicHost" ]] && canPromptUser; then
-      glissaPublicHost="$(promptValue "Tailnet hostname for this box (e.g. myhost.tailnet-name.ts.net)")"
-    fi
-    if [[ -n "$glissaPublicHost" ]] && setGlissaPublicHost "$glissaConfigDest" "$glissaPublicHost"; then
-      chmod 600 "$glissaConfigDest" 2>/dev/null || noteWarned "glissa config perms" "chmod 600 failed"
-      noteApplied "glissa server config" "publicHost $glissaPublicHost"
-    fi
-  fi
-  if [[ -f "$glissaConfigDest" ]] && grep -q "CHANGEME" "$glissaConfigDest"; then
-    noteWarned "glissa server config" "publicHost/allowedOrigins still say CHANGEME, edit ~/.glissa/config.json before remote access works"
-  fi
+  configureGlissaRemoteSettings
   installGlissaService
   configureGlissaServe
-  noteWarned "glissa checklist" "claude login on the box; glissa pair per device"
+  offerGlissaPairingUrl
 }
 
 syncDevelopBranch() {

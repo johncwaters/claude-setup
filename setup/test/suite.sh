@@ -187,6 +187,113 @@ bootstrapCheckout() {
   git -C "$target" checkout -q -f -B master origin/master
 }
 
+jsonField() {
+  local path="$1"
+  local expression="$2"
+  node -e "const config = require(process.argv[1]); console.log($expression);" "$path"
+}
+
+prepareGlissaServerFixture() {
+  local fixtureHome="$1"
+  local fixtureBin="$2"
+  mkdir -p "$fixtureHome" "$fixtureBin" "$fixtureHome/Projects/glissa/.git" "$fixtureHome/Projects/glissa/bin" "$fixtureHome/.npm-global/lib/node_modules"
+  (
+    export HOME="$fixtureHome"
+    bootstrapCheckout "$fixtureHome/.claude"
+  ) >/dev/null 2>&1
+  cat >"$fixtureHome/Projects/glissa/bin/glissa.js" <<'GLISSA'
+#!/usr/bin/env node
+if (process.argv[2] === "pair") {
+  console.log("https://paired.example/pair");
+}
+GLISSA
+  chmod +x "$fixtureHome/Projects/glissa/bin/glissa.js"
+  cat >"$fixtureBin/git" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-C" && "${3:-}" == "pull" ]]; then
+  exit 0
+fi
+exec /usr/bin/git "$@"
+STUB
+  cat >"$fixtureBin/node" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-v" ]]; then
+  printf 'v99.0.0\n'
+  exit 0
+fi
+exec /usr/bin/node "$@"
+STUB
+  cat >"$fixtureBin/npm" <<'STUB'
+#!/usr/bin/env bash
+case "${1:-}" in
+  root)
+    printf '%s/.npm-global/lib/node_modules\n' "$HOME"
+    exit 0
+    ;;
+  ls)
+    printf '%s/.npm-global/lib\n' "$HOME"
+    exit 0
+    ;;
+  pack)
+    printf 'fixture.tgz\n'
+    touch fixture.tgz
+    exit 0
+    ;;
+  ci|run|install|config)
+    exit 0
+    ;;
+esac
+exit 0
+STUB
+  cat >"$fixtureBin/python3" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+  cat >"$fixtureBin/gh" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+  cat >"$fixtureBin/codium" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+  cat >"$fixtureBin/claude" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+  chmod +x "$fixtureBin/git" "$fixtureBin/node" "$fixtureBin/npm" "$fixtureBin/python3" "$fixtureBin/gh" "$fixtureBin/codium" "$fixtureBin/claude"
+}
+
+installTailscaleFixture() {
+  local fixtureBin="$1"
+  local dnsName="$2"
+  cat >"$fixtureBin/tailscale" <<STUB
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "status" && "\${2:-}" == "--json" ]]; then
+  printf '{"Self":{"DNSName":"$dnsName."}}\n'
+  exit 0
+fi
+if [[ "\${1:-}" == "status" ]]; then
+  exit 0
+fi
+if [[ "\${1:-}" == "serve" ]]; then
+  printf '%s\n' "\$*" >>"\${TAILSCALE_SERVE_LOG:-/tmp/tailscale-serve.log}"
+  exit 0
+fi
+exit 0
+STUB
+  chmod +x "$fixtureBin/tailscale"
+}
+
+runGlissaServerApply() {
+  local fixtureHome="$1"
+  local fixtureBin="$2"
+  local promptInput="${CLAUDE_SETUP_TTY_INPUT:-}"
+  local serveLog="${TAILSCALE_SERVE_LOG:-}"
+  shift 2
+  HOME="$fixtureHome" PATH="$fixtureBin:/usr/bin:/bin" CLAUDE_SETUP_TTY_INPUT="$promptInput" TAILSCALE_SERVE_LOG="$serveLog" bash "$fixtureHome/.claude/setup/apply.sh" --profile server "$@" 2>&1 | stripColor
+}
+
 printf 'suite mode: %s\n' "$suiteMode"
 printf 'distro: %s\n' "$(sed -n 's/^PRETTY_NAME="\(.*\)"$/\1/p' /etc/os-release)"
 
@@ -475,6 +582,115 @@ assertMatch "a capitalised marker still selects the work profile" "skipped \(wor
 markerCollectOutput="$(bash "$claudeHome/setup/collect.sh" 2>&1)"
 assertMatch "collect.sh reads the marker the same way" "personal-profile only" "$markerCollectOutput"
 printf 'personal\n' > "$claudeHome/.machine-profile"
+
+if [[ "$suiteMode" != "full" ]]; then
+  phase "glissa server remote config"
+
+  autoHome="$(mktemp -d)"
+  autoBin="$(mktemp -d)"
+  autoServeLog="$autoHome/tailscale-serve.log"
+  prepareGlissaServerFixture "$autoHome" "$autoBin"
+  installTailscaleFixture "$autoBin" "server.machine.tailnet.ts.net"
+  autoOutput="$(TAILSCALE_SERVE_LOG="$autoServeLog" runGlissaServerApply "$autoHome" "$autoBin")"
+  autoConfig="$autoHome/.glissa/config.json"
+  assertMatch "auto-detect reports the public host" "glissa remote config +publicHost server.machine.tailnet.ts.net \(auto-detected\)" "$autoOutput"
+  assertEquals "auto-detect writes publicHost" "server.machine.tailnet.ts.net" "$(jsonField "$autoConfig" 'config.remote.publicHost')"
+  assertEquals "auto-detect writes allowedOrigins" '["https://server.machine.tailnet.ts.net"]' "$(jsonField "$autoConfig" 'JSON.stringify(config.remote.allowedOrigins)')"
+  assertNoMatch "auto-detect removes CHANGEME" "CHANGEME" "$(cat "$autoConfig")"
+  assertEquals "auto-detect keeps config private" "600" "$(stat -c %a "$autoConfig")"
+  assertEquals "tailscale serve targets remote.port" "serve --bg 3001" "$(cat "$autoServeLog")"
+
+  autoConfigDigestBefore="$(sha256sum < "$autoConfig" | cut -d' ' -f1)"
+  autoRerunOutput="$(TAILSCALE_SERVE_LOG="$autoServeLog" runGlissaServerApply "$autoHome" "$autoBin")"
+  autoConfigDigestAfter="$(sha256sum < "$autoConfig" | cut -d' ' -f1)"
+  assertMatch "configured rerun reports present remote config" "glissa remote config +configured" "$autoRerunOutput"
+  assertNoMatch "configured rerun prompts nothing" "Enable remote access|Remote hostname|listener port" "$autoRerunOutput"
+  assertEquals "configured rerun leaves config byte-identical" "$autoConfigDigestBefore" "$autoConfigDigestAfter"
+
+  manualHome="$(mktemp -d)"
+  manualBin="$(mktemp -d)"
+  prepareGlissaServerFixture "$manualHome" "$manualBin"
+  cat >"$manualBin/curl" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+  chmod +x "$manualBin/curl"
+  manualOutput="$(runGlissaServerApply "$manualHome" "$manualBin")"
+  manualConfig="$manualHome/.glissa/config.json"
+  assertMatch "missing tailscale keeps the checklist warning" "publicHost/allowedOrigins still say CHANGEME" "$manualOutput"
+  assertMatch "missing tailscale preserves CHANGEME" "CHANGEME" "$(cat "$manualConfig")"
+
+  disabledHome="$(mktemp -d)"
+  disabledBin="$(mktemp -d)"
+  disabledAnswers="$disabledHome/answers.txt"
+  disabledServeLog="$disabledHome/tailscale-serve.log"
+  prepareGlissaServerFixture "$disabledHome" "$disabledBin"
+  installTailscaleFixture "$disabledBin" "disabled.machine.tailnet.ts.net"
+  printf 'n\n' > "$disabledAnswers"
+  disabledOutput="$(CLAUDE_SETUP_TTY_INPUT="$disabledAnswers" TAILSCALE_SERVE_LOG="$disabledServeLog" runGlissaServerApply "$disabledHome" "$disabledBin")"
+  disabledConfig="$disabledHome/.glissa/config.json"
+  assertMatch "disabled remote reports config update" "glissa remote config +remote access disabled" "$disabledOutput"
+  assertEquals "disabled remote writes enabled false" "false" "$(jsonField "$disabledConfig" 'config.remote.enabled')"
+  assertMatch "disabled remote skips tailscale serve" "Tailscale serve +skipped, glissa remote disabled" "$disabledOutput"
+  assertNoFile "disabled remote does not call tailscale serve" "$disabledServeLog"
+
+  portsHome="$(mktemp -d)"
+  portsBin="$(mktemp -d)"
+  portsAnswers="$portsHome/answers.txt"
+  prepareGlissaServerFixture "$portsHome" "$portsBin"
+  installTailscaleFixture "$portsBin" "ports.machine.tailnet.ts.net"
+  printf 'Y\n2\ncustom.tailnet.ts.net\nabc\n3000\n3000\n3000\n4444\n3000\nn\n' > "$portsAnswers"
+  portsOutput="$(CLAUDE_SETUP_TTY_INPUT="$portsAnswers" runGlissaServerApply "$portsHome" "$portsBin")"
+  portsConfig="$portsHome/.glissa/config.json"
+  assertMatch "invalid remote port is rejected" "remote port must be 1-65535" "$portsOutput"
+  assertMatch "equal ports are rejected" "remote.port must differ from port" "$portsOutput"
+  assertEquals "valid remote port is accepted" "4444" "$(jsonField "$portsConfig" 'config.remote.port')"
+  assertEquals "valid local port is accepted" "3000" "$(jsonField "$portsConfig" 'config.port')"
+  assertEquals "typed hostname is accepted" "custom.tailnet.ts.net" "$(jsonField "$portsConfig" 'config.remote.publicHost')"
+
+  wordNoHome="$(mktemp -d)"
+  wordNoBin="$(mktemp -d)"
+  wordNoAnswers="$wordNoHome/answers.txt"
+  prepareGlissaServerFixture "$wordNoHome" "$wordNoBin"
+  installTailscaleFixture "$wordNoBin" "wordno.machine.tailnet.ts.net"
+  printf 'no\n' > "$wordNoAnswers"
+  wordNoOutput="$(CLAUDE_SETUP_TTY_INPUT="$wordNoAnswers" runGlissaServerApply "$wordNoHome" "$wordNoBin")"
+  assertMatch "a typed word no disables remote access" "glissa remote config +remote access disabled" "$wordNoOutput"
+  assertEquals "a typed word no writes enabled false" "false" "$(jsonField "$wordNoHome/.glissa/config.json" 'config.remote.enabled')"
+
+  badChoiceHome="$(mktemp -d)"
+  badChoiceBin="$(mktemp -d)"
+  badChoiceAnswers="$badChoiceHome/answers.txt"
+  prepareGlissaServerFixture "$badChoiceHome" "$badChoiceBin"
+  installTailscaleFixture "$badChoiceBin" "badchoice.machine.tailnet.ts.net"
+  printf 'Y\n4\n' > "$badChoiceAnswers"
+  badChoiceOutput="$(CLAUDE_SETUP_TTY_INPUT="$badChoiceAnswers" runGlissaServerApply "$badChoiceHome" "$badChoiceBin")"
+  badChoiceConfig="$badChoiceHome/.glissa/config.json"
+  assertMatch "an unrecognized hostname choice warns about CHANGEME" "publicHost/allowedOrigins still say CHANGEME" "$badChoiceOutput"
+  assertMatch "an unrecognized hostname choice preserves CHANGEME" "CHANGEME" "$(cat "$badChoiceConfig")"
+  assertNoMatch "an unrecognized hostname choice claims no publicHost" "glissa remote config +publicHost" "$badChoiceOutput"
+
+  mintHome="$(mktemp -d)"
+  mintBin="$(mktemp -d)"
+  mintAnswers="$mintHome/answers.txt"
+  prepareGlissaServerFixture "$mintHome" "$mintBin"
+  installTailscaleFixture "$mintBin" "mint.machine.tailnet.ts.net"
+  printf 'Y\n1\n\n\ny\n' > "$mintAnswers"
+  mintOutput="$(CLAUDE_SETUP_TTY_INPUT="$mintAnswers" runGlissaServerApply "$mintHome" "$mintBin")"
+  assertMatch "minting prints the pairing URL" "https://paired.example/pair" "$mintOutput"
+  assertMatch "minting still reminds about claude login" "glissa checklist +claude login on the box" "$mintOutput"
+
+  customPortHome="$(mktemp -d)"
+  customPortBin="$(mktemp -d)"
+  customPortAnswers="$customPortHome/answers.txt"
+  prepareGlissaServerFixture "$customPortHome" "$customPortBin"
+  installTailscaleFixture "$customPortBin" "customport.machine.tailnet.ts.net"
+  mkdir -p "$customPortHome/.glissa"
+  node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 8080; fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2));' "$customPortHome/.claude/setup/glissa/config.server.example.json" "$customPortHome/.glissa/config.json"
+  printf 'n\n' > "$customPortAnswers"
+  CLAUDE_SETUP_TTY_INPUT="$customPortAnswers" runGlissaServerApply "$customPortHome" "$customPortBin" >/dev/null
+  assertEquals "declining remote keeps a customized local port" "8080" "$(jsonField "$customPortHome/.glissa/config.json" 'config.port')"
+fi
 
 if [[ "$suiteMode" != "full" ]]; then
   printf '\n%s passed, %s failed (fast mode)\n' "$passCount" "$failCount"
