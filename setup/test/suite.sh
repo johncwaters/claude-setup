@@ -645,6 +645,17 @@ STUB
   mintOutput="$(CLAUDE_SETUP_TTY_INPUT="$mintAnswers" runGlissaServerApply "$mintHome" "$mintBin")"
   assertMatch "minting prints the pairing URL" "https://paired.example/pair" "$mintOutput"
   assertMatch "minting still reminds about claude login" "glissa checklist +claude login on the box" "$mintOutput"
+
+  customPortHome="$(mktemp -d)"
+  customPortBin="$(mktemp -d)"
+  customPortAnswers="$customPortHome/answers.txt"
+  prepareGlissaServerFixture "$customPortHome" "$customPortBin"
+  installTailscaleFixture "$customPortBin" "customport.machine.tailnet.ts.net"
+  mkdir -p "$customPortHome/.glissa"
+  node -e 'const fs = require("fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); config.port = 8080; fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2));' "$customPortHome/.claude/setup/glissa/config.server.example.json" "$customPortHome/.glissa/config.json"
+  printf 'n\n' > "$customPortAnswers"
+  CLAUDE_SETUP_TTY_INPUT="$customPortAnswers" runGlissaServerApply "$customPortHome" "$customPortBin" >/dev/null
+  assertEquals "declining remote keeps a customized local port" "8080" "$(jsonField "$customPortHome/.glissa/config.json" 'config.port')"
 fi
 
 if [[ "$suiteMode" != "full" ]]; then

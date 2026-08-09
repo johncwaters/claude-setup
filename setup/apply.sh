@@ -660,23 +660,7 @@ detectGlissaTailnetHostname() {
   if ! isTailscaleAuthed; then
     return 0
   fi
-  tailscale status --json 2>/dev/null | node -e '
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", chunk => {
-  input += chunk;
-});
-process.stdin.on("end", () => {
-  try {
-    const status = JSON.parse(input);
-    const dnsName = String(status.Self?.DNSName || "").replace(/\.$/, "");
-    if (dnsName) {
-      process.stdout.write(dnsName);
-    }
-  } catch {
-  }
-});
-' 2>/dev/null || true
+  tailscale status --json 2>/dev/null | node -e 'try { const status = JSON.parse(require("fs").readFileSync(0, "utf8")); const dnsName = String((status.Self || {}).DNSName || "").replace(/\.$/, ""); if (dnsName) process.stdout.write(dnsName); } catch {}' 2>/dev/null || true
 }
 
 warnUnlessTailscaleAuthed() {
@@ -800,22 +784,32 @@ readGlissaRemotePort() {
   node -p "String((require(process.argv[1]).remote || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
 }
 
+readGlissaLocalPort() {
+  node -p "String((require(process.argv[1]) || {}).port || '')" "$HOME/.glissa/config.json" 2>/dev/null
+}
+
 isGlissaRemoteEnabled() {
   [[ "$(node -p "String((require(process.argv[1]).remote || {}).enabled !== false)" "$HOME/.glissa/config.json" 2>/dev/null)" == "true" ]]
 }
 
 configureGlissaServe() {
   local remotePort
-  # Serve must target remote.port (the auth-gated listener), never Glissa's local port:
-  # serving the local port exposes the unauthenticated dashboard to the whole tailnet.
-  if ! isGlissaRemoteEnabled; then
-    notePresent "Tailscale serve" "skipped, glissa remote disabled"
-    return 0
-  fi
   if ! command -v tailscale >/dev/null 2>&1; then
     noteWarned "Tailscale serve" "tailscale not on PATH"
     return 0
   fi
+  if [[ ! -f "$HOME/.glissa/config.json" ]]; then
+    noteWarned "Tailscale serve" "could not read remote.port from ~/.glissa/config.json, skipping serve"
+    return 0
+  fi
+  # An operator who declined remote access must not get a serve proxy pointed at
+  # a listener glissa will refuse to open.
+  if ! isGlissaRemoteEnabled; then
+    notePresent "Tailscale serve" "skipped, glissa remote disabled"
+    return 0
+  fi
+  # Serve must target remote.port (the auth-gated listener), never Glissa's local port:
+  # serving the local port exposes the unauthenticated dashboard to the whole tailnet.
   remotePort="$(readGlissaRemotePort)" || remotePort=""
   if [[ ! "$remotePort" =~ ^[0-9]+$ ]]; then
     noteWarned "Tailscale serve" "could not read remote.port from ~/.glissa/config.json, skipping serve"
@@ -970,6 +964,8 @@ configureGlissaRemoteSettings() {
   local enableAnswer
   local hostChoice
   local chosenHost=""
+  local defaultLocalPort
+  local defaultRemotePort
   if [[ ! -f "$configPath" ]]; then
     return 0
   fi
@@ -977,10 +973,20 @@ configureGlissaRemoteSettings() {
     notePresent "glissa remote config" "configured"
     return 0
   fi
+  # A pre-customized port survives the guided fill: existing config values are
+  # the defaults, the seeded 3000/3001 only back them up.
+  defaultLocalPort="$(readGlissaLocalPort)"
+  if [[ ! "$defaultLocalPort" =~ ^[0-9]+$ ]]; then
+    defaultLocalPort=3000
+  fi
+  defaultRemotePort="$(readGlissaRemotePort)"
+  if [[ ! "$defaultRemotePort" =~ ^[0-9]+$ ]]; then
+    defaultRemotePort=3001
+  fi
   detectedHost="$(detectGlissaTailnetHostname)"
   if ! canPromptGlissaRemoteSettings; then
     if [[ -n "$detectedHost" ]]; then
-      writeGlissaRemoteSettings "$configPath" "true" "3000" "3001" "$detectedHost" || return 0
+      writeGlissaRemoteSettings "$configPath" "true" "$defaultLocalPort" "$defaultRemotePort" "$detectedHost" || return 0
       noteApplied "glissa remote config" "publicHost $detectedHost (auto-detected)"
       return 0
     fi
@@ -993,7 +999,7 @@ configureGlissaRemoteSettings() {
   fi
   enableAnswer="$(readGlissaPrompt "Enable remote access over Tailscale? [Y/n] ")"
   if [[ "$enableAnswer" =~ ^[Nn][Oo]?$ ]]; then
-    writeGlissaRemoteSettings "$configPath" "false" "3000" "3001" "" || return 0
+    writeGlissaRemoteSettings "$configPath" "false" "$defaultLocalPort" "$defaultRemotePort" "" || return 0
     noteApplied "glissa remote config" "remote access disabled"
     return 0
   fi
@@ -1020,7 +1026,7 @@ configureGlissaRemoteSettings() {
     warnGlissaRemotePlaceholder
     return 0
   fi
-  promptGlissaPorts "3001" "3000"
+  promptGlissaPorts "$defaultRemotePort" "$defaultLocalPort"
   writeGlissaRemoteSettings "$configPath" "true" "$glissaChosenLocalPort" "$glissaChosenRemotePort" "$chosenHost" || return 0
   noteApplied "glissa remote config" "publicHost $chosenHost"
 }
