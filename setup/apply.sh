@@ -1572,6 +1572,7 @@ syncOneRepo() {
   notePresent "$label" "synced"
   syncDevelopBranch "$label" "$dest"
   installRepoDepsUnlessSkipped "$label" "$dest" "$entryFlags"
+  return 0
 }
 
 readPackageList() {
@@ -1987,6 +1988,8 @@ if stepEnabled "repos"; then
       # The guarded call is what disables set -e for the whole entry and everything
       # it calls, so one bad repo cannot abort apply.
       warnedBeforeEntry="$countsWarned"
+      # Safety net for a FUTURE stage that fails without warning; every current
+      # failure path in syncOneRepo warns first, so this line is unreachable today.
       if ! syncOneRepo "$repoLine" && ((countsWarned == warnedBeforeEntry)); then
         noteWarned "repos" "entry failed, continuing: $repoLine"
       fi
