@@ -799,11 +799,12 @@ renderGlissaService() {
   local claudeDir
   escapedNode="$(printf '%s' "$nodePath" | sed 's/[\/&]/\\&/g')"
   escapedHome="$(printf '%s' "$HOME" | sed 's/[\/&]/\\&/g')"
-  if claudePath="$(command -v claude 2>/dev/null)"; then
+  claudePath="$(command -v claude 2>/dev/null || true)"
+  if [[ -n "$claudePath" ]]; then
     claudeDir="$(dirname -- "$claudePath")"
     servicePath="$claudeDir:$servicePath"
   fi
-  if ! command -v claude >/dev/null 2>&1 && [[ -d "$HOME/.local/bin" ]]; then
+  if [[ -z "$claudePath" && -d "$HOME/.local/bin" ]]; then
     servicePath="$HOME/.local/bin:$servicePath"
   fi
   escapedPath="$(printf '%s' "$servicePath" | sed 's/[\/&]/\\&/g')"
@@ -864,13 +865,15 @@ installGlissaService() {
   fi
   # A rewritten remote config needs a restart even when the unit is unchanged:
   # the server reads config.remote only at boot.
+  local serviceStateNote="enabled and started"
   if ((didInstallService == 1)) || ((glissaRemoteSettingsRewritten == 1)); then
     if ! systemctl --user restart glissa >/dev/null 2>&1; then
       noteWarned "glissa service" "restart failed"
       return 0
     fi
+    serviceStateNote="restarted"
   fi
-  notePresent "glissa service" "enabled and started"
+  notePresent "glissa service" "$serviceStateNote"
   probeGlissaServiceHealth
   if ! command -v loginctl >/dev/null 2>&1; then
     noteWarned "glissa linger" "loginctl not on PATH"
@@ -904,7 +907,7 @@ readGlissaRemoteEnabled() {
 }
 
 isGlissaRemoteEnabled() {
-  [[ "$(node -p "String((require(process.argv[1]).remote || {}).enabled !== false)" "$HOME/.glissa/config.json" 2>/dev/null)" == "true" ]]
+  [[ "$(readGlissaRemoteEnabled)" == "true" ]]
 }
 
 hasDottedGlissaHost() {
@@ -912,12 +915,10 @@ hasDottedGlissaHost() {
   [[ "$publicHost" == *.* && "$publicHost" != *CHANGEME* ]]
 }
 
+# Callers gate on curl being present before probing.
 probeHttpStatus() {
   local url="$1"
   local status
-  if ! command -v curl >/dev/null 2>&1; then
-    return 2
-  fi
   status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url")" || return 1
   printf '%s\n' "$status"
 }
