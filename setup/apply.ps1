@@ -82,11 +82,16 @@ function Update-SessionPath {
     $env:Path = $ordered -join ";"
 }
 
+function Format-CmdArg([string]$value) {
+    if ($value -match "\s") { return '"' + $value + '"' }
+    return $value
+}
+
 # Run a native command under cmd (which owns the redirects, avoiding PS 5.1's
 # NativeCommandError trap on native stderr), logging output to a temp file.
 function Invoke-LoggedCommand([string]$exe, [string[]]$cmdArgs) {
     $log = Join-Path $env:TEMP ("claude-cmd-{0}.log" -f ([guid]::NewGuid().ToString("N")))
-    $quotedArgs = ($cmdArgs | ForEach-Object { if ($_ -match "\s") { '"' + $_ + '"' } else { $_ } }) -join " "
+    $quotedArgs = ($cmdArgs | ForEach-Object { Format-CmdArg $_ }) -join " "
     cmd /c """$exe"" $quotedArgs >""$log"" 2>&1"
     $ok = $LASTEXITCODE -eq 0
     $lastLine = ""
