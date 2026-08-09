@@ -42,7 +42,7 @@ Each machine adopts one profile, `personal`, `work`, or `server`, and apply runs
 
 - `personal` runs the full set: workflow config and settings render, VSCodium config, glissa, gitconfig, Codex AGENTS.md, Windows Terminal, software installs, fonts, project repos, npm globals, python tools, and VSCodium extensions.
 - `work` runs a focused set: workflow config and settings render, VSCodium config, fonts, the biome hook dependency, python tools, and VSCodium extensions. It skips all software installs, project repos, npm globals sync, glissa, gitconfig, and Windows Terminal.
-- `server` runs the headless Linux set: workflow config and settings render, glissa config, gitconfig, Codex AGENTS.md, software installs, Tailscale, Glissa server provisioning, npm globals, and python tools. It skips desktop-only VSCodium, fonts, terminal styling, and project repo sync.
+- `server` runs the headless Linux set: workflow config and settings render, gitconfig, Codex AGENTS.md, software installs, Tailscale, Glissa server provisioning (`glissa-server`, see Glissa server below), npm globals, and python tools. It skips desktop-only VSCodium, fonts, terminal styling, and project repo sync. It also skips the `glissa` config-copy step, which is personal only: on a server the config comes from `glissa-server`, which seeds `~/.glissa/config.json` itself and then keeps the runtime state that accumulates there.
 
 The work profile installs nothing beyond biome and the pip tools, so it assumes git, node, and python are already on the machine. When node is missing, apply warns instead of failing and `settings.json` gets rendered on the next run after node is installed.
 
@@ -104,6 +104,30 @@ d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config
 `setup/install.sh` and `setup/apply.sh` are the bash ports of the two PowerShell scripts and read the same `profiles/<profile>/profile.json` step lists and the same `.machine-profile` marker, so a Linux box adopts `personal`, `work`, or `server` exactly like a Windows one. Same flags, spelled long: `--skip-installs`, `--profile personal|work|server`, `--dry-run`. Linux paths: VSCodium config to `~/.config/VSCodium/User`, glissa to `~/.glissa/config.json`, gitconfig to `~/.gitconfig`, Codex AGENTS.md to `~/.codex/AGENTS.md`, fonts to `~/.local/share/fonts` (then `fc-cache -f`), and project repos under `$HOME` with the backslashes in `repos.txt` paths translated to `/`.
 
 Differences from Windows: system packages come from apt-get, dnf, pacman, or zypper (with sudo when not root) instead of winget; Node comes from NodeSource on apt-get and dnf, because Debian bookworm's Node 18 is too old for the glissa build, and apt calls carry a dpkg lock timeout so a background packagekitd or unattended upgrade costs a wait instead of a failed install; Windows Terminal is reported as not applicable; VSCodium is not in any default distro repo, so it warns and points at https://vscodium.com/#install rather than adding third-party repos, and `gh` does the same where the package manager does not ship it; `python-tools` retries pip with `--user --break-system-packages` for PEP 668 distros; and `collect.ps1` has no Linux port, so publishing config changes still happens from the Windows machine.
+
+## Glissa server
+
+The `server` profile provisions the glissa dashboard as a systemd user service through its `glissa-server` step. The step clones `https://github.com/johncwaters/glissa.git` into `~/Projects/glissa`, or fast-forwards an existing clone with `git pull --ff-only` and warns without touching anything when that tree is dirty or diverged. It then runs `npm ci` and `npm run build`, and seeds `~/.glissa/config.json` from `setup/glissa/config.server.example.json` only when no config is there yet, so the runtime state a live server accumulates survives every rerun. The config directory is chmodded to 700 and the file to 600.
+
+Remote access is configured in the same step. Apply auto-detects the machine's Tailscale hostname and offers it as `remote.publicHost`, filling the seeded `CHANGEME` placeholders; on later runs it repairs drift when the tailnet name changed, and declining leaves `remote.enabled` false with no serve proxy. It renders `setup/glissa/glissa.service` into `~/.config/systemd/user/`, runs `daemon-reload` and `enable --now`, restarts the unit when either the unit file or the remote config changed (glissa reads `config.remote` only at boot), and enables linger so the service survives logout. `tailscale serve --bg` is pointed at the remote port only; serving the local port would publish the unauthenticated dashboard across the tailnet. Health probes finish the step: local `200`, remote `401`, and HTTPS against the public host.
+
+The `glissa` CLI is a separate install. The `npm-globals` step reads `glissa=github:johncwaters/glissa` from `setup/npm-globals.txt` and installs it through `npm pack` first, because a global install straight from a git spec runs glissa's node-pty postinstall in a directory npm has already moved and dies with an ENOENT `uv_cwd`.
+
+Updating glissa on a server is just re-running apply, which reruns the whole step (pull, `npm ci`, build, restart). There is no separate updater:
+
+```bash
+bash "$HOME/.claude/setup/install.sh"
+```
+
+The manual equivalent, when you want those four things without the rest of apply:
+
+```bash
+cd ~/Projects/glissa && git pull --ff-only && npm ci && npm run build && systemctl --user restart glissa
+```
+
+To pair a phone, mint a single-use URL on the server with `node ~/Projects/glissa/bin/glissa.js pair` (apply offers this at the end of the step on an interactive run) and open it on the device over the tailnet HTTPS host. `glissa pair --list` and `glissa pair --revoke <id>` manage the paired devices from there.
+
+All of the above is pinned by `setup/test/suite.sh`: the remote config fill, the drift repair, serve targeting the remote port, unit rendering and restart-on-change, the health probes, and the GitHub-source CLI install each have assertions there, so this section describes checked behavior rather than intent.
 
 ## Re-sync an existing machine
 
