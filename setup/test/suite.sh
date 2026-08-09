@@ -653,6 +653,10 @@ STUB
   disabledServeLog="$disabledHome/tailscale-serve.log"
   prepareGlissaServerFixture "$disabledHome" "$disabledBin"
   installTailscaleFixture "$disabledBin" "disabled.machine.tailnet.ts.net"
+  # Every glissa fixture answer file starts with two blank lines: the server
+  # profile runs the gitconfig step first, and with GIT_CONFIG_GLOBAL pointed at
+  # the fixture's absent ~/.gitconfig its name/email prompts consume two answers
+  # (tailscale auth and gh auth do not prompt, their stubs report already-authed).
   printf '\n\nn\n' > "$disabledAnswers"
   disabledOutput="$(CLAUDE_SETUP_TTY_INPUT="$disabledAnswers" TAILSCALE_SERVE_LOG="$disabledServeLog" runGlissaServerApply "$disabledHome" "$disabledBin")"
   disabledConfig="$disabledHome/.glissa/config.json"

@@ -146,8 +146,13 @@ refreshSessionPath() {
   hash -r 2>/dev/null || true
 }
 
+# Test-only pty substitute for the container suite.
+hasPromptInputFixture() {
+  [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]
+}
+
 canPromptUser() {
-  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+  if hasPromptInputFixture; then
     return 0
   fi
   [[ -r /dev/tty && -t 1 ]]
@@ -157,8 +162,7 @@ openPromptInput() {
   if ((promptInputOpen == 1)); then
     return 0
   fi
-  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
-    # Test-only pty substitute for the container suite.
+  if hasPromptInputFixture; then
     exec 9< "$CLAUDE_SETUP_TTY_INPUT"
     promptInputOpen=1
     return 0
@@ -174,14 +178,13 @@ promptValue() {
   if [[ ! "$renderedPrompt" =~ [[:space:]]$ ]]; then
     renderedPrompt="$renderedPrompt "
   fi
-  if [[ -n "${CLAUDE_SETUP_TTY_INPUT:-}" && -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+  if hasPromptInputFixture; then
     printf '%s\n' "$renderedPrompt" >&2
-    IFS= read -r answer <&9 || answer=""
   fi
-  if [[ -z "${CLAUDE_SETUP_TTY_INPUT:-}" || ! -r "${CLAUDE_SETUP_TTY_INPUT:-}" ]]; then
+  if ! hasPromptInputFixture; then
     printf '%s' "$renderedPrompt" > /dev/tty
-    IFS= read -r answer <&9 || answer=""
   fi
+  IFS= read -r answer <&9 || answer=""
   answer="${answer#"${answer%%[![:space:]]*}"}"
   answer="${answer%"${answer##*[![:space:]]}"}"
   printf '%s\n' "$answer"
