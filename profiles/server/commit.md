@@ -69,14 +69,20 @@ Typed outcomes and what to do:
   blocked after two passes, stop and report.
 - `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
   push error. Do not retry the push yourself unless the user asks.
-- `PROMOTE_CONFLICT`, `PROMOTE_FAILED`: the commit exists and the feature branch is pushed
-  (`commit_hash` and `pushed` are populated); promotion did not complete, and the
-  `promoted` field says which branches did update. Relay the warnings and stop. Never
-  resolve conflicts or finish the promotion by hand.
+- `PROMOTE_CONFLICT`: the commit exists and the feature branch is pushed (`commit_hash`
+  and `pushed` are populated); the runner aborted the conflicted promotion merge and left
+  the tree clean. Resolve it per Conflict resolution below, then re-run the runner with
+  `--promote` to finish the remaining hops and pushes.
+- `PROMOTE_FAILED`: the commit exists and the feature branch is pushed; promotion stopped
+  for a non-conflict reason and the `promoted` field says which branches did update. Relay
+  the warnings and stop.
 - `NOTHING_TO_COMMIT` with `--promote`: no commit was made, but the runner still ran
   promotion; report what the `promoted` field says instead of treating it as a failure.
+- `MERGE_CONFLICT`: the sync merge conflicted; the runner aborted it and left the tree
+  clean, with the conflicting files listed in `warnings`. Resolve it per Conflict
+  resolution below, then re-run the runner with the same flags.
 - `NOTHING_TO_COMMIT` (without `--promote`), `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
-  `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_DEAD`,
+  `SYNC_DIVERGED`, `HOOK_FAILED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
 - Runner missing or crashes (non-JSON output): report the error verbatim. On the machine
@@ -84,14 +90,41 @@ Typed outcomes and what to do:
   `~/.claude/commands/commit.md.pre-compiled.bak` (not versioned in this repo, so it may not
   exist elsewhere). Do not execute the archived prose yourself.
 
+## Conflict resolution
+
+When the runner reports `MERGE_CONFLICT` or `PROMOTE_CONFLICT`, resolving the conflict and
+continuing is your job; do not dead-end on it. The runner has already aborted the merge, so
+the tree is clean and the conflicting files are named in `warnings`.
+
+1. Redo the merge the runner attempted:
+   - `MERGE_CONFLICT` (sync stage): merge the branch named in the warning (the integration
+     branch, or `origin/<branch>` when the warning says it merged origin directly) into the
+     current branch.
+   - `PROMOTE_CONFLICT`: note the current branch, check out the destination branch from the
+     warning ("promoting <src> into <dst>"), and merge the source into it.
+2. Resolve each conflicted file on its merits: read both sides, keep both intents where they
+   are independent, and pick the semantically correct result where they collide. Never
+   resolve by blanket `--ours`/`--theirs`, and never drop changes you cannot account for.
+3. Stage the resolutions and complete the merge commit (default merge message is fine).
+4. Return to the branch you started on (`PROMOTE_CONFLICT` case), then re-run the runner
+   with the same flags (`--promote` included) so it finishes the remaining merges and
+   pushes. A `NOTHING_TO_COMMIT` outcome here is expected and fine.
+
+Stop and report instead when: the same hop conflicts again after two resolution attempts,
+a conflict involves changes you cannot attribute or understand (another session's
+work-in-progress, generated files with unclear provenance), or resolving would require
+discarding one side wholesale. Merging by hand remains forbidden in every other situation;
+this section is the only sanctioned manual merge, and only to unblock the runner.
+
 ## Promotion through develop (default)
 
 Promotion is the runner's job, not yours: with `--promote` it merges the feature branch
 into develop, then develop into main/master, pushing each hop, and it creates develop from
 main/master when the repo has none. The invariant it enforces: every change goes through
 develop, and main/master only ever receives merges from develop, so the two never drift.
-Never merge branches yourself, and never merge anything other than develop into
-main/master, even when asked to "just merge it quickly"; re-run the runner instead.
+Never merge branches yourself (sole exception: redoing a conflicted merge per Conflict
+resolution above), and never merge anything other than develop into main/master, even when
+asked to "just merge it quickly"; re-run the runner instead.
 
 Omit `--promote` in exactly two cases:
 

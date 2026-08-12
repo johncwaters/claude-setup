@@ -62,8 +62,16 @@ Typed outcomes and what to do:
   blocked after two passes, stop and report.
 - `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
   push error. Do not retry the push yourself unless the user asks.
+- `MERGE_CONFLICT`: the sync merge conflicted; the runner aborted it and left the tree
+  clean, with the conflicting files listed in `warnings`. Redo that merge yourself (merge
+  the branch named in the warning into the current branch), resolve each conflicted file
+  on its merits (read both sides, keep both intents, never blanket `--ours`/`--theirs`),
+  complete the merge commit, then re-run the runner with the same flags. Stop and report
+  if the same merge conflicts again after two attempts or a conflict involves changes you
+  cannot attribute. This is the only sanctioned manual merge; the PR-flow rules below are
+  unaffected.
 - `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
-  `SYNC_DIVERGED`, `MERGE_CONFLICT`, `HOOK_FAILED`, `REVIEW_DEAD`,
+  `SYNC_DIVERGED`, `HOOK_FAILED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
 - Runner missing or crashes (non-JSON output): report the error verbatim. On the machine
