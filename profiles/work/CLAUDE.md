@@ -1,7 +1,7 @@
 @AGENTS.md
 
 <routing>
-Single source of truth for model selection and subagent delegation. No other section in this file governs routing. This is a work machine: Claude models only. Never dispatch to external model CLIs (Codex, Gemini, or any non-Claude tool), even if guidance merged from another profile mentions them.
+Main session loop only; subagents skip per the `<scope>` section in AGENTS.md. Single source of truth for model selection and subagent delegation; this section overrides the `<routing>` section in AGENTS.md entirely, per that section's own precedence rule. This is a work machine: Claude models only. Never dispatch to external model CLIs (Codex, Grok, Gemini, or any non-Claude tool), even if guidance merged from another profile mentions them.
 
 Models available, rated 1 (low) to 5 (high) on intelligence and speed, and 1 (cheap) to 5 (expensive) on cost:
 
@@ -9,7 +9,7 @@ Models available, rated 1 (low) to 5 (high) on intelligence and speed, and 1 (ch
 |---|---|---|---|---|---|
 | `opus` (claude-opus-5) | 5 | 2 | 5 | Agent `model=opus` (default coding tier) | Default tier for coding: implementation, debugging, architecture, security-sensitive code, refactors, planning/critique, review, judgment calls that gate a completion claim, and any task of uncertain complexity |
 | `sonnet` (claude-sonnet-5) | 4 | 3 | 3 | Agent `model=sonnet` | Downgrade tier, opt-in only: clearly trivial mechanical slices (formulaic single-file edits, simple lookups, routine sweeps) where opus intelligence adds nothing; at any sign of complexity route to `opus` instead |
-| `fable` (claude-fable-5) | 4 | 4 | 2 | Session model only; never a spawn target | Main-loop orchestration when it is the active session model; its spawns still route to `opus`/`sonnet` per the decision order |
+| `fable` (claude-fable-5) | 5 (Mythos-class, above opus in capability) | 4 | 2 | Session model only; never a spawn target | Main-loop orchestration when it is the active session model; its spawns still route to `opus`/`sonnet` per the decision order |
 | `haiku` | - | - | - | Banned | Never use, no exceptions, overrides every other rule in this file |
 
 Decision order for any delegated task:
@@ -25,20 +25,10 @@ Orchestration posture by active session model:
 - Any other session model (sonnet, etc.): apply the decision order above directly, no special posture.
 </routing>
 
-<execution>
-Broad or vague requests: explore first, then plan, then implement. Run builds, test suites, and installs with run_in_background instead of blocking the loop on them.
-Session hygiene: commit each completed slice as it lands rather than batching at session end. When a task finishes and the next is unrelated, suggest the user /clear (or /compact mid-task) instead of continuing to accumulate context; sessions past ~150k context are disproportionately expensive even fully cached. Long-running loops wake every 20-30 minutes minimum. Prefer queueing work over running 4+ parallel sessions; all sessions share one limit.
-</execution>
-
-<verification>
-Before any completion claim or auto-commit: zero pending tasks, tests passing, and verification evidence collected by actually exercising the change, not just typechecking. Never self-approve in the same context. For simple, well-bounded changes the /commit runner's review is the single review gate; do not spawn a separate verifier agent first. Spawn a dedicated `opus` reviewer pass, in addition to the /commit gate, only for large, cross-cutting, or security-sensitive changes. If verification fails, keep iterating.
-</verification>
-
-<auto_commit>
-When a requested change is complete and every gate passes (tests green, verification evidence collected, zero pending tasks), run the /commit workflow immediately; do not wait for the user to ask. Skip only when: the user said not to commit, the work was assessment or exploration with no code change, or the change is one slice of a larger plan still in flight.
-</auto_commit>
-
 # Personal Rules (work PC)
+
+The shared `<execution>`, `<verification>`, and `<auto_commit>` sections arrive via
+@AGENTS.md above; they are not repeated here.
 
 <model_policy>
 - Never use Haiku models. No exceptions. Reinforces the `haiku` = Banned row in the routing table above; overrides any guidance to the contrary.
