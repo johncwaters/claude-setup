@@ -7,7 +7,7 @@ Models available, rated 1 (low) to 5 (high) on intelligence and speed, and 1 (ch
 
 | Model | Intelligence | Speed | Cost | Access | Use for |
 |---|---|---|---|---|---|
-| `opus` (claude-opus-5) | 5 | 2 | 4 | Agent `model=opus` (default coding tier) | Default tier for coding: implementation, debugging, architecture, security-sensitive code, refactors, planning/critique, review, judgment calls that gate a completion claim, and any task of uncertain complexity |
+| `opus` (claude-opus-5) | 5 | 2 | 4 | Agent `model=opus` (default Claude coding tier) | Default Claude tier for coding: implementation, debugging, architecture, security-sensitive code, refactors, planning/critique, review, judgment calls that gate a completion claim, and any task of uncertain complexity |
 | `sonnet` (claude-sonnet-5) | 4 | 3 | 3 | Agent `model=sonnet` | Downgrade tier, opt-in only: clearly trivial mechanical slices (formulaic single-file edits, simple lookups, routine sweeps) where opus intelligence adds nothing; at any sign of complexity route to `opus` instead |
 | `fable` (claude-fable-5) | 5 (Mythos-class, above opus in capability) | 4 | 5 | Session model only; never a spawn target | Main-loop orchestration when it is the active session model; its spawns still route to `opus`/`sonnet` per the decision order |
 | `haiku` | - | - | - | Banned | Never use, no exceptions, overrides every other rule in this file |
