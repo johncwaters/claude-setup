@@ -8,6 +8,13 @@
 
 set -uo pipefail
 
+# Container guard: this suite overwrites $HOME/.gitconfig, $HOME/.glissa/config.json, and the
+# setup/ collect copies. Running it on a real machine destroys live config (it did, 2026-08-16).
+if [[ ! -f /.dockerenv && -z "${SUITE_ALLOW_HOST:-}" ]]; then
+  printf 'suite.sh: refusing to run outside the run-docker.sh container (destructive to $HOME). Use setup/test/run-docker.sh, or set SUITE_ALLOW_HOST=1 if this really is a throwaway machine.\n' >&2
+  exit 1
+fi
+
 suiteMode="${SUITE_MODE:-fast}"
 originRepo="/tmp/origin.git"
 passCount=0
