@@ -54,6 +54,14 @@ def build_arg_parser():
         help="After commit and push, promote the change outward: feature into develop, "
         "develop into mainline (main or master). Never skips develop",
     )
+    parser.add_argument(
+        "--promote-to",
+        choices=["develop", "mainline"],
+        default="mainline",
+        help="Promotion target when --promote is set. mainline promotes through develop "
+        "into main or master. develop stops promotion at develop for PR flows where "
+        "mainline is updated via PR",
+    )
     return parser
 
 
@@ -101,6 +109,7 @@ def main(argv=None):
         skip_review=args.skip_review,
         no_push=args.no_push,
         promote=args.promote,
+        promote_target=args.promote_to,
         llm_client=llm_client,
         context=args.context,
         paths=args.paths,

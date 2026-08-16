@@ -19,7 +19,7 @@ from tests.helpers import (
 )
 
 
-def _make_pipeline(repo, promote=True, no_push=False, paths=None,
+def _make_pipeline(repo, promote=True, promote_target="mainline", no_push=False, paths=None,
                    message="chore: promote test\n\nBody text here."):
     client = LlmClient(mode="live")  # never dispatched: message is always supplied here
     config = PipelineConfig(
@@ -30,6 +30,7 @@ def _make_pipeline(repo, promote=True, no_push=False, paths=None,
         skip_review=True,
         no_push=no_push,
         promote=promote,
+        promote_target=promote_target,
         message=message,
         paths=paths,
         push_retry_delay_sec=0,
@@ -140,6 +141,94 @@ class PromoteTests(unittest.TestCase):
             self.assertEqual(self.current_branch(local), "feature")
             self.assertEqual(_origin_ref(origin, "develop"), result.commit_hash)
             self.assertEqual(_origin_ref(origin, "main"), result.commit_hash)
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_promote_to_develop_stops_before_mainline(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            main_before = _origin_ref(origin, "main")
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+            run_git(seed, ["checkout", "-b", "feature"])
+            run_git(seed, ["push", "-u", "origin", "feature"])
+
+            clone_repo(origin, local)
+            run_git(local, ["branch", "develop", "origin/develop"])
+            run_git(local, ["checkout", "-b", "feature", "origin/feature"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+
+            result = _make_pipeline(local, promote_target="develop").run()
+
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(result.promoted, ["develop"])
+            self.assertEqual(_origin_ref(origin, "develop"), result.commit_hash)
+            self.assertEqual(_origin_ref(origin, "main"), main_before)
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_promote_to_develop_on_develop_skips_promotion(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            main_before = _origin_ref(origin, "main")
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+
+            clone_repo(origin, local)
+            run_git(local, ["checkout", "-b", "develop", "origin/develop"])
+            write_file(local, "base.txt", "base\ndevelop change\n")
+
+            result = _make_pipeline(local, promote_target="develop").run()
+
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(result.promoted, [])
+            self.assertIn("PROMOTE(skipped)", result.stages_run)
+            self.assertTrue(
+                any(
+                    "promote target is develop and current branch is develop; nothing to promote" in w
+                    for w in result.warnings
+                )
+            )
+            self.assertEqual(_origin_ref(origin, "main"), main_before)
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_promote_to_develop_creates_missing_develop_without_updating_mainline(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            main_before = _origin_ref(origin, "main")
+            run_git(seed, ["checkout", "-b", "feature"])
+            run_git(seed, ["push", "-u", "origin", "feature"])
+
+            clone_repo(origin, local)
+            run_git(local, ["checkout", "-b", "feature", "origin/feature"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+
+            result = _make_pipeline(local, promote_target="develop").run()
+
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(result.promoted, ["develop"])
+            self.assertEqual(_origin_ref(origin, "develop"), result.commit_hash)
+            self.assertEqual(_origin_ref(origin, "main"), main_before)
+            self.assertTrue(any("develop branch did not exist" in w for w in result.warnings))
         finally:
             cleanup(origin, seed, local_parent)
 

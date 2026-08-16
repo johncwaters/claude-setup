@@ -20,10 +20,11 @@ nothing falls through silently.
 ## Outward promotion (--promote)
 
 `--promote` adds a final stage that moves the committed change outward along a fixed
-chain: the feature branch into `develop`, then `develop` into the mainline branch (`main`,
-falling back to `master`). It never skips `develop`: mainline only ever receives merges
-from `develop`, which keeps `develop` and mainline in sync. `develop` is created off the
-mainline tip (and pushed) when it does not exist. Each hop is a working-tree-free
+chain by default: the feature branch into `develop`, then `develop` into the mainline
+branch (`main`, falling back to `master`). `--promote-to develop` stops after updating
+`develop` for PR flows where mainline is updated separately. It never skips `develop`:
+mainline only ever receives merges from `develop`. `develop` is created off the mainline
+tip (and pushed) when it does not exist. Each hop is a working-tree-free
 fast-forward (`git fetch . <src>:<dst>`) whenever possible, so a dirty worktree does not
 block promotion; when a hop cannot fast-forward, it falls back to a real merge that
 requires a clean working tree and restores the original branch afterward. A commit made
@@ -82,6 +83,7 @@ Full CLI:
 python runner.py [--repo PATH] [--message "..."] [--context "..."] [--no-sync]
                   [--skip-deslop] [--skip-review] [--replay-fixtures DIR] [--record DIR]
                   [--model ID] [--json] [--no-push] [--promote]
+                  [--promote-to {develop,mainline}]
 ```
 
 Run the tests (from this directory, so `src` resolves on `sys.path`):
@@ -125,7 +127,7 @@ Judge token usage is written to `judge.json` only and is never merged into
 | `NOT_A_REPO` | 10 | `--repo` is not inside a git working tree |
 | `DETACHED_HEAD` | 11 | HEAD is detached |
 | `OPERATION_IN_PROGRESS` | 12 | A merge, rebase, or cherry-pick is already in progress |
-| `NOTHING_TO_COMMIT` | 13 | No changed or (non-denylisted) untracked files, either at scope time or at commit time. With `--promote`, a clean tree at scope time does not stop the run: stages 4 through 9 are skipped and promotion runs anyway from the current branch (an idempotent carry of develop into mainline). The outcome stays `NOTHING_TO_COMMIT`, but `promoted` and any promote warnings are populated; a promotion failure on this path still surfaces as `PROMOTE_CONFLICT` or `PROMOTE_FAILED` |
+| `NOTHING_TO_COMMIT` | 13 | No changed or (non-denylisted) untracked files, either at scope time or at commit time. With `--promote`, a clean tree at scope time does not stop the run: stages 4 through 9 are skipped and promotion runs anyway from the current branch (an idempotent carry of develop into mainline unless `--promote-to develop` stops at develop). The outcome stays `NOTHING_TO_COMMIT`, but `promoted` and any promote warnings are populated; a promotion failure on this path still surfaces as `PROMOTE_CONFLICT` or `PROMOTE_FAILED` |
 | `SYNC_DIVERGED` | 14 | The local integration branch has diverged from `origin` (non-fast-forward) |
 | `MERGE_CONFLICT` | 15 | Sync merge conflicted; merge was aborted, no `MERGE_HEAD` left behind |
 | `GATE_FAILED` | 16 | The workspace confinement assertion failed (see below) |
@@ -191,7 +193,8 @@ still populated), sync (clean feature-branch
 merge, diverged local branch, conflicting merge with a verified clean abort), the LLM
 replay adapter end to end through a real commit, workspace confinement, and outward
 promotion (`--promote`: the full feature/develop/mainline fast-forward chain with pushes,
-auto-creation of a missing develop, the commit-on-develop and commit-on-mainline cases, a
+develop-only promotion for PR flows, auto-creation of a missing develop, the
+commit-on-develop and commit-on-mainline cases, a
 non-fast-forward hop that conflicts with a verified clean abort and branch restore, a
 non-fast-forward hop that merges cleanly, flaky promote-push retry, clean local mainline
 divergence recovery from origin, conflicting local mainline divergence with a verified

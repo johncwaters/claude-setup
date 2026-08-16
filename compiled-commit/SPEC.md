@@ -135,10 +135,11 @@ PROMOTE anyway from the current branch. The outcome stays NOTHING_TO_COMMIT (exi
 unchanged) with the promoted list, promote warnings, and the PROMOTE stage entry
 populated. PROMOTE_CONFLICT and PROMOTE_FAILED still win as the outcome when promotion
 fails on this path. This makes "--promote on a clean tree" an idempotent carry of develop
-into mainline, e.g. after a pull request merges into develop.
+into mainline, e.g. after a pull request merges into develop, unless --promote-to develop
+stops promotion at develop.
 Invariant: every change flows feature -> develop -> mainline (main or master), never
-skipping develop; mainline only ever receives merges from develop, keeping develop and
-mainline in sync.
+skipping develop; mainline only ever receives merges from develop. With --promote-to
+develop, promotion stops at develop so a PR can update mainline separately.
 When origin exists, first refresh the remote-tracking refs the stage depends on
 (`git fetch origin develop`, then each mainline candidate; fetches of absent refs just
 fail), since `refs/remotes/origin/*` may be stale when sync was skipped and a stale view
@@ -153,9 +154,12 @@ branch; promotion skipped", stage records PROMOTE(skipped), outcome stays COMMIT
 Hops from the current branch B:
 - B == mainline: warning "commit landed directly on <mainline>; promotion skipped, develop
   not updated", PROMOTE(skipped), stay COMMITTED (mainline is never merged into develop).
+- B == develop and --promote-to develop: warning "promote target is develop and current
+  branch is develop; nothing to promote", PROMOTE(skipped), stay COMMITTED.
 - B == develop: hop [develop -> mainline] when mainline exists; no mainline -> nothing to
   do (PROMOTE(skipped) with a note).
-- otherwise: hops [B -> develop, develop -> mainline], dropping the second when no mainline.
+- otherwise: hops [B -> develop, develop -> mainline], dropping the second when no mainline
+  or when --promote-to develop is set.
 Each hop src -> dst, in order:
 1. When origin exists: `git fetch origin <dst>` (failure -> warning, continue with local
    state), then `git fetch origin <dst>:<dst>`; a non-fast-forward rejection here means
@@ -217,6 +221,7 @@ Default model: claude-sonnet-5. Never claude-haiku.
 python runner.py [--repo PATH] [--message "..."] [--no-sync] [--skip-deslop]
                  [--skip-review] [--replay-fixtures DIR] [--record DIR]
                  [--model ID] [--json] [--no-push] [--promote]
+                 [--promote-to {develop,mainline}]
 ```
 --repo defaults to cwd. --replay-fixtures: LLM replay mode plus sync skip. --json: print
 full result JSON only. Human output otherwise: terse stage lines then outcome.
@@ -226,6 +231,8 @@ benchmark always passes it since a replay clone's origin is the real source repo
 --promote (default off) enables Stage 10: after commit and push it advances the change
 outward feature -> develop -> mainline. PROMOTE_CONFLICT and PROMOTE_FAILED get distinct
 nonzero exit codes.
+--promote-to (default mainline) only matters with --promote. develop stops after the
+feature -> develop hop for PR flows where mainline is updated via PR.
 
 ## Benchmark (bench/run_bench.py)
 

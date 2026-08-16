@@ -176,6 +176,7 @@ class PipelineConfig:
     skip_review: bool = False
     no_push: bool = False
     promote: bool = False
+    promote_target: str = "mainline"
     llm_client: object = None
     fixture_prefix: str = "run"
     context: str = None
@@ -574,6 +575,13 @@ class Pipeline:
             )
             return None
 
+        if self.config.promote_target == "develop" and current == "develop":
+            self.result.stages_run.append("PROMOTE(skipped)")
+            self.result.warnings.append(
+                "promote target is develop and current branch is develop; nothing to promote"
+            )
+            return None
+
         hops = self._promotion_hops(current, mainline)
         if not hops:
             self.result.stages_run.append("PROMOTE(skipped)")
@@ -594,6 +602,8 @@ class Pipeline:
         return None
 
     def _promotion_hops(self, current, mainline):
+        if self.config.promote_target == "develop":
+            return [(current, "develop")]
         if current == "develop":
             if mainline is None:
                 return []
