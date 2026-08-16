@@ -40,7 +40,9 @@ Flag mapping from the user's arguments:
   it only when the user asked to commit everything or you genuinely cannot enumerate what
   changed.
 - Pass `--promote` by default so the runner carries the commit through develop into
-  main/master. Omit it only in the two cases listed under Promotion through develop below.
+  main/master. For PR-flow branches, pass `--promote --promote-to develop` so promotion
+  stops at develop. Omit `--promote` only in the case listed under Promotion through
+  develop below.
 
 The runner has additional flags for direct use (`--help`), but this command maps only the
 flags above. Do not pass skip flags unless the user explicitly names one.
@@ -119,18 +121,19 @@ this section is the only sanctioned manual merge, and only to unblock the runner
 ## Promotion through develop (default)
 
 Promotion is the runner's job, not yours: with `--promote` it merges the feature branch
-into develop, then develop into main/master, pushing each hop, and it creates develop from
-main/master when the repo has none. The invariant it enforces: every change goes through
-develop, and main/master only ever receives merges from develop, so the two never drift.
-Never merge branches yourself (sole exception: redoing a conflicted merge per Conflict
-resolution above), and never merge anything other than develop into main/master, even when
-asked to "just merge it quickly"; re-run the runner instead.
+into develop, then develop into main/master by default, pushing each hop, and it creates
+develop from main/master when the repo has none. The invariant it enforces: every change
+goes through develop, and main/master only ever receives merges from develop. Never merge
+branches yourself (sole exception: redoing a conflicted merge per Conflict resolution
+above), and never merge anything other than develop into main/master, even when asked to
+"just merge it quickly"; re-run the runner instead.
 
-Omit `--promote` in exactly two cases:
+Use promotion flags this way:
 
-- The user asked for commit-only (words like "commit only", "don't merge").
-- The branch is part of a PR flow that reviews before merge. The PR must target develop,
-  never main/master; after the PR merges, promote develop into main/master by running the
-  runner on develop with `--promote`. A clean tree is fine: with `--promote` the runner
-  still performs promotion on a NOTHING_TO_COMMIT outcome, so this doubles as the way to
-  repair develop/main drift.
+- The user asked for commit-only (words like "commit only", "don't merge"): omit
+  `--promote`.
+- The branch is part of a PR flow that reviews before merge. Pass `--promote
+  --promote-to develop` so the change lands in develop and the PR, whether targeting
+  develop or promoting develop to main/master, does the rest. A clean tree is fine: with
+  `--promote` the runner still performs promotion on a NOTHING_TO_COMMIT outcome, so this
+  doubles as the way to repair develop/main drift when the target is mainline.
