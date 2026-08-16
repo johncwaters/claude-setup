@@ -133,7 +133,10 @@ Use promotion flags this way:
 - The user asked for commit-only (words like "commit only", "don't merge"): omit
   `--promote`.
 - The branch is part of a PR flow that reviews before merge. Pass `--promote
-  --promote-to develop` so the change lands in develop and the PR, whether targeting
-  develop or promoting develop to main/master, does the rest. A clean tree is fine: with
-  `--promote` the runner still performs promotion on a NOTHING_TO_COMMIT outcome, so this
-  doubles as the way to repair develop/main drift when the target is mainline.
+  --promote-to develop` so promotion stops at develop and main/master stays untouched.
+  Main/master then moves only from develop: either the PR itself is develop into
+  main/master, or after a PR into develop merges, run the runner on develop with plain
+  `--promote`. A PR from any other branch must never target main/master. A clean tree is
+  fine: with `--promote` the runner still performs promotion on a NOTHING_TO_COMMIT
+  outcome, so this doubles as the way to repair develop/main drift when the target is
+  mainline.
