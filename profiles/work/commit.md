@@ -60,8 +60,13 @@ Typed outcomes and what to do:
   per above, then report; then offer the PR handoff below.
 - `REVIEW_BLOCKED`: no commit happened. Fix the findings per above and re-run; still
   blocked after two passes, stop and report.
-- `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
-  push error. Do not retry the push yourself unless the user asks.
+- `PUSH_FAILED`: the commit exists but the push did not land after the runner's retries.
+  Fixing it is your job; do not stop here. Read the push error in `warnings`: rejected as
+  non-fast-forward or "fetch first" means the remote branch moved, so fetch, merge
+  `origin/<branch>` into the branch (resolve conflicts per the `MERGE_CONFLICT` rules),
+  then re-run the runner. Transient network or remote errors: re-run the runner once.
+  Stop and report only for authentication, permission, or branch protection failures, or
+  when the same failure survives two recovery passes.
 - `MERGE_CONFLICT`: the sync merge conflicted; the runner aborted it and left the tree
   clean, with the conflicting files listed in `warnings`. Redo that merge yourself (merge
   the branch named in the warning into the current branch), resolve each conflicted file
@@ -70,8 +75,12 @@ Typed outcomes and what to do:
   if the same merge conflicts again after two attempts or a conflict involves changes you
   cannot attribute. This is the only sanctioned manual merge; the PR-flow rules below are
   unaffected.
+- `SYNC_DIVERGED`: the local integration branch has diverged from origin. Check out the
+  integration branch, merge `origin/<branch>` into it (resolve conflicts per the
+  `MERGE_CONFLICT` rules), push it, return to your feature branch, then re-run the runner
+  with the same flags. Stop only if the same divergence survives two recovery passes.
 - `NOTHING_TO_COMMIT`, `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
-  `SYNC_DIVERGED`, `HOOK_FAILED`, `REVIEW_DEAD`,
+  `HOOK_FAILED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
 - Runner missing or crashes (non-JSON output): report the error verbatim. On the machine

@@ -69,22 +69,25 @@ Typed outcomes and what to do:
   runner carried the commit into. Fix findings per above, then report.
 - `REVIEW_BLOCKED`: no commit happened. Fix the findings per above and re-run; still
   blocked after two passes, stop and report.
-- `PUSH_FAILED`: the commit exists but the push did not land. Relay the commit hash and the
-  push error. Do not retry the push yourself unless the user asks.
+- `PUSH_FAILED`: the commit exists but the push did not land after the runner's retries.
+  Recover per Push and merge recovery below; do not stop here.
 - `PROMOTE_CONFLICT`: the commit exists and the feature branch is pushed (`commit_hash`
   and `pushed` are populated); the runner aborted the conflicted promotion merge and left
   the tree clean. Resolve it per Conflict resolution below, then re-run the runner with
   `--promote` to finish the remaining hops and pushes.
 - `PROMOTE_FAILED`: the commit exists and the feature branch is pushed; promotion stopped
-  for a non-conflict reason and the `promoted` field says which branches did update. Relay
-  the warnings and stop.
+  for a non-conflict reason and the `promoted` field says which branches did update. Fix
+  the cause named in `warnings` per Push and merge recovery below, then re-run the runner
+  with `--promote` to finish the remaining hops.
 - `NOTHING_TO_COMMIT` with `--promote`: no commit was made, but the runner still ran
   promotion; report what the `promoted` field says instead of treating it as a failure.
 - `MERGE_CONFLICT`: the sync merge conflicted; the runner aborted it and left the tree
   clean, with the conflicting files listed in `warnings`. Resolve it per Conflict
   resolution below, then re-run the runner with the same flags.
+- `SYNC_DIVERGED`: the local integration branch has diverged from origin. Recover per
+  Push and merge recovery below, then re-run the runner with the same flags.
 - `NOTHING_TO_COMMIT` (without `--promote`), `NOT_A_REPO`, `DETACHED_HEAD`, `OPERATION_IN_PROGRESS`,
-  `SYNC_DIVERGED`, `HOOK_FAILED`, `REVIEW_DEAD`,
+  `HOOK_FAILED`, `REVIEW_DEAD`,
   `MESSAGE_INVALID`: stop and relay. The user decides the next step. Never retry by
   performing the workflow manually.
 - Runner missing or crashes (non-JSON output): report the error verbatim. On the machine
@@ -117,6 +120,31 @@ a conflict involves changes you cannot attribute or understand (another session'
 work-in-progress, generated files with unclear provenance), or resolving would require
 discarding one side wholesale. Merging by hand remains forbidden in every other situation;
 this section is the only sanctioned manual merge, and only to unblock the runner.
+
+## Push and merge recovery
+
+`PUSH_FAILED`, `SYNC_DIVERGED`, and `PROMOTE_FAILED` are yours to resolve, the same way
+conflicts are; do not dead-end on them. The runner's `warnings` name the root cause. Fix
+it, then re-run the runner (keeping `--promote` when it was passed) so it finishes every
+remaining merge and push; a `NOTHING_TO_COMMIT` outcome on the re-run is expected and
+fine. The git commands in this section are sanctioned only to unblock the runner.
+
+- Push rejected (non-fast-forward, "stale info", "fetch first"): the remote branch moved.
+  Fetch, merge `origin/<branch>` into the local branch (conflicts per Conflict
+  resolution), push that branch, then re-run the runner.
+- `SYNC_DIVERGED`: check out the integration branch, merge `origin/<branch>` into it
+  (conflicts per Conflict resolution), push it, return to the branch you started on, then
+  re-run the runner.
+- Destination branch checked out in a dirty worktree: if the uncommitted changes are this
+  session's, commit or stash them there first; changes you cannot attribute are a stop
+  case.
+- Transient network or remote errors: re-run the runner once before treating the failure
+  as real.
+
+Stop and report only when: the failure is authentication, permissions, or branch
+protection policy (nothing you can fix from the CLI); the same failure survives two
+recovery passes; or fixing would require touching changes you cannot attribute. Everything
+else gets resolved until the change is merged and pushed.
 
 ## Promotion through develop (default)
 
