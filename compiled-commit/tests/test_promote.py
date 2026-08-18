@@ -5,10 +5,10 @@ import tempfile
 import unittest
 
 from src.failures import Outcome
-from src.git_ops import GitOps
 from src.llm import LlmClient
 from src.pipeline import Pipeline, PipelineConfig, find_worktree_for_branch
 from tests.helpers import (
+    RecordingGitOps,
     cleanup,
     clone_repo,
     commit_file,
@@ -37,16 +37,6 @@ def _make_pipeline(repo, promote=True, promote_target="mainline", no_push=False,
         push_retry_delay_sec=0,
     )
     return Pipeline(config)
-
-
-class RecordingGitOps(GitOps):
-    def __init__(self, repo):
-        super().__init__(repo)
-        self.calls = []
-
-    def _run(self, args, cwd=None):
-        self.calls.append(list(args))
-        return super()._run(args, cwd=cwd)
 
 
 def _origin_ref(origin, branch):

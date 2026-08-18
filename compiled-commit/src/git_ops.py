@@ -75,7 +75,7 @@ class GitOps:
         return self._run(["fetch", remote, f"{branch}:{branch}"])
 
     def fetch_local_from_tracking(self, branch):
-        return self._run(["fetch", ".", f"refs/remotes/origin/{branch}:refs/heads/{branch}"])
+        return self.fetch_local_ff(f"refs/remotes/origin/{branch}", f"refs/heads/{branch}")
 
     def fetch_local_ff(self, src, dst):
         # Fast-forward local ref dst to src without touching the working tree.

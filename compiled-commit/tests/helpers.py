@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import tempfile
 
+from src.git_ops import GitOps
+
 
 def run_git(repo, args, check=True):
     proc = subprocess.run(["git"] + args, cwd=repo, capture_output=True, text=True)
@@ -75,3 +77,13 @@ def write_flaky_hook(hooks_dir, hook_name, count_file_rel, failing_attempts, lab
             "exit 0\n"
         )
     os.chmod(hook_path, 0o755)
+
+
+class RecordingGitOps(GitOps):
+    def __init__(self, repo):
+        super().__init__(repo)
+        self.calls = []
+
+    def _run(self, args, cwd=None):
+        self.calls.append(list(args))
+        return super()._run(args, cwd=cwd)
