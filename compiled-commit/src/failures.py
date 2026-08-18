@@ -71,6 +71,7 @@ class PipelineResult:
     git_op_count: int = 0
     wall_time_sec: float = 0.0
     stages_run: list = field(default_factory=list)
+    stage_times: list = field(default_factory=list)
 
     def to_dict(self):
         data = asdict(self)

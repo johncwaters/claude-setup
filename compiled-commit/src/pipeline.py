@@ -1,6 +1,8 @@
 """Typed state machine driving the compiled commit workflow (SPEC Stages 1-8)."""
 
+import json
 import os
+import sys
 import time
 from dataclasses import dataclass
 
@@ -18,7 +20,7 @@ INTEGRATION_BRANCH_CANDIDATES = ("develop", "main", "master")
 
 MAINLINE_CANDIDATES = ("main", "master")
 
-DENYLIST_DIR_PREFIXES = ("node_modules/", "dist/", "__pycache__/")
+DENYLIST_DIR_PREFIXES = ("node_modules/", "dist/", "__pycache__/", ".compiled-commit-tmp/")
 
 PUSH_ATTEMPTS = 3
 
@@ -65,6 +67,11 @@ def compute_scope(git, paths=None):
             continue
         untracked.append(path)
     return changed, untracked
+
+
+def is_dirty_status_line_in_scope(line):
+    path = line[3:].strip()
+    return not is_denylisted(path)
 
 
 def resolve_integration_branch(git):
@@ -188,6 +195,13 @@ class PipelineConfig:
             self.workspace = self.repo
 
 
+@dataclass
+class PendingPushRef:
+    branch: str
+    kind: str
+    source: str = None
+
+
 class Pipeline:
     def __init__(self, config):
         self.config = config
@@ -200,6 +214,8 @@ class Pipeline:
         self.rendered_message = None
         self._diff_packet = None
         self._no_origin_promote_warned = False
+        self._checkpoint_warning_recorded = False
+        self._deferred_feature_branch = None
 
     def run(self):
         if not self._workspace_confined():
@@ -208,46 +224,57 @@ class Pipeline:
             )
             return self._finish(Outcome.GATE_FAILED)
 
-        outcome = self._preflight()
+        outcome = self._run_stage("PREFLIGHT", self._preflight)
         if outcome:
             return self._finish(outcome)
 
-        outcome = self._sync()
+        outcome = self._run_stage("SYNC", self._sync)
         if outcome:
             return self._finish(outcome)
 
-        scope_outcome = self._scope()
+        scope_outcome = self._run_stage("SCOPE", self._scope)
         if scope_outcome:
             if scope_outcome == Outcome.NOTHING_TO_COMMIT and self.config.promote:
-                promote_outcome = self._promote()
+                promote_outcome = self._run_stage("PROMOTE", self._promote)
                 if promote_outcome:
                     return self._finish(promote_outcome)
                 return self._finish(Outcome.NOTHING_TO_COMMIT)
             return self._finish(scope_outcome)
 
-        self._slop()
+        self._run_stage("SLOP", self._slop)
 
-        outcome = self._review()
+        outcome = self._run_stage("REVIEW", self._review)
         if outcome:
             return self._finish(outcome)
 
-        outcome = self._message()
+        outcome = self._run_stage("MESSAGE", self._message)
         if outcome:
             return self._finish(outcome)
 
-        outcome = self._commit()
+        outcome = self._run_stage("COMMIT", self._commit)
         if outcome != Outcome.COMMITTED:
             return self._finish(outcome)
 
-        push_outcome = self._push()
+        push_outcome = self._run_stage("PUSH", self._push)
         if push_outcome:
             return self._finish(push_outcome)
 
-        promote_outcome = self._promote()
-        if promote_outcome:
-            return self._finish(promote_outcome)
+        if self.config.promote:
+            promote_outcome = self._run_stage("PROMOTE", self._promote)
+            if promote_outcome:
+                return self._finish(promote_outcome)
 
         return self._finish(Outcome.COMMITTED)
+
+    def _run_stage(self, stage_name, stage_func):
+        print(f"[{time.strftime('%H:%M:%S')}] stage {stage_name}", file=sys.stderr)
+        stage_start = time.monotonic()
+        outcome = stage_func()
+        seconds = time.monotonic() - stage_start
+        self.result.stage_times.append({"stage": stage_name, "seconds": seconds})
+        completed_stage = self.result.stages_run[-1] if self.result.stages_run else stage_name
+        self._checkpoint(completed_stage)
+        return outcome
 
     def _workspace_confined(self):
         repo_real = os.path.realpath(self.config.repo)
@@ -260,7 +287,32 @@ class Pipeline:
         self.result.outcome = outcome
         self.result.git_op_count = self.git.op_count
         self.result.wall_time_sec = time.monotonic() - self.start_time
+        self._write_result_snapshot(checkpoint=False, stage=self._last_completed_stage())
         return self.result
+
+    def _last_completed_stage(self):
+        if self.result.stages_run:
+            return self.result.stages_run[-1]
+        return None
+
+    def _checkpoint(self, stage_name):
+        self.result.git_op_count = self.git.op_count
+        self.result.wall_time_sec = time.monotonic() - self.start_time
+        self._write_result_snapshot(checkpoint=True, stage=stage_name)
+
+    def _write_result_snapshot(self, checkpoint, stage):
+        data = self.result.to_dict()
+        data["checkpoint"] = checkpoint
+        data["stage"] = stage
+        try:
+            path = os.path.join(self._temp_dir(), "checkpoint.json")
+            with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(data, indent=2))
+        except OSError as error:
+            if self._checkpoint_warning_recorded:
+                return
+            self.result.warnings.append(f"could not write checkpoint: {error}")
+            self._checkpoint_warning_recorded = True
 
     # -- Stage 1 --------------------------------------------------------
 
@@ -529,16 +581,20 @@ class Pipeline:
             return None
 
         branch = self.git.current_branch()
+        if self.config.promote:
+            self._deferred_feature_branch = branch
+            return None
 
-        def push_once():
-            if self.git.has_upstream():
-                return self.git.push()
-            return self.git.push_set_upstream("origin", branch)
+        pending_refs = [PendingPushRef(branch=branch, kind="feature")]
+        refs_to_push, skipped_refs = self._filter_up_to_date_refs(pending_refs)
+        if skipped_refs:
+            self.result.pushed = True
+            return None
 
-        outcome = self._push_with_retries(
-            push_once,
-            Outcome.PUSH_FAILED,
-            lambda attempt, stderr: f"push attempt {attempt}/{PUSH_ATTEMPTS} failed: {stderr}",
+        outcome = self._push_pending_refs(
+            refs_to_push,
+            set_upstream=not self.git.has_upstream(),
+            exhausted_outcome=Outcome.PUSH_FAILED,
         )
         if outcome:
             return outcome
@@ -553,9 +609,7 @@ class Pipeline:
             return None
 
         origin_exists = "origin" in self.git.list_remotes()
-        if origin_exists:
-            for name in ("develop",) + MAINLINE_CANDIDATES:
-                self.git.fetch("origin", name)
+        self._prefetch_promotion_branches(origin_exists)
 
         mainline = resolve_mainline(self.git)
         develop_present = self.git.verify_ref("refs/heads/develop") or self.git.verify_ref(
@@ -595,10 +649,33 @@ class Pipeline:
         if not develop_present:
             self._create_develop(mainline, origin_exists)
 
+        promoted_branches = []
         for src, dst in hops:
             outcome = self._promote_hop(src, dst, origin_exists)
             if outcome:
                 return outcome
+            promoted_branches.append(dst)
+
+        self.result.stages_run.append("PROMOTE(merged)")
+        self._checkpoint("PROMOTE(merged)")
+
+        if not origin_exists:
+            return None
+
+        pending_refs = []
+        if self._deferred_feature_branch:
+            pending_refs.append(PendingPushRef(branch=self._deferred_feature_branch, kind="feature"))
+        pending_refs.extend(
+            PendingPushRef(branch=dst, kind="promote", source=src)
+            for src, dst in hops
+        )
+
+        outcome = self._push_promoted_batch(pending_refs, promoted_branches)
+        if outcome:
+            return outcome
+
+        self.result.stages_run.append("PROMOTE(pushed)")
+        self._checkpoint("PROMOTE(pushed)")
         return None
 
     def _promotion_hops(self, current, mainline):
@@ -613,23 +690,43 @@ class Pipeline:
             hops.append(("develop", mainline))
         return hops
 
+    def _prefetch_promotion_branches(self, origin_exists):
+        if not origin_exists:
+            return
+
+        candidates = self._local_promotion_candidates()
+        if not candidates:
+            return
+
+        fetch = self.git.fetch_many("origin", candidates)
+        if fetch.returncode == 0:
+            return
+
+        self.result.warnings.append(
+            "combined promotion fetch failed; falling back to per-branch fetches: "
+            f"{(fetch.stderr or '').strip()}"
+        )
+        for name in candidates:
+            self.git.fetch("origin", name)
+
+    def _local_promotion_candidates(self):
+        candidates = []
+        for name in ("develop",) + MAINLINE_CANDIDATES:
+            if self.git.verify_ref(f"refs/heads/{name}"):
+                candidates.append(name)
+                continue
+            if self.git.verify_ref(f"refs/remotes/origin/{name}"):
+                candidates.append(name)
+        return candidates
+
     def _create_develop(self, mainline, origin_exists):
         start_point = mainline
-        if origin_exists:
-            self.git.fetch("origin", mainline)
-            if self.git.verify_ref(f"refs/remotes/origin/{mainline}"):
-                start_point = f"origin/{mainline}"
+        if origin_exists and self.git.verify_ref(f"refs/remotes/origin/{mainline}"):
+            start_point = f"origin/{mainline}"
         self.git.create_branch_at("develop", start_point)
         self.result.warnings.append(
             f"develop branch did not exist; created it at {start_point}"
         )
-        if not origin_exists:
-            return
-        push = self.git.push_set_upstream("origin", "develop")
-        if push.returncode != 0:
-            self.result.warnings.append(
-                f"created develop locally but pushing it to origin failed: {(push.stderr or '').strip()}"
-            )
 
     def _promote_hop(self, src, dst, origin_exists):
         if origin_exists:
@@ -643,21 +740,43 @@ class Pipeline:
             if outcome:
                 return outcome
 
-        return self._push_promoted(src, dst, origin_exists)
-
-    def _sync_dst_with_origin(self, dst):
-        fetch = self.git.fetch("origin", dst)
-        if fetch.returncode != 0:
-            self.result.warnings.append(
-                f"could not fetch origin {dst}; continuing with local state: {(fetch.stderr or '').strip()}"
-            )
+        if origin_exists:
             return None
 
+        if not self._no_origin_promote_warned:
+            self.result.warnings.append(
+                "no origin remote; promoted branches updated locally only"
+            )
+            self._no_origin_promote_warned = True
+        self.result.promoted.append(dst)
+        return None
+
+    def _sync_dst_with_origin(self, dst, fetch_remote=False):
+        if fetch_remote:
+            fetch = self.git.fetch("origin", dst)
+            if fetch.returncode != 0:
+                self.result.warnings.append(
+                    f"could not fetch origin {dst}; continuing with local state: {(fetch.stderr or '').strip()}"
+                )
+
+        if self.git.verify_ref(f"refs/remotes/origin/{dst}"):
+            return self._update_dst_from_origin_tracking(dst)
+
         update = self.git.fetch_update_local_ref("origin", dst)
+        return self._handle_dst_origin_update(dst, update)
+
+    def _update_dst_from_origin_tracking(self, dst):
+        update = self.git.fetch_local_from_tracking(dst)
+        return self._handle_dst_origin_update(dst, update)
+
+    def _handle_dst_origin_update(self, dst, update):
         if update.returncode == 0:
             return None
 
         stderr = update.stderr or ""
+        if "checked out" in stderr:
+            return self._ff_in_holding_worktree(f"origin/{dst}", dst)
+
         if "non-fast-forward" in stderr or "rejected" in stderr:
             outcome = self._merge_for_promotion(f"origin/{dst}", dst)
             if outcome:
@@ -714,7 +833,10 @@ class Pipeline:
         return None
 
     def _merge_for_promotion(self, src, dst):
-        dirty = [line for line in self.git.status_short() if not line.startswith("??")]
+        dirty = [
+            line for line in self.git.status_short()
+            if not line.startswith("??") and is_dirty_status_line_in_scope(line)
+        ]
         if dirty:
             self.result.warnings.append(f"working tree not clean; cannot merge {src} into {dst}")
             return Outcome.PROMOTE_FAILED
@@ -778,6 +900,224 @@ class Pipeline:
         self.result.promoted.append(dst)
         return None
 
+    def _filter_up_to_date_refs(self, pending_refs):
+        refs_to_push = []
+        skipped_refs = []
+        for pending_ref in pending_refs:
+            if self._origin_ref_is_up_to_date(pending_ref.branch):
+                skipped_refs.append(pending_ref)
+                continue
+            refs_to_push.append(pending_ref)
+        return refs_to_push, skipped_refs
+
+    def _origin_ref_is_up_to_date(self, branch):
+        local_sha = self.git.rev_parse_ref(f"refs/heads/{branch}")
+        if local_sha is None:
+            return False
+        remote_sha = self.git.rev_parse_ref(f"refs/remotes/origin/{branch}")
+        if remote_sha is None:
+            return False
+        return local_sha == remote_sha
+
+    def _push_pending_refs(self, pending_refs, set_upstream, exhausted_outcome):
+        if not pending_refs:
+            return None
+
+        refspecs = [self._branch_refspec(pending_ref.branch) for pending_ref in pending_refs]
+        for attempt in range(1, PUSH_ATTEMPTS + 1):
+            push = self.git.push_refs_porcelain("origin", refspecs, set_upstream=set_upstream)
+            ref_statuses = self._push_status_by_branch(push, pending_refs)
+            if self._all_refs_pushed(ref_statuses):
+                return None
+            if self._has_per_ref_failure(ref_statuses):
+                return self._push_outcome_for_ref_failures(ref_statuses, exhausted_outcome)
+
+            stderr = (push.stderr or "").strip()
+            self._append_batch_transport_warnings(pending_refs, attempt, stderr)
+            if attempt == PUSH_ATTEMPTS:
+                break
+            time.sleep(self.config.push_retry_delay_sec)
+        return exhausted_outcome
+
+    def _push_promoted_batch(self, pending_refs, promoted_branches):
+        refs_to_push, skipped_refs = self._filter_up_to_date_refs(pending_refs)
+        self._mark_skipped_push_refs(skipped_refs, promoted_branches)
+        if not refs_to_push:
+            return None
+
+        push = self._push_batch_until_per_ref_result(refs_to_push, set_upstream=False)
+        if push is None:
+            return Outcome.PROMOTE_FAILED
+
+        ref_statuses = self._push_status_by_branch(push, refs_to_push)
+        feature_failures = [
+            pending_ref for pending_ref in refs_to_push
+            if pending_ref.kind == "feature" and self._ref_failed(ref_statuses[pending_ref.branch])
+        ]
+        if feature_failures:
+            return Outcome.PUSH_FAILED
+
+        rejected_promoted_refs = [
+            pending_ref for pending_ref in refs_to_push
+            if pending_ref.kind == "promote" and ref_statuses[pending_ref.branch] == "rejected"
+        ]
+        error_promoted_refs = [
+            pending_ref for pending_ref in refs_to_push
+            if pending_ref.kind == "promote" and ref_statuses[pending_ref.branch] == "error"
+        ]
+        if error_promoted_refs:
+            self._append_promote_failure_warnings(error_promoted_refs, ref_statuses, push)
+            return Outcome.PROMOTE_FAILED
+
+        if rejected_promoted_refs:
+            return self._resync_and_retry_rejected_promoted_refs(
+                refs_to_push,
+                ref_statuses,
+                rejected_promoted_refs,
+                promoted_branches,
+                push,
+            )
+
+        self._mark_successful_push_refs(refs_to_push, promoted_branches)
+        return None
+
+    def _push_batch_until_per_ref_result(self, pending_refs, set_upstream):
+        refspecs = [self._branch_refspec(pending_ref.branch) for pending_ref in pending_refs]
+        for attempt in range(1, PUSH_ATTEMPTS + 1):
+            push = self.git.push_refs_porcelain("origin", refspecs, set_upstream=set_upstream)
+            ref_statuses = self._push_status_by_branch(push, pending_refs)
+            if self._all_refs_pushed(ref_statuses) or self._has_per_ref_failure(ref_statuses):
+                return push
+
+            stderr = (push.stderr or "").strip()
+            self._append_batch_transport_warnings(pending_refs, attempt, stderr)
+            if attempt == PUSH_ATTEMPTS:
+                break
+            time.sleep(self.config.push_retry_delay_sec)
+        return None
+
+    def _resync_and_retry_rejected_promoted_refs(
+        self,
+        initial_refs_to_push,
+        initial_statuses,
+        rejected_promoted_refs,
+        promoted_branches,
+        initial_push,
+    ):
+        self._append_promote_failure_warnings(rejected_promoted_refs, initial_statuses, initial_push)
+        for pending_ref in rejected_promoted_refs:
+            outcome = self._resync_promoted_dst(pending_ref.source, pending_ref.branch)
+            if outcome:
+                return outcome
+
+        retry_refs = rejected_promoted_refs
+        retry_push = self.git.push_refs_porcelain(
+            "origin",
+            [self._branch_refspec(pending_ref.branch) for pending_ref in retry_refs],
+            set_upstream=False,
+        )
+        retry_statuses = self._push_status_by_branch(retry_push, retry_refs)
+        if self._all_refs_pushed(retry_statuses):
+            self._mark_successful_push_refs(initial_refs_to_push, promoted_branches, initial_statuses)
+            self._mark_successful_push_refs(retry_refs, promoted_branches, retry_statuses)
+            return None
+
+        self._append_promote_failure_warnings(retry_refs, retry_statuses, retry_push, attempt=2)
+        return Outcome.PROMOTE_FAILED
+
+    def _append_promote_failure_warnings(self, pending_refs, statuses, push, attempt=1):
+        for pending_ref in pending_refs:
+            summary = self._push_failure_text(push, pending_ref.branch)
+            self.result.warnings.append(
+                f"promote push {pending_ref.branch} attempt {attempt}/{PUSH_ATTEMPTS} failed: {summary}"
+            )
+
+    def _mark_skipped_push_refs(self, skipped_refs, promoted_branches):
+        for pending_ref in skipped_refs:
+            if pending_ref.kind == "feature":
+                self.result.pushed = True
+                continue
+            self._append_promoted_in_hop_order(pending_ref.branch, promoted_branches)
+
+    def _mark_successful_push_refs(self, pending_refs, promoted_branches, statuses=None):
+        for pending_ref in pending_refs:
+            if statuses is not None and not self._ref_succeeded(statuses[pending_ref.branch]):
+                continue
+            if pending_ref.kind == "feature":
+                self.result.pushed = True
+                continue
+            self._append_promoted_in_hop_order(pending_ref.branch, promoted_branches)
+
+    def _append_promoted_in_hop_order(self, branch, promoted_branches):
+        for promoted_branch in promoted_branches:
+            if promoted_branch != branch:
+                continue
+            if promoted_branch in self.result.promoted:
+                return
+            self.result.promoted.append(promoted_branch)
+            return
+
+    def _push_status_by_branch(self, push, pending_refs):
+        statuses = {}
+        for pending_ref in pending_refs:
+            parsed = self._push_ref_result(push, pending_ref.branch)
+            if parsed is None and push.returncode == 0:
+                statuses[pending_ref.branch] = "ok"
+                continue
+            if parsed is None:
+                statuses[pending_ref.branch] = "unknown"
+                continue
+            statuses[pending_ref.branch] = parsed["status"]
+        return statuses
+
+    def _push_ref_result(self, push, branch):
+        refname = f"refs/heads/{branch}"
+        if refname in push.refs:
+            return push.refs[refname]
+        return push.refs.get(branch)
+
+    def _all_refs_pushed(self, statuses):
+        return all(self._ref_succeeded(status) for status in statuses.values())
+
+    def _has_per_ref_failure(self, statuses):
+        return any(self._ref_failed(status) for status in statuses.values())
+
+    def _ref_succeeded(self, status):
+        return status in ("ok", "up_to_date")
+
+    def _ref_failed(self, status):
+        return status in ("rejected", "error")
+
+    def _push_outcome_for_ref_failures(self, statuses, exhausted_outcome):
+        if exhausted_outcome == Outcome.PUSH_FAILED:
+            return Outcome.PUSH_FAILED
+        return Outcome.PROMOTE_FAILED
+
+    def _append_batch_transport_warnings(self, pending_refs, attempt, stderr):
+        for pending_ref in pending_refs:
+            if pending_ref.kind == "feature":
+                self.result.warnings.append(
+                    f"push attempt {attempt}/{PUSH_ATTEMPTS} failed: {stderr}"
+                )
+                continue
+            self.result.warnings.append(
+                f"promote push {pending_ref.branch} attempt {attempt}/{PUSH_ATTEMPTS} failed: {stderr}"
+            )
+
+    def _push_failure_text(self, push, branch):
+        parsed = self._push_ref_result(push, branch)
+        stderr = (push.stderr or "").strip()
+        if parsed is not None and parsed.get("summary") and stderr:
+            return f"{parsed['summary']}: {stderr}"
+        if parsed is not None and parsed.get("summary"):
+            return parsed["summary"]
+        if stderr:
+            return stderr
+        return (push.stdout or "").strip()
+
+    def _branch_refspec(self, branch):
+        return f"refs/heads/{branch}:refs/heads/{branch}"
+
     def _push_with_retries(self, push_once, exhausted_outcome, warn, on_rejected=None):
         for attempt in range(1, PUSH_ATTEMPTS + 1):
             push = push_once()
@@ -798,7 +1138,7 @@ class Pipeline:
         return exhausted_outcome
 
     def _resync_promoted_dst(self, src, dst):
-        outcome = self._sync_dst_with_origin(dst)
+        outcome = self._sync_dst_with_origin(dst, fetch_remote=True)
         if outcome:
             return outcome
 

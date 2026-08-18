@@ -3,6 +3,7 @@ import shutil
 import unittest
 
 from src.failures import Outcome
+from src.git_ops import GitOps, parse_push_porcelain
 from src.llm import LlmClient
 from src.pipeline import Pipeline, PipelineConfig
 from tests.helpers import (
@@ -14,6 +15,16 @@ from tests.helpers import (
     write_file,
     write_flaky_hook,
 )
+
+
+class RecordingGitOps(GitOps):
+    def __init__(self, repo):
+        super().__init__(repo)
+        self.calls = []
+
+    def _run(self, args, cwd=None):
+        self.calls.append(list(args))
+        return super()._run(args, cwd=cwd)
 
 
 def _make_pipeline(repo, message="chore: push test", push_retry_delay_sec=0):
@@ -31,6 +42,24 @@ def _make_pipeline(repo, message="chore: push test", push_retry_delay_sec=0):
 
 
 class PushStageTests(unittest.TestCase):
+    def test_parse_push_porcelain_status_flags(self):
+        parsed = parse_push_porcelain(
+            "\n".join(
+                [
+                    " \trefs/heads/main:refs/heads/main\t111..222",
+                    "*\trefs/heads/feature:refs/heads/feature\t[new branch]",
+                    "=\trefs/heads/develop:refs/heads/develop\t[up to date]",
+                    "!\trefs/heads/release:refs/heads/release\t[rejected] fetch first",
+                ]
+            )
+        )
+
+        self.assertEqual(parsed["refs/heads/main"]["status"], "ok")
+        self.assertEqual(parsed["refs/heads/feature"]["status"], "ok")
+        self.assertEqual(parsed["refs/heads/develop"]["status"], "up_to_date")
+        self.assertEqual(parsed["refs/heads/release"]["status"], "rejected")
+        self.assertEqual(parsed["refs/heads/release"]["summary"], "[rejected] fetch first")
+
     def test_push_from_feature_branch_advances_origin_ref(self):
         origin = make_bare_origin()
         repo = make_repo()
@@ -41,14 +70,19 @@ class PushStageTests(unittest.TestCase):
 
             run_git(repo, ["checkout", "-b", "feature"])
             write_file(repo, "base.txt", "base\nfeature change\n")
+            pipeline = _make_pipeline(repo)
+            recording_git = RecordingGitOps(repo)
+            pipeline.git = recording_git
 
             before = run_git(origin, ["rev-parse", "-q", "--verify", "refs/heads/feature"], check=False)
             self.assertNotEqual(before.returncode, 0)  # feature does not exist on origin yet
 
-            result = _make_pipeline(repo).run()
+            result = pipeline.run()
 
             self.assertEqual(result.outcome, Outcome.COMMITTED)
             self.assertTrue(result.pushed)
+            push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
+            self.assertEqual(len(push_calls), 1)
 
             after = run_git(origin, ["rev-parse", "refs/heads/feature"])
             self.assertEqual(after.stdout.strip(), result.commit_hash)

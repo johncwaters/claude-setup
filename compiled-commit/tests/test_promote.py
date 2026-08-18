@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from src.failures import Outcome
+from src.git_ops import GitOps
 from src.llm import LlmClient
 from src.pipeline import Pipeline, PipelineConfig, find_worktree_for_branch
 from tests.helpers import (
@@ -36,6 +37,16 @@ def _make_pipeline(repo, promote=True, promote_target="mainline", no_push=False,
         push_retry_delay_sec=0,
     )
     return Pipeline(config)
+
+
+class RecordingGitOps(GitOps):
+    def __init__(self, repo):
+        super().__init__(repo)
+        self.calls = []
+
+    def _run(self, args, cwd=None):
+        self.calls.append(list(args))
+        return super()._run(args, cwd=cwd)
 
 
 def _origin_ref(origin, branch):
@@ -94,6 +105,29 @@ def _write_drifting_main_pre_receive_hook(origin):
     os.chmod(hook_path, 0o755)
 
 
+def _write_one_time_update_reject_hook(origin, branch):
+    hook_path = os.path.join(origin, "hooks", "update")
+    with open(hook_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(
+            "#!/bin/sh\n"
+            "ref_name=\"$1\"\n"
+            f"if [ \"$ref_name\" != \"refs/heads/{branch}\" ]; then\n"
+            "  exit 0\n"
+            "fi\n"
+            f"count_file=\"hooks/{branch}-update-count\"\n"
+            "count=0\n"
+            "[ -f \"$count_file\" ] && count=$(cat \"$count_file\")\n"
+            "count=$((count + 1))\n"
+            "printf \"%s\" \"$count\" > \"$count_file\"\n"
+            "if [ \"$count\" -le 1 ]; then\n"
+            f"  echo \"rejecting {branch} once\" >&2\n"
+            "  exit 1\n"
+            "fi\n"
+            "exit 0\n"
+        )
+    os.chmod(hook_path, 0o755)
+
+
 class PromoteTests(unittest.TestCase):
     def test_find_worktree_for_branch_skips_detached_and_bare_blocks(self):
         porcelain = "\n".join(
@@ -134,13 +168,69 @@ class PromoteTests(unittest.TestCase):
             run_git(local, ["checkout", "-b", "feature", "origin/feature"])
             write_file(local, "base.txt", "base\nfeature change\n")
 
-            result = _make_pipeline(local).run()
+            pipeline = _make_pipeline(local)
+            recording_git = RecordingGitOps(local)
+            pipeline.git = recording_git
+            result = pipeline.run()
 
             self.assertEqual(result.outcome, Outcome.COMMITTED)
             self.assertEqual(result.promoted, ["develop", "main"])
             self.assertEqual(self.current_branch(local), "feature")
             self.assertEqual(_origin_ref(origin, "develop"), result.commit_hash)
             self.assertEqual(_origin_ref(origin, "main"), result.commit_hash)
+            push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
+            self.assertEqual(len(push_calls), 1)
+            self.assertIn("refs/heads/feature:refs/heads/feature", push_calls[0])
+            self.assertIn("refs/heads/develop:refs/heads/develop", push_calls[0])
+            self.assertIn("refs/heads/main:refs/heads/main", push_calls[0])
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_promote_prefetches_candidates_once_and_updates_hops_from_tracking(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+            run_git(seed, ["checkout", "-b", "feature"])
+            run_git(seed, ["push", "-u", "origin", "feature"])
+
+            clone_repo(origin, local)
+            run_git(local, ["branch", "main", "origin/main"])
+            run_git(local, ["branch", "develop", "origin/develop"])
+            run_git(local, ["checkout", "-b", "feature", "origin/feature"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+
+            pipeline = _make_pipeline(local, no_push=True)
+            recording_git = RecordingGitOps(local)
+            pipeline.git = recording_git
+
+            result = pipeline.run()
+
+            network_fetches = [
+                call for call in recording_git.calls
+                if len(call) >= 2 and call[0] == "fetch" and call[1] == "origin"
+            ]
+            local_tracking_fetches = [
+                call for call in recording_git.calls
+                if call[:2] == ["fetch", "."]
+                and call[2].startswith("refs/remotes/origin/")
+            ]
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(network_fetches, [["fetch", "origin", "develop", "main"]])
+            self.assertIn(
+                ["fetch", ".", "refs/remotes/origin/develop:refs/heads/develop"],
+                local_tracking_fetches,
+            )
+            self.assertIn(
+                ["fetch", ".", "refs/remotes/origin/main:refs/heads/main"],
+                local_tracking_fetches,
+            )
         finally:
             cleanup(origin, seed, local_parent)
 
@@ -361,7 +451,10 @@ class PromoteTests(unittest.TestCase):
         try:
             write_file(session, "base.txt", "base\nfeature change\n")
 
-            result = _make_pipeline(session).run()
+            pipeline = _make_pipeline(session)
+            recording_git = RecordingGitOps(session)
+            pipeline.git = recording_git
+            result = pipeline.run()
 
             self.assertEqual(result.outcome, Outcome.COMMITTED)
             self.assertEqual(result.promoted, ["develop", "main"])
@@ -372,6 +465,10 @@ class PromoteTests(unittest.TestCase):
             with open(os.path.join(holder, "base.txt"), encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "base\nfeature change\n")
             self.assertTrue(any("fast-forwarded in its holding worktree" in w for w in result.warnings))
+            self.assertIn(
+                ["fetch", ".", "refs/remotes/origin/develop:refs/heads/develop"],
+                recording_git.calls,
+            )
         finally:
             cleanup(origin, seed, local_parent)
 
@@ -545,6 +642,96 @@ class PromoteTests(unittest.TestCase):
             self.assertTrue(
                 any("local main diverged from origin/main" in w for w in result.warnings)
             )
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_promote_dst_rejection_resyncs_then_retries_only_that_ref(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+            run_git(seed, ["checkout", "-b", "feature"])
+            run_git(seed, ["push", "-u", "origin", "feature"])
+
+            clone_repo(origin, local)
+            run_git(local, ["branch", "develop", "origin/develop"])
+            run_git(local, ["checkout", "-b", "feature", "origin/feature"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+            _write_one_time_update_reject_hook(origin, "main")
+
+            pipeline = _make_pipeline(local, no_push=True)
+            recording_git = RecordingGitOps(local)
+            pipeline.git = recording_git
+            result = pipeline.run()
+
+            push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(result.promoted, ["develop", "main"])
+            self.assertEqual(len(push_calls), 2)
+            self.assertIn("refs/heads/develop:refs/heads/develop", push_calls[0])
+            self.assertIn("refs/heads/main:refs/heads/main", push_calls[0])
+            self.assertEqual(push_calls[1][-1], "refs/heads/main:refs/heads/main")
+            self.assertNotIn("refs/heads/develop:refs/heads/develop", push_calls[1])
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_promote_feature_ref_rejection_maps_to_push_failed(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+            run_git(seed, ["checkout", "-b", "feature"])
+            run_git(seed, ["push", "-u", "origin", "feature"])
+
+            clone_repo(origin, local)
+            run_git(local, ["branch", "develop", "origin/develop"])
+            run_git(local, ["checkout", "-b", "feature", "origin/feature"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+            _write_one_time_update_reject_hook(origin, "feature")
+
+            result = _make_pipeline(local).run()
+
+            self.assertEqual(result.outcome, Outcome.PUSH_FAILED)
+            self.assertFalse(result.pushed)
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_clean_promote_over_synced_branches_skips_push_invocation(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+
+            clone_repo(origin, local)
+            run_git(local, ["checkout", "-b", "develop", "origin/develop"])
+            pipeline = _make_pipeline(local)
+            recording_git = RecordingGitOps(local)
+            pipeline.git = recording_git
+
+            result = pipeline.run()
+
+            push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
+            self.assertEqual(result.outcome, Outcome.NOTHING_TO_COMMIT)
+            self.assertEqual(result.promoted, ["main"])
+            self.assertEqual(push_calls, [])
         finally:
             cleanup(origin, seed, local_parent)
 
