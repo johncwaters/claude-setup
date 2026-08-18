@@ -3,10 +3,11 @@ import shutil
 import unittest
 
 from src.failures import Outcome
-from src.git_ops import GitOps, parse_push_porcelain
+from src.git_ops import parse_push_porcelain
 from src.llm import LlmClient
 from src.pipeline import Pipeline, PipelineConfig
 from tests.helpers import (
+    RecordingGitOps,
     cleanup,
     commit_file,
     make_bare_origin,
@@ -15,16 +16,6 @@ from tests.helpers import (
     write_file,
     write_flaky_hook,
 )
-
-
-class RecordingGitOps(GitOps):
-    def __init__(self, repo):
-        super().__init__(repo)
-        self.calls = []
-
-    def _run(self, args, cwd=None):
-        self.calls.append(list(args))
-        return super()._run(args, cwd=cwd)
 
 
 def _make_pipeline(repo, message="chore: push test", push_retry_delay_sec=0):
