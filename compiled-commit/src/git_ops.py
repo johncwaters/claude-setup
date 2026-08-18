@@ -5,6 +5,19 @@ Code sessions (SPEC bench/run_bench.py step 5).
 """
 
 import subprocess
+import sys
+import time
+from dataclasses import dataclass
+
+SLOW_OP_THRESHOLD_SEC = 1.0
+
+
+@dataclass
+class PushPorcelainResult:
+    returncode: int
+    stdout: str
+    stderr: str
+    refs: dict
 
 
 def _scoped(args, paths):
@@ -20,7 +33,8 @@ class GitOps:
 
     def _run(self, args, cwd=None):
         self.op_count += 1
-        return subprocess.run(
+        started = time.monotonic()
+        proc = subprocess.run(
             ["git"] + args,
             cwd=cwd or self.repo,
             capture_output=True,
@@ -28,6 +42,10 @@ class GitOps:
             encoding="utf-8",
             errors="replace",
         )
+        seconds = time.monotonic() - started
+        if seconds >= SLOW_OP_THRESHOLD_SEC:
+            print(f"[git {seconds:.1f}s] {' '.join(args)}", file=sys.stderr)
+        return proc
 
     def is_inside_work_tree(self):
         proc = self._run(["rev-parse", "--is-inside-work-tree"])
@@ -41,11 +59,23 @@ class GitOps:
         proc = self._run(["rev-parse", "-q", "--verify", ref])
         return proc.returncode == 0
 
+    def rev_parse_ref(self, ref):
+        proc = self._run(["rev-parse", "-q", "--verify", ref])
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip()
+
     def fetch(self, remote, branch):
         return self._run(["fetch", remote, branch])
 
+    def fetch_many(self, remote, branches):
+        return self._run(["fetch", remote] + list(branches))
+
     def fetch_update_local_ref(self, remote, branch):
         return self._run(["fetch", remote, f"{branch}:{branch}"])
+
+    def fetch_local_from_tracking(self, branch):
+        return self._run(["fetch", ".", f"refs/remotes/origin/{branch}:refs/heads/{branch}"])
 
     def fetch_local_ff(self, src, dst):
         # Fast-forward local ref dst to src without touching the working tree.
@@ -135,3 +165,53 @@ class GitOps:
 
     def push_ref(self, remote, branch):
         return self._run(["push", remote, branch])
+
+    def push_refs_porcelain(self, remote, refspecs, set_upstream=False):
+        args = ["push", "--porcelain"]
+        if set_upstream:
+            args.append("-u")
+        proc = self._run(args + [remote] + list(refspecs))
+        return PushPorcelainResult(
+            returncode=proc.returncode,
+            stdout=proc.stdout,
+            stderr=proc.stderr,
+            refs=parse_push_porcelain(proc.stdout),
+        )
+
+
+def parse_push_porcelain(stdout):
+    parsed = {}
+    for line in stdout.splitlines():
+        if not line:
+            continue
+        flag = line[0]
+        if flag not in (" ", "*", "=", "!"):
+            continue
+        fields = line[1:].split("\t")
+        parts = [field for field in fields if field]
+        if len(parts) < 2:
+            continue
+        refname = _push_porcelain_refname(parts[0].strip())
+        if not refname:
+            continue
+        parsed[refname] = {
+            "status": _push_porcelain_status(flag),
+            "summary": "\t".join(parts[1:]).strip(),
+        }
+    return parsed
+
+
+def _push_porcelain_refname(refspec_text):
+    if ":" not in refspec_text:
+        return refspec_text
+    return refspec_text.rsplit(":", 1)[-1]
+
+
+def _push_porcelain_status(flag):
+    if flag == "!":
+        return "rejected"
+    if flag == "=":
+        return "up_to_date"
+    if flag in (" ", "*"):
+        return "ok"
+    return "error"

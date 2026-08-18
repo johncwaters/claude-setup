@@ -71,11 +71,13 @@ Typed outcomes and what to do:
   blocked after two passes, stop and report.
 - `PUSH_FAILED`: the commit exists but the push did not land after the runner's retries.
   Recover per Push and merge recovery below; do not stop here.
-- `PROMOTE_CONFLICT`: the commit exists and the feature branch is pushed (`commit_hash`
-  and `pushed` are populated); the runner aborted the conflicted promotion merge and left
-  the tree clean. Resolve it per Conflict resolution below, then re-run the runner with
-  `--promote` to finish the remaining hops and pushes.
-- `PROMOTE_FAILED`: the commit exists and the feature branch is pushed; promotion stopped
+- `PROMOTE_CONFLICT`: the commit exists (`commit_hash` is populated) but with `--promote`
+  the feature-branch push is deferred into promotion's single batched push, so the feature
+  branch may not be pushed yet (`pushed` says); the runner aborted the conflicted promotion
+  merge and left the tree clean. Resolve it per Conflict resolution below, then re-run the
+  runner with `--promote` to finish the remaining hops and the batched push.
+- `PROMOTE_FAILED`: the commit exists and `pushed` says whether the feature branch made it
+  to origin (the batched push may have failed before or with the promoted refs); promotion stopped
   for a non-conflict reason and the `promoted` field says which branches did update. Fix
   the cause named in `warnings` per Push and merge recovery below, then re-run the runner
   with `--promote` to finish the remaining hops.

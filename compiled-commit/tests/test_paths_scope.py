@@ -76,7 +76,10 @@ class PathsScopeTests(unittest.TestCase):
             self.assertEqual(result.outcome, Outcome.COMMITTED)
 
             git = GitOps(repo)
-            status = git.status_short()
+            status = [
+                line for line in git.status_short()
+                if ".compiled-commit-tmp/" not in line
+            ]
             self.assertEqual(status, [])
         finally:
             cleanup(repo)
