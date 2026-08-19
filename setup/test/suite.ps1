@@ -407,6 +407,178 @@ Assert-NoFile "work profile writes no glissa config" (Join-Path $workProfile ".g
 Assert-NoFile "work profile installs no gitconfig" (Join-Path $workProfile ".gitconfig")
 Assert-Ok "work profile collect completes" $workCollectOutput.Status
 Assert-Match "work profile collect stops after VSCodium" "personal-profile only" $workCollectOutput.Output
+Assert-Match "work profile converges retired plugins" "plugin removals\s+none present" $workOutput.Output
+
+Phase "retired plugin teardown"
+
+# The npm global bin dir is resolved through `npm prefix -g`, so the fixture stubs npm
+# ahead of the real one on PATH. Without that, shim teardown would reach the real
+# machine's npm prefix.
+function Write-FakeNpm([string]$binDir, [string]$prefixDir) {
+    New-Item -ItemType Directory -Force $binDir | Out-Null
+    $lines = @(
+        "@echo off",
+        "if ""%~1""==""prefix"" (",
+        "  echo $prefixDir",
+        "  exit /b 0",
+        ")",
+        "exit /b 0"
+    )
+    Set-Content -LiteralPath (Join-Path $binDir "npm.cmd") -Value $lines -Encoding ascii
+}
+
+# A checkout whose profile runs only plugins-remove, so settings-render cannot rewrite
+# settings.json and mask what this step did to it.
+function Initialize-RetirementCheckout([string]$claudeDir) {
+    Initialize-Checkout $claudeDir
+    Set-Content -LiteralPath (Join-Path $claudeDir "profiles\work\profile.json") `
+        -Value '{ "steps": ["plugins-remove"] }' -Encoding ascii
+}
+
+function Write-RetirementFixture([string]$claudeDir, [string]$homeDir, [string]$npmPrefix, [string]$siblingPluginId) {
+    $settings = @{
+        model = "claude-fable-5[1m]"
+        enabledPlugins = [ordered]@{ "oh-my-claudecode@omc" = $true; "keeper@keepmarket" = $true }
+        extraKnownMarketplaces = [ordered]@{
+            omc = @{ source = @{ source = "git"; url = "https://example.invalid/omc.git" } }
+            keepmarket = @{ source = @{ source = "github"; repo = "example/keeper" } }
+        }
+    }
+    Set-Content -LiteralPath (Join-Path $claudeDir "settings.json") -Value ($settings | ConvertTo-Json -Depth 10) -Encoding ascii
+
+    $pluginsDir = Join-Path $claudeDir "plugins"
+    New-Item -ItemType Directory -Force $pluginsDir | Out-Null
+    $installedPlugins = [ordered]@{
+        "oh-my-claudecode@omc" = @(@{ scope = "user"; version = "4.15.10" })
+        "keeper@keepmarket" = @(@{ scope = "user"; version = "1.0.0" })
+    }
+    if ($siblingPluginId) { $installedPlugins[$siblingPluginId] = @(@{ scope = "user"; version = "2.0.0" }) }
+    Set-Content -LiteralPath (Join-Path $pluginsDir "installed_plugins.json") `
+        -Value (@{ version = 2; plugins = $installedPlugins } | ConvertTo-Json -Depth 10) -Encoding ascii
+    $marketplaces = [ordered]@{
+        omc = @{ source = @{ source = "git"; url = "https://example.invalid/omc.git" } }
+        keepmarket = @{ source = @{ source = "github"; repo = "example/keeper" } }
+    }
+    Set-Content -LiteralPath (Join-Path $pluginsDir "known_marketplaces.json") `
+        -Value ($marketplaces | ConvertTo-Json -Depth 10) -Encoding ascii
+
+    $seededDirs = @(
+        (Join-Path $pluginsDir "cache\omc\oh-my-claudecode\4.15.10"),
+        (Join-Path $pluginsDir "cache\omc\sibling\2.0.0"),
+        (Join-Path $pluginsDir "marketplaces\omc"),
+        (Join-Path $pluginsDir "data\oh-my-claudecode-omc"),
+        (Join-Path $pluginsDir "oh-my-claudecode"),
+        (Join-Path $pluginsDir "cache\keepmarket"),
+        (Join-Path $pluginsDir "marketplaces\keepmarket"),
+        (Join-Path $claudeDir ".omc"),
+        (Join-Path $homeDir ".omc"),
+        (Join-Path $homeDir ".keepstate")
+    )
+    New-Item -ItemType Directory -Force $seededDirs | Out-Null
+
+    New-Item -ItemType Directory -Force $npmPrefix | Out-Null
+    foreach ($shim in @("omc", "omc.cmd", "omc.ps1", "omc-cli", "omc-cli.cmd", "omc-cli.ps1", "glissa.cmd")) {
+        Set-Content -LiteralPath (Join-Path $npmPrefix $shim) -Value "shim" -Encoding ascii
+    }
+}
+
+$retireRoot = Join-Path $env:TEMP "retirehome"
+$retireHome = Join-Path $retireRoot "profile"
+$retireAppData = Join-Path $retireRoot "appdata"
+$retireNpmPrefix = Join-Path $retireRoot "npmprefix"
+$retireStubBin = Join-Path $retireRoot "stubbin"
+$retireClaude = Join-Path $retireHome ".claude"
+New-Item -ItemType Directory -Force $retireHome, $retireAppData | Out-Null
+Initialize-RetirementCheckout $retireClaude
+Write-RetirementFixture $retireClaude $retireHome $retireNpmPrefix ""
+Write-FakeNpm $retireStubBin $retireNpmPrefix
+
+$savedUserProfile = $env:USERPROFILE
+$savedAppData = $env:APPDATA
+$savedPath = $env:Path
+$env:USERPROFILE = $retireHome
+$env:APPDATA = $retireAppData
+$env:Path = "$retireStubBin;$env:Path"
+$retireFirst = Invoke-PowerShellFile (Join-Path $retireClaude "setup\apply.ps1") @("-SkipInstalls", "-Profile", "work")
+$retireSecond = Invoke-PowerShellFile (Join-Path $retireClaude "setup\apply.ps1") @("-SkipInstalls", "-Profile", "work")
+$env:USERPROFILE = $savedUserProfile
+$env:APPDATA = $savedAppData
+$env:Path = $savedPath
+
+Assert-Ok "retirement apply completes" $retireFirst.Status
+Assert-Match "retirement apply reports the removal" "oh-my-claudecode@omc\s+removed" $retireFirst.Output
+
+$retiredPluginsDir = Join-Path $retireClaude "plugins"
+Assert-NoFile "removes the cached marketplace plugin dir" (Join-Path $retiredPluginsDir "cache\omc")
+Assert-NoFile "removes the marketplace checkout" (Join-Path $retiredPluginsDir "marketplaces\omc")
+Assert-NoFile "removes the plugin data dir" (Join-Path $retiredPluginsDir "data\oh-my-claudecode-omc")
+Assert-NoFile "removes the stray plugin dir" (Join-Path $retiredPluginsDir "oh-my-claudecode")
+Assert-NoFile "removes the profile state dir" (Join-Path $retireClaude ".omc")
+Assert-NoFile "removes the home state dir" (Join-Path $retireHome ".omc")
+foreach ($shim in @("omc", "omc.cmd", "omc.ps1", "omc-cli", "omc-cli.cmd", "omc-cli.ps1")) {
+    Assert-NoFile "removes the $shim npm shim" (Join-Path $retireNpmPrefix $shim)
+}
+Assert-Dir "keeps an unrelated cached marketplace" (Join-Path $retiredPluginsDir "cache\keepmarket")
+Assert-Dir "keeps an unrelated marketplace checkout" (Join-Path $retiredPluginsDir "marketplaces\keepmarket")
+Assert-Dir "keeps an unrelated state dir" (Join-Path $retireHome ".keepstate")
+Assert-File "keeps an unrelated npm shim" (Join-Path $retireNpmPrefix "glissa.cmd")
+
+$retiredSettings = Get-Content -LiteralPath (Join-Path $retireClaude "settings.json") -Raw | ConvertFrom-Json
+Assert-NoMatch "strips the retired plugin from enabledPlugins" "oh-my-claudecode@omc" ($retiredSettings.enabledPlugins.PSObject.Properties.Name -join " ")
+Assert-NoMatch "strips the retired marketplace from extraKnownMarketplaces" "^omc$" ($retiredSettings.extraKnownMarketplaces.PSObject.Properties.Name -join "`n")
+Assert-Match "keeps an unrelated enabled plugin" "keeper@keepmarket" ($retiredSettings.enabledPlugins.PSObject.Properties.Name -join " ")
+Assert-Match "keeps an unrelated marketplace" "keepmarket" ($retiredSettings.extraKnownMarketplaces.PSObject.Properties.Name -join " ")
+Assert-Equals "keeps unrelated settings keys" "claude-fable-5[1m]" $retiredSettings.model
+
+$retiredInstalled = Get-Content -LiteralPath (Join-Path $retiredPluginsDir "installed_plugins.json") -Raw | ConvertFrom-Json
+Assert-NoMatch "strips the retired plugin from installed_plugins" "oh-my-claudecode@omc" ($retiredInstalled.plugins.PSObject.Properties.Name -join " ")
+Assert-Match "keeps an unrelated installed plugin" "keeper@keepmarket" ($retiredInstalled.plugins.PSObject.Properties.Name -join " ")
+Assert-Equals "keeps the installed_plugins schema version" "2" ([string]$retiredInstalled.version)
+
+$retiredMarkets = Get-Content -LiteralPath (Join-Path $retiredPluginsDir "known_marketplaces.json") -Raw | ConvertFrom-Json
+Assert-NoMatch "strips the retired marketplace from known_marketplaces" "^omc$" ($retiredMarkets.PSObject.Properties.Name -join "`n")
+Assert-Match "keeps an unrelated known marketplace" "keepmarket" ($retiredMarkets.PSObject.Properties.Name -join " ")
+
+Assert-Ok "second retirement apply completes" $retireSecond.Status
+Assert-Match "second apply finds nothing to remove" "plugin removals\s+none present" $retireSecond.Output
+Assert-NoMatch "second apply removes nothing again" "oh-my-claudecode@omc\s+removed" $retireSecond.Output
+Assert-NoMatch "second apply raises no warnings" "\[warn\]" $retireSecond.Output
+
+# A marketplace hosting a plugin that is staying must survive, registry entry included.
+$siblingRoot = Join-Path $env:TEMP "retiresibling"
+$siblingHome = Join-Path $siblingRoot "profile"
+$siblingAppData = Join-Path $siblingRoot "appdata"
+$siblingNpmPrefix = Join-Path $siblingRoot "npmprefix"
+$siblingStubBin = Join-Path $siblingRoot "stubbin"
+$siblingClaude = Join-Path $siblingHome ".claude"
+New-Item -ItemType Directory -Force $siblingHome, $siblingAppData | Out-Null
+Initialize-RetirementCheckout $siblingClaude
+Write-RetirementFixture $siblingClaude $siblingHome $siblingNpmPrefix "sibling@omc"
+Write-FakeNpm $siblingStubBin $siblingNpmPrefix
+
+$savedUserProfile = $env:USERPROFILE
+$savedAppData = $env:APPDATA
+$savedPath = $env:Path
+$env:USERPROFILE = $siblingHome
+$env:APPDATA = $siblingAppData
+$env:Path = "$siblingStubBin;$env:Path"
+$siblingOutput = Invoke-PowerShellFile (Join-Path $siblingClaude "setup\apply.ps1") @("-SkipInstalls", "-Profile", "work")
+$env:USERPROFILE = $savedUserProfile
+$env:APPDATA = $savedAppData
+$env:Path = $savedPath
+
+Assert-Ok "sibling-marketplace apply completes" $siblingOutput.Status
+$siblingInstalled = Get-Content -LiteralPath (Join-Path $siblingClaude "plugins\installed_plugins.json") -Raw | ConvertFrom-Json
+Assert-NoMatch "still strips the retired plugin" "oh-my-claudecode@omc" ($siblingInstalled.plugins.PSObject.Properties.Name -join " ")
+Assert-Match "keeps the sibling plugin on the same marketplace" "sibling@omc" ($siblingInstalled.plugins.PSObject.Properties.Name -join " ")
+$siblingMarkets = Get-Content -LiteralPath (Join-Path $siblingClaude "plugins\known_marketplaces.json") -Raw | ConvertFrom-Json
+Assert-Match "keeps a marketplace another plugin still needs" "omc" ($siblingMarkets.PSObject.Properties.Name -join " ")
+$siblingPluginsDir = Join-Path $siblingClaude "plugins"
+Assert-NoFile "removes only the retired plugin's cache entry" (Join-Path $siblingPluginsDir "cache\omc\oh-my-claudecode")
+Assert-Dir "keeps the sibling plugin's cache entry" (Join-Path $siblingPluginsDir "cache\omc\sibling")
+Assert-Dir "keeps the shared marketplace checkout" (Join-Path $siblingPluginsDir "marketplaces\omc")
+$siblingSettings = Get-Content -LiteralPath (Join-Path $siblingClaude "settings.json") -Raw | ConvertFrom-Json
+Assert-Match "keeps the shared marketplace in settings" "omc" ($siblingSettings.extraKnownMarketplaces.PSObject.Properties.Name -join " ")
 
 Phase "collect.ps1 round trip"
 

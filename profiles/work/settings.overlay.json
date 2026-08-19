@@ -1,8 +1,6 @@
 {
   "worktree": { "baseRef": "fresh" },
-  "statusLine": { "type": "command", "command": "node {{HOME}}/.claude/hud/omc-hud.mjs" },
-  "enabledPlugins": { "oh-my-claudecode@omc": true, "example-org-plugin@example-org": true },
-  "extraKnownMarketplaces": { "omc": { "source": { "source": "git", "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git" }, "autoUpdate": true } },
+  "enabledPlugins": { "example-org-plugin@example-org": true },
   "theme": "dark",
   "switchModelsOnFlag": false
 }
