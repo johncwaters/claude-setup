@@ -5,4 +5,4 @@
 # Format: <plugin>@<marketplace> [shims=a,b] [state=rel/dir,rel/dir]
 #   shims: command names to delete from the npm global bin dir (bare, .cmd and .ps1)
 #   state: dirs to delete, relative to the home directory
-oh-my-claudecode@omc shims=omc,omc-cli state=.claude/.omc,.omc
+oh-my-claudecode@omc shims=omc,omc-cli,oh-my-claudecode state=.claude/.omc,.omc
