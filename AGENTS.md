@@ -74,13 +74,15 @@ NEVER write `else` statements. Zero tolerance. Use early returns and guard claus
 
 <code_style_comments>
 Comments are a last resort. Default to zero. Comment only the "why", never the "what", and only when the "why" cannot be expressed by renaming or restructuring.
+- Never match the surrounding comment density. A comment-heavy file is not license to add comments; these rules override the "write code that reads like the surrounding code" default. New and edited code gets the zero-default regardless of what the rest of the file does.
 - Hard cap: one line per comment. Never a paragraph, never a multi-line block. If the "why" will not fit in one line, the code needs restructuring, not more prose.
-- Budget check: if a diff adds more than one comment per ~40 lines of code, cut comments until it does not.
-- Never write comments that restate what the code does ("increment counter", "loop over users", "return the result"). If the code needs explaining, rename or restructure it instead.
-- Acceptable comments (still one line each): non-obvious constraints, workaround reasons with the upstream issue, tricky invariants, domain rules the code cannot express.
+- Budget: at most one comment per ~100 added lines, and zero comments in a diff under ~40 lines unless the one comment cites an external anchor. Over budget: cut until under, starting with the most explanatory one.
+- A comment earns its line only when deleting it would invite a wrong future edit, and it must point at something the code cannot show: an upstream issue, a spec or RFC, a measured incident, a cross-file invariant. "Clarifying" what well-named code already says fails this bar; rename or restructure instead.
+- Never write comments that restate what the code does ("increment counter", "loop over users", "return the result").
 - No section-banner comments, no changelog-style comments, no comments narrating an edit to the reviewer, no commented-out code, no TODO essays (a TODO is one line naming the trigger for removal).
-- Doc comments on public APIs follow the project's existing convention; keep them to a one-line summary unless the convention demands parameter docs.
-- When editing existing code, delete any touched comment that violates these rules instead of preserving it.
+- Tests: intent lives in the test name, not in comments. No scenario narration inside test bodies; a test needing a comment to explain its setup needs a better name or a helper.
+- Doc comments: a one-line summary on exported public API, and only where repo tooling (a lint rule or doc generator config, not mere habit in neighboring files) enforces the convention; parameter docs only when that tooling demands them.
+- When editing existing code, delete or rewrite any touched comment that violates these rules or that your change made stale. Deleting a bad comment is a fix, not scope creep.
 </code_style_comments>
 
 <code_style_naming>
