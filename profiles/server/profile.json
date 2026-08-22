@@ -1,1 +1,1 @@
-{ "steps": ["workflow-config", "settings-render", "gitconfig", "codex-agents", "software", "tailscale", "glissa-server", "repos", "npm-globals", "python-tools"], "vscodiumExtensionSync": "exact" }
+{ "steps": ["plugins-remove", "workflow-config", "settings-render", "gitconfig", "codex-agents", "software", "tailscale", "glissa-server", "repos", "npm-globals", "python-tools"], "vscodiumExtensionSync": "exact" }

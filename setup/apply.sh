@@ -1681,6 +1681,318 @@ ensurePythonPackage() {
   noteWarned "$packageName" "pip install failed"
 }
 
+removePathIfPresent() {
+  local target="$1"
+  if [[ ! -e "$target" ]]; then
+    return 1
+  fi
+  rm -rf -- "$target"
+  return 0
+}
+
+# The prefix in effect can be the per-account one ensureUserNpmPrefix moved to, so ask npm
+# rather than assuming /usr/local. Without npm the ~/.npm-global guess is the only prefix
+# this repo ever writes to; nothing is created, so a wrong guess just finds nothing.
+npmGlobalBinDir() {
+  local npmPrefix
+  if ! command -v npm >/dev/null 2>&1; then
+    printf '%s\n' "$HOME/.npm-global/bin"
+    return 0
+  fi
+  npmPrefix="$(npm prefix -g 2>/dev/null | head -n 1 | tr -d '\r' || true)"
+  if [[ -n "$npmPrefix" ]]; then
+    printf '%s\n' "$npmPrefix/bin"
+    return 0
+  fi
+  printf '%s\n' "$HOME/.npm-global/bin"
+}
+
+splitCsvField() {
+  local csvText="$1"
+  if [[ -z "$csvText" ]]; then
+    return 0
+  fi
+  printf '%s\n' "$csvText" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sed '/^$/d'
+}
+
+# A marketplace can host more than one plugin, so anything scoped to the marketplace rather
+# than to this plugin survives while another installed plugin still needs it. The question has
+# to be answered before installed_plugins.json is rewritten, and a machine without node cannot
+# read that file at all, so this is never called there: the caller then assumes the marketplace
+# is still in use and deletes less rather than nuking a marketplace a sibling plugin shares.
+retiredMarketplaceIsUnused() {
+  local pluginId="$1"
+  local marketplace="$2"
+  node - "$repoRoot/plugins/installed_plugins.json" "$pluginId" "$marketplace" <<'NODE'
+const fs = require("fs");
+
+const [installedPath, pluginId, marketplace] = process.argv.slice(2);
+let installed;
+try {
+  installed = JSON.parse(fs.readFileSync(installedPath, "utf8"));
+} catch {
+  process.exit(0);
+}
+
+const plugins = installed?.plugins;
+const installedPluginIds = plugins && typeof plugins === "object" ? Object.keys(plugins) : [];
+const otherPluginIds = installedPluginIds.filter((id) => id !== pluginId && id.endsWith(`@${marketplace}`));
+process.exit(otherPluginIds.length === 0 ? 0 : 3);
+NODE
+}
+
+removeRetiredPluginSettings() {
+  local pluginId="$1"
+  local marketplace="$2"
+  local marketplaceUnused="$3"
+  local settingsPath="$repoRoot/settings.json"
+  local nodeStatus=0
+  node - "$settingsPath" "$pluginId" "$marketplace" "$marketplaceUnused" <<'NODE' || nodeStatus=$?
+const fs = require("fs");
+const path = require("path");
+
+const [settingsPath, pluginId, marketplace, marketplaceUnused] = process.argv.slice(2);
+let settings;
+try {
+  settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+} catch {
+  process.exit(3);
+}
+
+const removeKey = (holder, key) => {
+  if (!holder || typeof holder !== "object") {
+    return false;
+  }
+  if (!Object.prototype.hasOwnProperty.call(holder, key)) {
+    return false;
+  }
+  delete holder[key];
+  return true;
+};
+
+const strippedPlugin = removeKey(settings.enabledPlugins, pluginId);
+let strippedMarket = false;
+if (marketplaceUnused === "1") {
+  strippedMarket = removeKey(settings.extraKnownMarketplaces, marketplace);
+}
+if (!strippedPlugin && !strippedMarket) {
+  process.exit(3);
+}
+
+const tempPath = path.join(path.dirname(settingsPath), `.settings.json.${process.pid}.tmp`);
+fs.writeFileSync(tempPath, `${JSON.stringify(settings, null, 2)}\n`);
+fs.renameSync(tempPath, settingsPath);
+NODE
+  if ((nodeStatus == 0)); then
+    return 0
+  fi
+  if ((nodeStatus != 3)); then
+    noteWarned "plugin removals" "settings.json update failed"
+  fi
+  return 1
+}
+
+removeRetiredPluginRegistries() {
+  local pluginId="$1"
+  local marketplace="$2"
+  local marketplaceUnused="$3"
+  local nodeStatus=0
+  node - "$repoRoot/plugins" "$pluginId" "$marketplace" "$marketplaceUnused" <<'NODE' || nodeStatus=$?
+const fs = require("fs");
+const path = require("path");
+
+const [pluginsDir, pluginId, marketplace, marketplaceUnused] = process.argv.slice(2);
+
+const readJson = (filePath) => {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+};
+
+const writeJson = (filePath, value) => {
+  const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.tmp`);
+  fs.writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`);
+  fs.renameSync(tempPath, filePath);
+};
+
+const hasKey = (holder, key) =>
+  Boolean(holder) && typeof holder === "object" && Object.prototype.hasOwnProperty.call(holder, key);
+
+let changed = false;
+const installedPath = path.join(pluginsDir, "installed_plugins.json");
+const installed = readJson(installedPath);
+if (hasKey(installed?.plugins, pluginId)) {
+  delete installed.plugins[pluginId];
+  writeJson(installedPath, installed);
+  changed = true;
+}
+
+if (marketplaceUnused === "1") {
+  const marketplacesPath = path.join(pluginsDir, "known_marketplaces.json");
+  const marketplaces = readJson(marketplacesPath);
+  if (hasKey(marketplaces, marketplace)) {
+    delete marketplaces[marketplace];
+    writeJson(marketplacesPath, marketplaces);
+    changed = true;
+  }
+}
+
+process.exit(changed ? 0 : 3);
+NODE
+  if ((nodeStatus == 0)); then
+    return 0
+  fi
+  if ((nodeStatus != 3)); then
+    noteWarned "plugin removals" "plugin registry update failed"
+  fi
+  return 1
+}
+
+removeRetiredPluginDirs() {
+  local pluginName="$1"
+  local marketplace="$2"
+  local marketplaceUnused="$3"
+  local pluginsDir="$repoRoot/plugins"
+  local targets=(
+    "$pluginsDir/cache/$marketplace/$pluginName"
+    "$pluginsDir/data/$pluginName-$marketplace"
+    "$pluginsDir/$pluginName"
+  )
+  local removedAny=1
+  local target
+  if [[ "$marketplaceUnused" == "1" ]]; then
+    targets+=("$pluginsDir/cache/$marketplace" "$pluginsDir/marketplaces/$marketplace")
+  fi
+  for target in "${targets[@]}"; do
+    if removePathIfPresent "$target"; then
+      removedAny=0
+    fi
+  done
+  return $removedAny
+}
+
+# .cmd and .ps1 are dead weight on Linux, but deleting them keeps both ports symmetric
+# for anyone whose home directory is shared between Windows and WSL.
+removeRetiredPluginShims() {
+  local shimList="$1"
+  local binDir
+  local shimName
+  local suffix
+  local removedAny=1
+  if [[ -z "$shimList" ]]; then
+    return 1
+  fi
+  binDir="$(npmGlobalBinDir)"
+  while IFS= read -r shimName; do
+    for suffix in "" ".cmd" ".ps1"; do
+      if removePathIfPresent "$binDir/$shimName$suffix"; then
+        removedAny=0
+      fi
+    done
+  done < <(splitCsvField "$shimList")
+  return $removedAny
+}
+
+removeRetiredPluginState() {
+  local stateList="$1"
+  local stateDir
+  local removedAny=1
+  if [[ -z "$stateList" ]]; then
+    return 1
+  fi
+  while IFS= read -r stateDir; do
+    if removePathIfPresent "$HOME/$stateDir"; then
+      removedAny=0
+    fi
+  done < <(splitCsvField "$stateList")
+  return $removedAny
+}
+
+# Retired plugins listed in plugins-remove.txt are torn down on every apply so machines
+# converge, mirroring how npm-globals-remove.txt retires global npm tools. Every removal
+# is present-only, so a second run on a clean machine is a no-op.
+removeRetiredPlugins() {
+  local listPath="$setupDir/plugins-remove.txt"
+  local entries=()
+  local entry
+  local tokens=()
+  local token
+  local pluginId
+  local pluginName
+  local marketplace
+  local shimList
+  local stateList
+  local nodeCanEditJson=0
+  local marketplaceUnused
+  local entryChanged
+  local removedCount=0
+  if [[ ! -f "$listPath" ]]; then
+    noteWarned "plugin removals" "plugins-remove.txt not in repo"
+    return 0
+  fi
+  mapfile -t entries < <(readPackageList "$listPath" | sed '/^[[:space:]]*#/d')
+  if ((${#entries[@]} == 0)); then
+    notePresent "plugin removals" "none listed"
+    return 0
+  fi
+  if command -v node >/dev/null 2>&1; then
+    nodeCanEditJson=1
+  fi
+  if ((nodeCanEditJson == 0)); then
+    noteWarned "plugin removals" "node not on PATH, settings.json and plugin registries left unchanged"
+  fi
+  for entry in "${entries[@]}"; do
+    read -r -a tokens <<<"$entry"
+    pluginId="${tokens[0]}"
+    if [[ ! "$pluginId" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]; then
+      noteWarned "plugin removals" "cannot parse '$pluginId'"
+      continue
+    fi
+    pluginName="${pluginId%@*}"
+    marketplace="${pluginId#*@}"
+    shimList=""
+    stateList=""
+    for token in "${tokens[@]:1}"; do
+      if [[ "$token" == shims=* ]]; then
+        shimList="${token#shims=}"
+      fi
+      if [[ "$token" == state=* ]]; then
+        stateList="${token#state=}"
+      fi
+    done
+    marketplaceUnused=0
+    if ((nodeCanEditJson == 1)) && retiredMarketplaceIsUnused "$pluginId" "$marketplace"; then
+      marketplaceUnused=1
+    fi
+    entryChanged=1
+    if ((nodeCanEditJson == 1)) && removeRetiredPluginSettings "$pluginId" "$marketplace" "$marketplaceUnused"; then
+      entryChanged=0
+    fi
+    if ((nodeCanEditJson == 1)) && removeRetiredPluginRegistries "$pluginId" "$marketplace" "$marketplaceUnused"; then
+      entryChanged=0
+    fi
+    if removeRetiredPluginDirs "$pluginName" "$marketplace" "$marketplaceUnused"; then
+      entryChanged=0
+    fi
+    if removeRetiredPluginShims "$shimList"; then
+      entryChanged=0
+    fi
+    if removeRetiredPluginState "$stateList"; then
+      entryChanged=0
+    fi
+    if ((entryChanged == 1)); then
+      continue
+    fi
+    noteApplied "$pluginId" "removed"
+    removedCount=$((removedCount + 1))
+  done
+  if ((removedCount == 0)); then
+    notePresent "plugin removals" "none present"
+  fi
+}
+
 markerPath="$repoRoot/.machine-profile"
 markerExisted=0
 if [[ -f "$markerPath" ]]; then
@@ -1741,7 +2053,7 @@ fi
 
 knownSteps=(
   "vscodium-config" "glissa" "glissa-server" "gitconfig" "codex-agents" "terminal"
-  "workflow-config" "settings-render" "software" "fonts" "biome"
+  "plugins-remove" "workflow-config" "settings-render" "software" "fonts" "biome"
   "tailscale" "repos" "npm-globals" "python-tools" "vscodium-extensions"
 )
 
@@ -1865,6 +2177,14 @@ if stepEnabled "terminal"; then
 fi
 if ! stepEnabled "terminal"; then
   noteSkipped "Windows Terminal"
+fi
+
+writeSection "Retired plugins"
+if ! stepEnabled "plugins-remove"; then
+  noteSkipped "plugin removals"
+fi
+if stepEnabled "plugins-remove"; then
+  removeRetiredPlugins
 fi
 
 writeSection "Workflow"
