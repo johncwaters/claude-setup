@@ -239,6 +239,155 @@ function Invoke-SettingsRender {
     Note-Present "settings.json" "up to date"
 }
 
+function Read-JsonFile([string]$path) {
+    if (-not (Test-Path $path)) { return $null }
+    try { return (Get-Content $path -Raw | ConvertFrom-Json) } catch { return $null }
+}
+
+# UTF8Encoding($false) because PS 5.1's Set-Content -Encoding UTF8 emits a BOM, which
+# Claude Code's own reads of these files choke on
+function Write-JsonFile([string]$path, $value) {
+    $text = ($value | ConvertTo-Json -Depth 100) + "`n"
+    [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Remove-ObjectKey($target, [string]$key) {
+    if (-not $target) { return $false }
+    if (-not ($target.PSObject.Properties.Name -contains $key)) { return $false }
+    $target.PSObject.Properties.Remove($key)
+    return $true
+}
+
+function Remove-PathIfPresent([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return $false }
+    Remove-Item -LiteralPath $path -Recurse -Force
+    return $true
+}
+
+function Get-NpmGlobalBinDir {
+    $fallback = Join-Path $env:APPDATA "npm"
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { return $fallback }
+    $prefix = (npm prefix -g 2>$null | Select-Object -First 1)
+    if ($prefix) { return $prefix.Trim() }
+    return $fallback
+}
+
+function Remove-RetiredPluginSettings([string]$pluginId, [string]$marketplace, [bool]$marketplaceUnused) {
+    $settingsPath = Join-Path $repoRoot "settings.json"
+    $settings = Read-JsonFile $settingsPath
+    if (-not $settings) { return $false }
+    $strippedPlugin = Remove-ObjectKey $settings.enabledPlugins $pluginId
+    $strippedMarket = $false
+    if ($marketplaceUnused) { $strippedMarket = Remove-ObjectKey $settings.extraKnownMarketplaces $marketplace }
+    if (-not ($strippedPlugin -or $strippedMarket)) { return $false }
+    Write-JsonFile $settingsPath $settings
+    return $true
+}
+
+# A marketplace can host more than one plugin, so anything scoped to the marketplace
+# rather than to this plugin survives while another installed plugin still needs it.
+# Must be asked before installed_plugins.json is rewritten.
+function Test-RetiredMarketplaceUnused([string]$pluginId, [string]$marketplace) {
+    $installed = Read-JsonFile (Join-Path $repoRoot "plugins\installed_plugins.json")
+    $others = @($installed.plugins.PSObject.Properties.Name |
+        Where-Object { $_ -ne $pluginId -and $_ -match "@$([regex]::Escape($marketplace))$" })
+    return ($others.Count -eq 0)
+}
+
+function Remove-RetiredPluginRegistries([string]$pluginId, [string]$marketplace, [bool]$marketplaceUnused) {
+    $pluginsDir = Join-Path $repoRoot "plugins"
+    $installedPath = Join-Path $pluginsDir "installed_plugins.json"
+    $installed = Read-JsonFile $installedPath
+    $changed = Remove-ObjectKey $installed.plugins $pluginId
+    if ($changed) { Write-JsonFile $installedPath $installed }
+    if (-not $marketplaceUnused) { return $changed }
+    $marketsPath = Join-Path $pluginsDir "known_marketplaces.json"
+    $markets = Read-JsonFile $marketsPath
+    if (-not (Remove-ObjectKey $markets $marketplace)) { return $changed }
+    Write-JsonFile $marketsPath $markets
+    return $true
+}
+
+function Remove-RetiredPluginDirs([string]$pluginName, [string]$marketplace, [bool]$marketplaceUnused) {
+    $pluginsDir = Join-Path $repoRoot "plugins"
+    $targets = @(
+        (Join-Path $pluginsDir "cache\$marketplace\$pluginName"),
+        (Join-Path $pluginsDir "data\$pluginName-$marketplace"),
+        (Join-Path $pluginsDir $pluginName)
+    )
+    if ($marketplaceUnused) {
+        $targets += (Join-Path $pluginsDir "cache\$marketplace")
+        $targets += (Join-Path $pluginsDir "marketplaces\$marketplace")
+    }
+    $changed = $false
+    foreach ($target in $targets) {
+        if (Remove-PathIfPresent $target) { $changed = $true }
+    }
+    return $changed
+}
+
+function Remove-RetiredPluginShims([string[]]$shims) {
+    if ($shims.Count -eq 0) { return $false }
+    $binDir = Get-NpmGlobalBinDir
+    $changed = $false
+    foreach ($shim in $shims) {
+        foreach ($suffix in @("", ".cmd", ".ps1")) {
+            if (Remove-PathIfPresent (Join-Path $binDir "$shim$suffix")) { $changed = $true }
+        }
+    }
+    return $changed
+}
+
+function Remove-RetiredPluginState([string[]]$stateDirs) {
+    $changed = $false
+    foreach ($stateDir in $stateDirs) {
+        if (Remove-PathIfPresent (Join-Path $env:USERPROFILE $stateDir)) { $changed = $true }
+    }
+    return $changed
+}
+
+function Split-CsvField([hashtable]$fields, [string]$key) {
+    if (-not $fields.ContainsKey($key)) { return @() }
+    return @($fields[$key] -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+# Retired plugins listed in plugins-remove.txt are torn down on every apply so machines
+# converge, mirroring how npm-globals-remove.txt retires global npm tools. Every removal
+# is present-only, so a second run on a clean machine is a no-op.
+function Remove-RetiredPlugins {
+    $listPath = Join-Path $setupDir "plugins-remove.txt"
+    if (-not (Test-Path $listPath)) { Note-Warned "plugin removals" "plugins-remove.txt not in repo"; return }
+    $entries = @(Get-Content $listPath | Where-Object { $_ -and ($_ -notmatch "^\s*#") })
+    if ($entries.Count -eq 0) { Note-Present "plugin removals" "none listed"; return }
+    $removed = 0
+    foreach ($entry in $entries) {
+        $tokens = @($entry.Trim() -split "\s+")
+        if ($tokens[0] -notmatch "^(?<name>[^@\s]+)@(?<market>[^@\s]+)$") {
+            Note-Warned "plugin removals" "cannot parse '$($tokens[0])'"
+            continue
+        }
+        $pluginId = $tokens[0]
+        $pluginName = $Matches.name
+        $marketplace = $Matches.market
+        $fields = @{}
+        foreach ($token in ($tokens | Select-Object -Skip 1)) {
+            if ($token -match "^(?<key>[a-z]+)=(?<value>.+)$") { $fields[$Matches.key] = $Matches.value }
+        }
+        $marketplaceUnused = Test-RetiredMarketplaceUnused $pluginId $marketplace
+        $changes = @(
+            (Remove-RetiredPluginSettings $pluginId $marketplace $marketplaceUnused),
+            (Remove-RetiredPluginRegistries $pluginId $marketplace $marketplaceUnused),
+            (Remove-RetiredPluginDirs $pluginName $marketplace $marketplaceUnused),
+            (Remove-RetiredPluginShims (Split-CsvField $fields "shims")),
+            (Remove-RetiredPluginState (Split-CsvField $fields "state"))
+        )
+        if (-not ($changes -contains $true)) { continue }
+        Note-Applied $pluginId "removed"
+        $removed++
+    }
+    if ($removed -eq 0) { Note-Present "plugin removals" "none present" }
+}
+
 $markerPath = Join-Path $repoRoot ".machine-profile"
 $markerExisted = Test-Path $markerPath
 
@@ -274,7 +423,7 @@ $steps = @($profileJson.steps)
 # Full step catalog in execution order, for the dry-run plan.
 $knownSteps = @(
     "vscodium-config", "glissa", "glissa-server", "gitconfig", "codex-agents", "terminal",
-    "workflow-config", "settings-render", "software", "fonts", "biome",
+    "plugins-remove", "workflow-config", "settings-render", "software", "fonts", "biome",
     "tailscale", "repos", "npm-globals", "python-tools", "vscodium-extensions"
 )
 
@@ -396,6 +545,10 @@ if (Step-Enabled "terminal") {
     if (-not (Test-Path $wtDir)) { Note-Warned "Windows Terminal" "not installed, skipping settings" }
 }
 if (-not (Step-Enabled "terminal")) { Note-Skipped "Windows Terminal" }
+
+Write-Section "Retired plugins"
+if (-not (Step-Enabled "plugins-remove")) { Note-Skipped "plugin removals" }
+if (Step-Enabled "plugins-remove") { Remove-RetiredPlugins }
 
 Write-Section "Workflow"
 if (Step-Enabled "workflow-config") {

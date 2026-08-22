@@ -584,6 +584,259 @@ assertOk "work profile collect completes" $?
 assertMatch "work profile collect stops after VSCodium" "personal-profile only" "$workCollectOutput"
 
 # ---------------------------------------------------------------------------
+# A machine that still carries the retired oh-my-claudecode plugin: settings keys, both
+# plugin registries, all four cached dirs, the npm shims, and both state dirs, plus a
+# keeper plugin from another marketplace that every removal has to leave alone.
+seedRetiredPluginFixture() {
+  local homeRoot="$1"
+  local shimDir="$2"
+  local claudeRoot="$homeRoot/.claude"
+  local shimName
+  mkdir -p \
+    "$claudeRoot/plugins/cache/omc/oh-my-claudecode/1.0.0" \
+    "$claudeRoot/plugins/cache/keepmarket/keeper" \
+    "$claudeRoot/plugins/marketplaces/omc" \
+    "$claudeRoot/plugins/marketplaces/keepmarket" \
+    "$claudeRoot/plugins/data/oh-my-claudecode-omc" \
+    "$claudeRoot/plugins/data/keeper-keepmarket" \
+    "$claudeRoot/plugins/oh-my-claudecode" \
+    "$claudeRoot/plugins/keeper" \
+    "$claudeRoot/.omc" \
+    "$homeRoot/.omc" \
+    "$homeRoot/.keep-state" \
+    "$shimDir"
+  printf 'cached\n' > "$claudeRoot/plugins/cache/omc/oh-my-claudecode/1.0.0/marker.txt"
+  printf 'cached\n' > "$claudeRoot/plugins/cache/keepmarket/keeper/marker.txt"
+  printf 'plugin\n' > "$claudeRoot/plugins/oh-my-claudecode/plugin.json"
+  printf 'plugin\n' > "$claudeRoot/plugins/keeper/plugin.json"
+  printf 'state\n' > "$claudeRoot/.omc/session.json"
+  printf 'state\n' > "$homeRoot/.omc/session.json"
+  printf 'state\n' > "$homeRoot/.keep-state/session.json"
+  cat > "$claudeRoot/plugins/installed_plugins.json" <<'JSON'
+{
+  "version": 2,
+  "plugins": {
+    "oh-my-claudecode@omc": [{ "version": "1.0.0" }],
+    "keeper@keepmarket": [{ "version": "2.0.0" }]
+  }
+}
+JSON
+  cat > "$claudeRoot/plugins/known_marketplaces.json" <<'JSON'
+{
+  "omc": { "source": { "source": "github", "repo": "example/omc" } },
+  "keepmarket": { "source": { "source": "github", "repo": "example/keepmarket" } }
+}
+JSON
+  cat > "$claudeRoot/settings.json" <<'JSON'
+{
+  "enabledPlugins": {
+    "oh-my-claudecode@omc": true,
+    "keeper@keepmarket": true
+  },
+  "extraKnownMarketplaces": {
+    "omc": { "source": { "source": "github", "repo": "example/omc" } },
+    "keepmarket": { "source": { "source": "github", "repo": "example/keepmarket" } }
+  },
+  "statusLine": { "type": "command", "command": "node ~/.claude/hud/hud.mjs" }
+}
+JSON
+  for shimName in omc omc-cli keep-tool; do
+    printf '#!/bin/sh\n' > "$shimDir/$shimName"
+    printf 'stub\n' > "$shimDir/$shimName.cmd"
+    printf 'stub\n' > "$shimDir/$shimName.ps1"
+  done
+}
+
+# Keeps the shim teardown inside the fixture home: apply.sh resolves the npm global bin
+# dir from `npm prefix -g`, so a stub prefix is what stops it reaching real shims.
+installNpmPrefixStub() {
+  local stubDir="$1"
+  local prefixDir="$2"
+  mkdir -p "$stubDir"
+  cat > "$stubDir/npm" <<STUB
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "prefix" ]]; then
+  printf '%s\n' "$prefixDir"
+  exit 0
+fi
+exit 0
+STUB
+  chmod +x "$stubDir/npm"
+}
+
+# node ships in the same directory as coreutils, so the only way to hide it from apply.sh
+# is a PATH of symlinks to every other tool.
+installNodelessPathDir() {
+  local linkDir="$1"
+  local toolPath
+  local toolName
+  mkdir -p "$linkDir"
+  for toolPath in /usr/bin/* /bin/*; do
+    toolName="$(basename -- "$toolPath")"
+    if [[ "$toolName" == "node" || "$toolName" == "nodejs" ]]; then
+      continue
+    fi
+    ln -sf "$toolPath" "$linkDir/$toolName" 2>/dev/null || true
+  done
+}
+
+phase "retired plugin teardown"
+
+pluginHome="/tmp/pluginhome"
+pluginClaude="$pluginHome/.claude"
+pluginStubBin="/tmp/pluginstubbin"
+pluginShimDir="$pluginHome/.npm-sandbox/bin"
+mkdir -p "$pluginHome"
+(
+  export HOME="$pluginHome"
+  bootstrapCheckout "$pluginClaude"
+) >/dev/null 2>&1
+installNpmPrefixStub "$pluginStubBin" "$pluginHome/.npm-sandbox"
+seedRetiredPluginFixture "$pluginHome" "$pluginShimDir"
+
+pluginOutput="$(HOME="$pluginHome" PATH="$pluginStubBin:$PATH" bash "$pluginClaude/setup/apply.sh" --skip-installs --profile work 2>&1 | stripColor)"
+pluginStatus="${PIPESTATUS[0]}"
+assertOk "retired plugin apply completes" "$pluginStatus"
+assertMatch "reports the retired plugin as removed" "oh-my-claudecode@omc +removed" "$pluginOutput"
+assertNoFile "removes the retired marketplace cache" "$pluginClaude/plugins/cache/omc"
+assertNoFile "removes the retired marketplace dir" "$pluginClaude/plugins/marketplaces/omc"
+assertNoFile "removes the retired plugin data dir" "$pluginClaude/plugins/data/oh-my-claudecode-omc"
+assertNoFile "removes the retired plugin dir" "$pluginClaude/plugins/oh-my-claudecode"
+assertDir "keeps another marketplace cache" "$pluginClaude/plugins/cache/keepmarket"
+assertDir "keeps another marketplace dir" "$pluginClaude/plugins/marketplaces/keepmarket"
+assertDir "keeps another plugin data dir" "$pluginClaude/plugins/data/keeper-keepmarket"
+assertDir "keeps another plugin dir" "$pluginClaude/plugins/keeper"
+assertNoFile "removes the omc shim" "$pluginShimDir/omc"
+assertNoFile "removes the omc .cmd shim" "$pluginShimDir/omc.cmd"
+assertNoFile "removes the omc .ps1 shim" "$pluginShimDir/omc.ps1"
+assertNoFile "removes the omc-cli shim" "$pluginShimDir/omc-cli"
+assertNoFile "removes the omc-cli .cmd shim" "$pluginShimDir/omc-cli.cmd"
+assertFile "keeps an unrelated shim" "$pluginShimDir/keep-tool"
+assertNoFile "removes the state dir under .claude" "$pluginClaude/.omc"
+assertNoFile "removes the state dir under HOME" "$pluginHome/.omc"
+assertDir "keeps an unrelated state dir" "$pluginHome/.keep-state"
+
+if command -v node >/dev/null 2>&1; then
+  pluginRegistry="$(cat "$pluginClaude/plugins/installed_plugins.json")"
+  assertNoMatch "drops the plugin from installed_plugins.json" "oh-my-claudecode@omc" "$pluginRegistry"
+  assertMatch "keeps another plugin in installed_plugins.json" "keeper@keepmarket" "$pluginRegistry"
+  assertMatch "leaves installed_plugins.json parseable" "^\{" "$pluginRegistry"
+  marketplaceRegistry="$(cat "$pluginClaude/plugins/known_marketplaces.json")"
+  assertNoMatch "drops the marketplace from known_marketplaces.json" '"omc":' "$marketplaceRegistry"
+  assertMatch "keeps another marketplace in known_marketplaces.json" '"keepmarket":' "$marketplaceRegistry"
+  assertNoMatch "settings.json carries no retired plugin" "oh-my-claudecode@omc" "$(cat "$pluginClaude/settings.json")"
+fi
+
+pluginRerunOutput="$(HOME="$pluginHome" PATH="$pluginStubBin:$PATH" bash "$pluginClaude/setup/apply.sh" --skip-installs --profile work 2>&1 | stripColor)"
+pluginRerunStatus="${PIPESTATUS[0]}"
+assertOk "second retired plugin apply completes" "$pluginRerunStatus"
+assertMatch "second apply finds nothing to remove" "plugin removals +none present" "$pluginRerunOutput"
+assertNoMatch "second apply removes nothing again" "oh-my-claudecode@omc +removed" "$pluginRerunOutput"
+assertNoMatch "second apply warns about nothing" '\[warn\]' "$pluginRerunOutput"
+assertDir "second apply keeps the unrelated plugin dir" "$pluginClaude/plugins/keeper"
+assertFile "second apply keeps the unrelated shim" "$pluginShimDir/keep-tool"
+
+# Settings teardown needs a run where settings-render cannot rewrite settings.json anyway, so
+# these two fixtures trim the profile to the plugins-remove step: one where the marketplace is
+# left unused (everything goes) and one where a sibling plugin still needs it (only the
+# plugin-scoped paths go).
+if command -v node >/dev/null 2>&1; then
+  soleHome="/tmp/pluginsolehome"
+  soleClaude="$soleHome/.claude"
+  soleStubBin="/tmp/pluginsolestubbin"
+  soleShimDir="$soleHome/.npm-sandbox/bin"
+  mkdir -p "$soleHome"
+  (
+    export HOME="$soleHome"
+    bootstrapCheckout "$soleClaude"
+  ) >/dev/null 2>&1
+  installNpmPrefixStub "$soleStubBin" "$soleHome/.npm-sandbox"
+  seedRetiredPluginFixture "$soleHome" "$soleShimDir"
+  printf '{ "steps": ["plugins-remove"] }\n' > "$soleClaude/profiles/work/profile.json"
+  soleOutput="$(HOME="$soleHome" PATH="$soleStubBin:$PATH" bash "$soleClaude/setup/apply.sh" --skip-installs --profile work 2>&1 | stripColor)"
+  soleStatus="${PIPESTATUS[0]}"
+  assertOk "unused marketplace apply completes" "$soleStatus"
+  soleSettings="$(cat "$soleClaude/settings.json")"
+  assertNoMatch "strips enabledPlugins of the retired plugin" "oh-my-claudecode@omc" "$soleSettings"
+  assertNoMatch "strips extraKnownMarketplaces of an unused marketplace" '"omc":' "$soleSettings"
+  assertMatch "keeps an unrelated enabledPlugins key" "keeper@keepmarket" "$soleSettings"
+  assertMatch "keeps an unrelated settings key" "statusLine" "$soleSettings"
+  assertNoFile "removes an unused marketplace cache dir" "$soleClaude/plugins/cache/omc"
+  assertNoFile "removes an unused marketplace dir" "$soleClaude/plugins/marketplaces/omc"
+  assertNoMatch "drops an unused marketplace from known_marketplaces.json" '"omc":' "$(cat "$soleClaude/plugins/known_marketplaces.json")"
+
+  keeperHome="/tmp/pluginkeeperhome"
+  keeperClaude="$keeperHome/.claude"
+  keeperStubBin="/tmp/pluginkeeperstubbin"
+  keeperShimDir="$keeperHome/.npm-sandbox/bin"
+  mkdir -p "$keeperHome"
+  (
+    export HOME="$keeperHome"
+    bootstrapCheckout "$keeperClaude"
+  ) >/dev/null 2>&1
+  installNpmPrefixStub "$keeperStubBin" "$keeperHome/.npm-sandbox"
+  seedRetiredPluginFixture "$keeperHome" "$keeperShimDir"
+  printf '{ "steps": ["plugins-remove"] }\n' > "$keeperClaude/profiles/work/profile.json"
+  mkdir -p "$keeperClaude/plugins/cache/omc/sibling/3.0.0"
+  printf 'cached\n' > "$keeperClaude/plugins/cache/omc/sibling/3.0.0/marker.txt"
+  cat > "$keeperClaude/plugins/installed_plugins.json" <<'JSON'
+{
+  "version": 2,
+  "plugins": {
+    "oh-my-claudecode@omc": [{ "version": "1.0.0" }],
+    "sibling@omc": [{ "version": "3.0.0" }]
+  }
+}
+JSON
+  keeperOutput="$(HOME="$keeperHome" PATH="$keeperStubBin:$PATH" bash "$keeperClaude/setup/apply.sh" --skip-installs --profile work 2>&1 | stripColor)"
+  keeperStatus="${PIPESTATUS[0]}"
+  assertOk "marketplace keeper apply completes" "$keeperStatus"
+  assertMatch "marketplace keeper still reports a removal" "oh-my-claudecode@omc +removed" "$keeperOutput"
+  assertNoFile "removes the retired plugin's own cache dir" "$keeperClaude/plugins/cache/omc/oh-my-claudecode"
+  assertNoFile "removes the retired plugin data dir" "$keeperClaude/plugins/data/oh-my-claudecode-omc"
+  assertNoFile "removes the retired plugin dir" "$keeperClaude/plugins/oh-my-claudecode"
+  assertDir "keeps a sibling plugin's cache dir" "$keeperClaude/plugins/cache/omc/sibling/3.0.0"
+  assertDir "keeps a shared marketplace cache dir" "$keeperClaude/plugins/cache/omc"
+  assertDir "keeps a shared marketplace dir" "$keeperClaude/plugins/marketplaces/omc"
+  keeperSettings="$(cat "$keeperClaude/settings.json")"
+  assertNoMatch "strips enabledPlugins even for a shared marketplace" "oh-my-claudecode@omc" "$keeperSettings"
+  assertMatch "keeps the extraKnownMarketplaces entry a sibling still needs" '"omc":' "$keeperSettings"
+  keeperRegistry="$(cat "$keeperClaude/plugins/installed_plugins.json")"
+  assertNoMatch "drops only the retired plugin" "oh-my-claudecode@omc" "$keeperRegistry"
+  assertMatch "keeps a sibling plugin from the same marketplace" "sibling@omc" "$keeperRegistry"
+  assertMatch "keeps the marketplace a sibling plugin still needs" '"omc":' "$(cat "$keeperClaude/plugins/known_marketplaces.json")"
+fi
+
+# node is what edits the JSON registries, so without it the plugin-scoped dirs, shims, and
+# state still have to go and the untouched registries have to be reported rather than silently
+# skipped. Marketplace-scoped paths stay: their gate cannot be read without node, and the
+# fail-safe answer is that some other plugin may still need the marketplace.
+nodelessHome="/tmp/pluginnodelesshome"
+nodelessClaude="$nodelessHome/.claude"
+nodelessStubBin="/tmp/pluginnodelessstubbin"
+nodelessShimDir="$nodelessHome/.npm-sandbox/bin"
+mkdir -p "$nodelessHome"
+(
+  export HOME="$nodelessHome"
+  bootstrapCheckout "$nodelessClaude"
+) >/dev/null 2>&1
+installNpmPrefixStub "$nodelessStubBin" "$nodelessHome/.npm-sandbox"
+installNodelessPathDir "/tmp/pluginnodelessbin"
+seedRetiredPluginFixture "$nodelessHome" "$nodelessShimDir"
+nodelessOutput="$(HOME="$nodelessHome" PATH="$nodelessStubBin:/tmp/pluginnodelessbin" bash "$nodelessClaude/setup/apply.sh" --skip-installs --profile work 2>&1 | stripColor)"
+nodelessStatus="${PIPESTATUS[0]}"
+assertOk "apply without node completes" "$nodelessStatus"
+assertMatch "warns that the registries need node" "plugin removals +node not on PATH" "$nodelessOutput"
+assertMatch "still reports the retired plugin as removed" "oh-my-claudecode@omc +removed" "$nodelessOutput"
+assertNoFile "removes the plugin dir without node" "$nodelessClaude/plugins/oh-my-claudecode"
+assertNoFile "removes the plugin cache without node" "$nodelessClaude/plugins/cache/omc/oh-my-claudecode"
+assertDir "keeps the marketplace cache dir without node" "$nodelessClaude/plugins/cache/omc"
+assertDir "keeps the marketplace dir without node" "$nodelessClaude/plugins/marketplaces/omc"
+assertNoFile "removes the shims without node" "$nodelessShimDir/omc"
+assertNoFile "removes the state dirs without node" "$nodelessHome/.omc"
+assertMatch "leaves installed_plugins.json alone without node" "oh-my-claudecode@omc" "$(cat "$nodelessClaude/plugins/installed_plugins.json")"
+
+# ---------------------------------------------------------------------------
 phase "collect.sh round trip"
 
 testRepo="$HOME/work/testrepo"
