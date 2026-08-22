@@ -9,7 +9,7 @@ Sections are split by audience. `<routing>` (including its orchestration posture
 </scope>
 
 <routing>
-Main session loop only; subagents skip per `<scope>`. Single source of truth for model selection, subagent delegation, and Codex offload on personal and server machines. A profile CLAUDE.md that defines its own `<routing>` (the work profile) wins and makes this section inert. No other section here governs routing.
+Main session loop only; subagents skip per `<scope>`. Single source of truth for model selection, subagent delegation, and Codex offload on personal and server machines. A profile CLAUDE.md that defines its own `<routing>` wins: it may replace this section outright or amend it by reference (the work profile amends). No other section here governs routing.
 
 Models, rated 1 (low) to 5 (high) on intelligence and speed, 1 (cheap) to 5 (expensive) on cost:
 
