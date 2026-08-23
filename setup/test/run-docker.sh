@@ -64,14 +64,16 @@ esac
 
 dockerfileDistro="$distro"
 dockerBuildArgs=()
-if [[ "$distro" == "ubuntu" ]]; then
-  dockerfileDistro="ubuntu"
-  dockerBuildArgs+=(--build-arg UBUNTU_IMAGE=ubuntu:24.04)
-fi
-if [[ "$distro" == "ubuntu22" ]]; then
-  dockerfileDistro="ubuntu"
-  dockerBuildArgs+=(--build-arg UBUNTU_IMAGE=ubuntu:22.04)
-fi
+case "$distro" in
+  ubuntu)
+    dockerfileDistro="ubuntu"
+    dockerBuildArgs+=(--build-arg UBUNTU_IMAGE=ubuntu:24.04)
+    ;;
+  ubuntu22)
+    dockerfileDistro="ubuntu"
+    dockerBuildArgs+=(--build-arg UBUNTU_IMAGE=ubuntu:22.04)
+    ;;
+esac
 
 testDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$testDir/../.." && pwd)"

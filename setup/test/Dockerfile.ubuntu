@@ -1,8 +1,7 @@
 ARG UBUNTU_IMAGE=ubuntu:24.04
 FROM ${UBUNTU_IMAGE}
 
-# Only the documented prerequisite (git) plus TLS roots and curl, so the suite
-# proves apply.sh installs everything else itself.
+# Only git plus TLS roots and curl, so the suite proves apply.sh installs the rest itself.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates curl sudo \
   && rm -rf /var/lib/apt/lists/*

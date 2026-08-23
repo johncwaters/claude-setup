@@ -245,13 +245,13 @@ copyGlissaSeedConfig() {
     return 0
   fi
   tempConfig="$(mktemp "${TMPDIR:-/tmp}/claude-glissa-config.XXXXXX")"
+  trap 'rm -f "$tempConfig"' RETURN
   seedContent="$(<"$src")"
   homeForJson="${HOME//\\/\/}"
   seedContent="${seedContent//C:\\\\Users\\\\YOUR_USERNAME/$homeForJson}"
   seedContent="${seedContent//\\\\//}"
   printf '%s\n' "$seedContent" >"$tempConfig"
   copyConfig "glissa config" "$tempConfig" "$dest"
-  rm -f "$tempConfig"
 }
 
 backupIfFirstRun() {
@@ -611,13 +611,17 @@ installVscodiumAptDeb() {
     return 0
   fi
   if ! architecture="$(vscodiumDebArchitecture)"; then
-    noteWarned "$label" "no matching .deb asset, install from https://vscodium.com"
+    noteWarned "$label" "unsupported architecture for .deb install, install from https://vscodium.com"
     return 0
   fi
   writeLine " .. " "$colorYellow" "$label" "installing .deb from GitHub releases"
   downloadDir="$(mktemp -d "${TMPDIR:-/tmp}/claude-vscodium.XXXXXX")"
   releaseJson="$downloadDir/release.json"
-  if ! curl -fsSL https://api.github.com/repos/VSCodium/vscodium/releases/latest -o "$releaseJson"; then
+  local apiAuthArgs=()
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    apiAuthArgs=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  fi
+  if ! curl -fsSL "${apiAuthArgs[@]}" https://api.github.com/repos/VSCodium/vscodium/releases/latest -o "$releaseJson"; then
     noteWarned "$label" "release lookup failed, install from https://vscodium.com"
     rm -rf "$downloadDir"
     return 0
