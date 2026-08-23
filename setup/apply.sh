@@ -234,6 +234,26 @@ copyConfig() {
   noteApplied "$label" "updated"
 }
 
+copyGlissaSeedConfig() {
+  local src="$1"
+  local dest="$2"
+  local tempConfig
+  local seedContent
+  local homeForJson
+  if [[ ! -f "$src" ]]; then
+    noteWarned "glissa config" "not in repo"
+    return 0
+  fi
+  tempConfig="$(mktemp "${TMPDIR:-/tmp}/claude-glissa-config.XXXXXX")"
+  seedContent="$(<"$src")"
+  homeForJson="${HOME//\\/\/}"
+  seedContent="${seedContent//C:\\\\Users\\\\YOUR_USERNAME/$homeForJson}"
+  seedContent="${seedContent//\\\\//}"
+  printf '%s\n' "$seedContent" >"$tempConfig"
+  copyConfig "glissa config" "$tempConfig" "$dest"
+  rm -f "$tempConfig"
+}
+
 backupIfFirstRun() {
   local dest="$1"
   local src="$2"
@@ -496,6 +516,10 @@ packageNamesForTool() {
       printf 'gh\n'
       return 0
       ;;
+    gh:apt-get)
+      printf 'gh\n'
+      return 0
+      ;;
     gh:pacman)
       printf 'github-cli\n'
       return 0
@@ -552,6 +576,84 @@ toolIsPresent() {
   command -v "$commandName" >/dev/null 2>&1
 }
 
+vscodiumDebArchitecture() {
+  local architecture
+  if ! command -v dpkg >/dev/null 2>&1; then
+    return 1
+  fi
+  architecture="$(dpkg --print-architecture 2>/dev/null || true)"
+  if [[ "$architecture" == "amd64" || "$architecture" == "arm64" ]]; then
+    printf '%s\n' "$architecture"
+    return 0
+  fi
+  return 1
+}
+
+installVscodiumAptDeb() {
+  local label="$1"
+  local architecture
+  local downloadDir
+  local releaseJson
+  local assetUrl
+  local debFile
+  local installLog
+  refreshSessionPath
+  if command -v codium >/dev/null 2>&1; then
+    notePresent "$label" "already installed"
+    return 0
+  fi
+  if ! canInstallSystemPackages; then
+    noteWarned "$label" "apt-get needs root or sudo, install from https://vscodium.com"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    noteWarned "$label" "curl not on PATH, install from https://vscodium.com"
+    return 0
+  fi
+  if ! architecture="$(vscodiumDebArchitecture)"; then
+    noteWarned "$label" "no matching .deb asset, install from https://vscodium.com"
+    return 0
+  fi
+  writeLine " .. " "$colorYellow" "$label" "installing .deb from GitHub releases"
+  downloadDir="$(mktemp -d "${TMPDIR:-/tmp}/claude-vscodium.XXXXXX")"
+  releaseJson="$downloadDir/release.json"
+  if ! curl -fsSL https://api.github.com/repos/VSCodium/vscodium/releases/latest -o "$releaseJson"; then
+    noteWarned "$label" "release lookup failed, install from https://vscodium.com"
+    rm -rf "$downloadDir"
+    return 0
+  fi
+  assetUrl="$(grep -E '"browser_download_url": "https://[^"]+\.deb"' "$releaseJson" | grep -E "(${architecture})\\.deb\"" | sed -E 's/.*"browser_download_url": "([^"]+)".*/\1/' | head -n 1 || true)"
+  if [[ -z "$assetUrl" ]]; then
+    noteWarned "$label" "no matching .deb asset, install from https://vscodium.com"
+    rm -rf "$downloadDir"
+    return 0
+  fi
+  debFile="$(basename -- "$assetUrl")"
+  if ! curl -fL "$assetUrl" -o "$downloadDir/$debFile"; then
+    noteWarned "$label" "download failed, install from https://vscodium.com"
+    rm -rf "$downloadDir"
+    return 0
+  fi
+  installLog="$(mktemp "${TMPDIR:-/tmp}/claude-vscodium-install.XXXXXX")"
+  packageInstallLog="$installLog"
+  if ! (cd "$downloadDir" && installSystemPackages apt-get "./$debFile"); then
+    packageInstallLog=""
+    noteWarned "$label" "apt-get install failed: $(lastLogLine "$installLog"), install from https://vscodium.com"
+    rm -rf "$downloadDir"
+    rm -f "$installLog"
+    return 0
+  fi
+  packageInstallLog=""
+  rm -rf "$downloadDir"
+  rm -f "$installLog"
+  refreshSessionPath
+  if command -v codium >/dev/null 2>&1; then
+    noteInstalled "$label" "installed"
+    return 0
+  fi
+  noteWarned "$label" "installed, but open a new shell for PATH"
+}
+
 installPackageTool() {
   local label="$1"
   local commandName="$2"
@@ -570,6 +672,10 @@ installPackageTool() {
   mapfile -t packageNameArgs < <(packageNamesForTool "$manager" "$toolKey" || true)
   if ((${#packageNameArgs[@]} == 0)); then
     if [[ "$toolKey" == "vscodium" ]]; then
+      if [[ "$manager" == "apt-get" ]]; then
+        installVscodiumAptDeb "$label"
+        return 0
+      fi
       noteWarned "$label" "not in default repos, install from https://vscodium.com/#install"
       return 0
     fi
@@ -586,6 +692,10 @@ installPackageTool() {
   fi
   writeLine " .. " "$colorYellow" "$label" "installing via $manager"
   if ! installSystemPackages "$manager" "${packageNameArgs[@]}"; then
+    if [[ "$toolKey" == "gh" && "$manager" == "apt-get" ]]; then
+      noteWarned "$label" "$manager install failed, install from https://cli.github.com"
+      return 0
+    fi
     noteWarned "$label" "$manager install failed"
     return 0
   fi
@@ -2108,7 +2218,7 @@ if stepEnabled "glissa"; then
       glissaSrc="$setupDir/glissa/config.example.json"
       noteWarned "glissa config" "no config.json, seeding from config.example.json (edit project paths)"
     fi
-    copyConfig "glissa config" "$glissaSrc" "$glissaDest"
+    copyGlissaSeedConfig "$glissaSrc" "$glissaDest"
   fi
 fi
 if ! stepEnabled "glissa"; then

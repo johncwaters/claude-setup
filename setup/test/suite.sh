@@ -452,6 +452,9 @@ assertFile "copies VSCodium settings" "$HOME/.config/VSCodium/User/settings.json
 assertFile "copies VSCodium keybindings" "$HOME/.config/VSCodium/User/keybindings.json"
 assertFile "copies Codex AGENTS.md" "$HOME/.codex/AGENTS.md"
 assertFile "seeds the glissa config" "$HOME/.glissa/config.json"
+glissaSeedConfig="$(cat "$HOME/.glissa/config.json" 2>/dev/null)"
+assertMatch "rewrites glissa project roots for Linux" "$HOME/Projects" "$glissaSeedConfig"
+assertNoMatch "glissa config has no Windows drive" 'C:\\' "$glissaSeedConfig"
 assertNoFile "refuses to install the placeholder gitconfig" "$HOME/.gitconfig"
 # The suite exports GIT_CONFIG_GLOBAL with its own identity above, so this run
 # legitimately reports the identity as already configured instead of warning.
@@ -835,6 +838,38 @@ assertDir "keeps the marketplace dir without node" "$nodelessClaude/plugins/mark
 assertNoFile "removes the shims without node" "$nodelessShimDir/omc"
 assertNoFile "removes the state dirs without node" "$nodelessHome/.omc"
 assertMatch "leaves installed_plugins.json alone without node" "oh-my-claudecode@omc" "$(cat "$nodelessClaude/plugins/installed_plugins.json")"
+
+# ---------------------------------------------------------------------------
+phase "VSCodium extension sync"
+
+extensionHome="/tmp/vscodium-extension-home"
+extensionBin="/tmp/vscodium-extension-bin"
+extensionLog="$extensionHome/codium.log"
+mkdir -p "$extensionHome" "$extensionBin"
+(
+  export HOME="$extensionHome"
+  bootstrapCheckout "$extensionHome/.claude"
+) >/dev/null 2>&1
+printf '%s\n' '{ "steps": ["vscodium-extensions"], "vscodiumExtensionSync": "exact" }' > "$extensionHome/.claude/profiles/personal/profile.json"
+printf 'vendor.tracked\n' > "$extensionHome/.claude/setup/vscodium/extensions.txt"
+cat >"$extensionBin/codium" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${CODIUM_LOG:?}"
+if [[ "${1:-}" == "--list-extensions" ]]; then
+  printf 'vendor.extra\n'
+  exit 0
+fi
+exit 0
+STUB
+chmod +x "$extensionBin/codium"
+
+extensionOutput="$(HOME="$extensionHome" CODIUM_LOG="$extensionLog" PATH="$extensionBin:/usr/bin:/bin" bash "$extensionHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+extensionStatus="${PIPESTATUS[0]}"
+assertOk "VSCodium extension apply completes" "$extensionStatus"
+assertMatch "installs a tracked VSCodium extension" "vendor.tracked +installed" "$extensionOutput"
+assertMatch "removes an extra VSCodium extension" "vendor.extra +removed" "$extensionOutput"
+assertMatch "codium installs the tracked extension" "--install-extension vendor.tracked" "$(cat "$extensionLog" 2>/dev/null)"
+assertMatch "codium uninstalls the extra extension" "--uninstall-extension vendor.extra" "$(cat "$extensionLog" 2>/dev/null)"
 
 # ---------------------------------------------------------------------------
 phase "collect.sh round trip"
@@ -1306,7 +1341,14 @@ command -v npm >/dev/null 2>&1
 assertOk "installs npm" $?
 assertMinimum "installs a node the glissa build can run" 20 "$(node -v 2>/dev/null | sed 's/^v//; s/\..*//')"
 assertRenderedSettings "$claudeHome/settings.json"
-assertMatch "reports VSCodium as needing a manual install" "vscodium.com" "$fullOutput"
+if command -v apt-get >/dev/null 2>&1; then
+  command -v codium >/dev/null 2>&1
+  assertOk "installs VSCodium" $?
+  assertMatch "reports VSCodium installed or present" "VSCodium +(installed|already installed)" "$fullOutput"
+fi
+if ! command -v apt-get >/dev/null 2>&1; then
+  assertMatch "reports VSCodium as needing a manual install" "vscodium.com" "$fullOutput"
+fi
 assertDir "clones the repo listed in repos.txt" "$HOME/work/clonedrepo/.git"
 # The suite's checkout origin is a local path, so the operator's owner is unreadable
 # and the ownership rule fails safe: clone yes, develop no.

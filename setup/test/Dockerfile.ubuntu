@@ -1,0 +1,16 @@
+ARG UBUNTU_IMAGE=ubuntu:24.04
+FROM ${UBUNTU_IMAGE}
+
+# Only the documented prerequisite (git) plus TLS roots and curl, so the suite
+# proves apply.sh installs everything else itself.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates curl sudo \
+  && rm -rf /var/lib/apt/lists/*
+RUN useradd -m -s /bin/bash tester \
+  && printf 'tester ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/tester \
+  && chmod 0440 /etc/sudoers.d/tester
+
+ENV SUITE_MODE=fast
+ENV HOME=/home/tester
+USER tester
+ENTRYPOINT ["bash", "/suite/suite.sh"]

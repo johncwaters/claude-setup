@@ -1,6 +1,6 @@
 # claude-setup
 
-Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus VSCodium, glissa, git, Windows Terminal, and npm global tools.
+Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus VSCodium, glissa, git, Windows Terminal (Windows-only; not applicable on Linux), and npm global tools.
 
 The interesting homegrown pieces:
 
@@ -41,7 +41,7 @@ Everything else in `~/.claude` (credentials, history, sessions, caches, plugins)
 
 Each machine adopts one profile, `personal`, `work`, or `server`, and apply runs only that profile's steps.
 
-- `personal` runs the full set: retired plugin removal, workflow config and settings render, VSCodium config, glissa, gitconfig, Codex AGENTS.md, Windows Terminal, software installs, fonts, project repos, npm globals, python tools, and VSCodium extensions.
+- `personal` runs the full set: retired plugin removal, workflow config and settings render, VSCodium config, glissa, gitconfig, Codex AGENTS.md, Windows Terminal (Windows-only; not applicable on Linux), software installs, fonts, project repos, npm globals, python tools, and VSCodium extensions.
 - `work` runs a focused set: retired plugin removal, workflow config and settings render, VSCodium config, fonts, the biome hook dependency, python tools, and VSCodium extensions. It skips all software installs, project repos, npm globals sync, glissa, gitconfig, and Windows Terminal.
 - `server` runs the headless Linux set: retired plugin removal, workflow config and settings render, gitconfig, Codex AGENTS.md, software installs, Tailscale, Glissa server provisioning (`glissa-server`, see Glissa server below), project repos, npm globals, and python tools. It skips desktop-only VSCodium, fonts, and terminal styling. It also skips the `glissa` config-copy step, which is personal only: on a server the config comes from `glissa-server`, which seeds `~/.glissa/config.json` itself and then keeps the runtime state that accumulates there.
 
@@ -106,7 +106,7 @@ d="$HOME/.claude"; mkdir -p "$d"; git -C "$d" init -b master; git -C "$d" config
 
 `setup/install.sh` and `setup/apply.sh` are the bash ports of the two PowerShell scripts and read the same `profiles/<profile>/profile.json` step lists and the same `.machine-profile` marker, so a Linux box adopts `personal`, `work`, or `server` exactly like a Windows one. Same flags, spelled long: `--skip-installs`, `--profile personal|work|server`, `--dry-run`. Linux paths: VSCodium config to `~/.config/VSCodium/User`, glissa to `~/.glissa/config.json`, gitconfig to `~/.gitconfig`, Codex AGENTS.md to `~/.codex/AGENTS.md`, fonts to `~/.local/share/fonts` (then `fc-cache -f`), and project repos under `$HOME` with the backslashes in `repos.txt` paths translated to `/`.
 
-Differences from Windows: system packages come from apt-get, dnf, pacman, or zypper (with sudo when not root) instead of winget; Node comes from NodeSource on apt-get and dnf, because Debian bookworm's Node 18 is too old for the glissa build, and apt calls carry a dpkg lock timeout so a background packagekitd or unattended upgrade costs a wait instead of a failed install; Windows Terminal is reported as not applicable; VSCodium is not in any default distro repo, so it warns and points at https://vscodium.com/#install rather than adding third-party repos, and `gh` does the same where the package manager does not ship it; `python-tools` retries pip with `--user --break-system-packages` for PEP 668 distros; and `collect.ps1` has no Linux port, so publishing config changes still happens from the Windows machine.
+Differences from Windows: system packages come from apt-get, dnf, pacman, or zypper (with sudo when not root) instead of winget; Node comes from NodeSource on apt-get and dnf, because Debian bookworm's Node 18 is too old for the glissa build, and apt calls carry a dpkg lock timeout so a background packagekitd or unattended upgrade costs a wait instead of a failed install; Windows Terminal is reported as not applicable; VSCodium installs from the GitHub releases .deb on apt-get without adding third-party repos, while other managers warn and point at https://vscodium.com/#install, and `gh` installs from apt where available or warns toward https://cli.github.com; `python-tools` retries pip with `--user --break-system-packages` for PEP 668 distros; and `setup/collect.sh` is the Linux collector, skipping Windows Terminal while collecting the portable config.
 
 ## Glissa server
 

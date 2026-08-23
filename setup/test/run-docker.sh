@@ -5,6 +5,8 @@
 #   bash setup/test/run-docker.sh --full           adds the install steps and the hook run
 #   bash setup/test/run-docker.sh --distro fedora  same suite against the dnf branch
 #   bash setup/test/run-docker.sh --distro arch    same suite against the pacman branch
+#   bash setup/test/run-docker.sh --distro ubuntu  same suite against Ubuntu 24.04
+#   bash setup/test/run-docker.sh --distro ubuntu22 same suite against Ubuntu 22.04
 #
 # Works from Git Bash on Windows and from any Linux shell. The container gets a
 # snapshot of the current working tree (tracked and not-yet-committed files
@@ -18,7 +20,7 @@ keepWorkDir=0
 
 usage() {
   cat <<'USAGE'
-Usage: setup/test/run-docker.sh [--full] [--distro debian|fedora|arch] [--keep] [--help]
+Usage: setup/test/run-docker.sh [--full] [--distro debian|fedora|arch|ubuntu|ubuntu22] [--keep] [--help]
 USAGE
 }
 
@@ -30,7 +32,7 @@ while (($# > 0)); do
       ;;
     --distro)
       if (($# < 2)); then
-        printf 'run-docker.sh: --distro requires debian, fedora, or arch\n' >&2
+        printf 'run-docker.sh: --distro requires debian, fedora, arch, ubuntu, or ubuntu22\n' >&2
         exit 2
       fi
       distro="$2"
@@ -53,12 +55,23 @@ while (($# > 0)); do
 done
 
 case "$distro" in
-  debian|fedora|arch) ;;
+  debian|fedora|arch|ubuntu|ubuntu22) ;;
   *)
-    printf 'run-docker.sh: --distro must be debian, fedora, or arch\n' >&2
+    printf 'run-docker.sh: --distro must be debian, fedora, arch, ubuntu, or ubuntu22\n' >&2
     exit 2
     ;;
 esac
+
+dockerfileDistro="$distro"
+dockerBuildArgs=()
+if [[ "$distro" == "ubuntu" ]]; then
+  dockerfileDistro="ubuntu"
+  dockerBuildArgs+=(--build-arg UBUNTU_IMAGE=ubuntu:24.04)
+fi
+if [[ "$distro" == "ubuntu22" ]]; then
+  dockerfileDistro="ubuntu"
+  dockerBuildArgs+=(--build-arg UBUNTU_IMAGE=ubuntu:22.04)
+fi
 
 testDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$testDir/../.." && pwd)"
@@ -110,7 +123,7 @@ cp "$testDir/suite.sh" "$workDir/suite.sh"
 
 imageTag="claude-setup-test:$distro"
 printf 'building %s\n' "$imageTag"
-runDocker build -q -f "$(hostPath "$testDir/Dockerfile.$distro")" -t "$imageTag" "$(hostPath "$workDir/context")" >/dev/null
+runDocker build -q -f "$(hostPath "$testDir/Dockerfile.$dockerfileDistro")" "${dockerBuildArgs[@]}" -t "$imageTag" "$(hostPath "$workDir/context")" >/dev/null
 
 printf 'running the %s suite\n' "$suiteMode"
 runDocker run --rm \
