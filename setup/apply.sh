@@ -621,7 +621,7 @@ installVscodiumAptDeb() {
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     apiAuthArgs=(-H "Authorization: Bearer $GITHUB_TOKEN")
   fi
-  if ! curl -fsSL "${apiAuthArgs[@]}" https://api.github.com/repos/VSCodium/vscodium/releases/latest -o "$releaseJson"; then
+  if ! curl -fsSL ${apiAuthArgs[@]+"${apiAuthArgs[@]}"} https://api.github.com/repos/VSCodium/vscodium/releases/latest -o "$releaseJson"; then
     noteWarned "$label" "release lookup failed, install from https://vscodium.com"
     rm -rf "$downloadDir"
     return 0
