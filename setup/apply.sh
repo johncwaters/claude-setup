@@ -1848,7 +1848,7 @@ try {
   process.exit(0);
 }
 
-const plugins = installed?.plugins;
+const plugins = installed == null ? null : installed.plugins;
 const installedPluginIds = plugins && typeof plugins === "object" ? Object.keys(plugins) : [];
 const otherPluginIds = installedPluginIds.filter((id) => id !== pluginId && id.endsWith(`@${marketplace}`));
 process.exit(otherPluginIds.length === 0 ? 0 : 3);
@@ -1937,7 +1937,7 @@ const hasKey = (holder, key) =>
 let changed = false;
 const installedPath = path.join(pluginsDir, "installed_plugins.json");
 const installed = readJson(installedPath);
-if (hasKey(installed?.plugins, pluginId)) {
+if (installed && hasKey(installed.plugins, pluginId)) {
   delete installed.plugins[pluginId];
   writeJson(installedPath, installed);
   changed = true;
