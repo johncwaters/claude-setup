@@ -701,8 +701,11 @@ pluginOutput="$(HOME="$pluginHome" PATH="$pluginStubBin:$PATH" bash "$pluginClau
 pluginStatus="${PIPESTATUS[0]}"
 assertOk "retired plugin apply completes" "$pluginStatus"
 assertMatch "reports the retired plugin as removed" "oh-my-claudecode@omc +removed" "$pluginOutput"
-assertNoFile "removes the retired marketplace cache" "$pluginClaude/plugins/cache/omc"
-assertNoFile "removes the retired marketplace dir" "$pluginClaude/plugins/marketplaces/omc"
+# Marketplace-scoped removal needs node to prove the marketplace is unused, so nodeless runs keep it.
+if command -v node >/dev/null 2>&1; then
+  assertNoFile "removes the retired marketplace cache" "$pluginClaude/plugins/cache/omc"
+  assertNoFile "removes the retired marketplace dir" "$pluginClaude/plugins/marketplaces/omc"
+fi
 assertNoFile "removes the retired plugin data dir" "$pluginClaude/plugins/data/oh-my-claudecode-omc"
 assertNoFile "removes the retired plugin dir" "$pluginClaude/plugins/oh-my-claudecode"
 assertDir "keeps another marketplace cache" "$pluginClaude/plugins/cache/keepmarket"
@@ -735,7 +738,10 @@ pluginRerunStatus="${PIPESTATUS[0]}"
 assertOk "second retired plugin apply completes" "$pluginRerunStatus"
 assertMatch "second apply finds nothing to remove" "plugin removals +none present" "$pluginRerunOutput"
 assertNoMatch "second apply removes nothing again" "oh-my-claudecode@omc +removed" "$pluginRerunOutput"
-assertNoMatch "second apply warns about nothing" '\[warn\]' "$pluginRerunOutput"
+# Without node the rerun still warns that the registries were left unchanged.
+if command -v node >/dev/null 2>&1; then
+  assertNoMatch "second apply warns about nothing" '\[warn\]' "$pluginRerunOutput"
+fi
 assertDir "second apply keeps the unrelated plugin dir" "$pluginClaude/plugins/keeper"
 assertFile "second apply keeps the unrelated shim" "$pluginShimDir/keep-tool"
 
