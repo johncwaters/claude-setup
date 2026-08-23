@@ -15,7 +15,8 @@
     "typescript-lsp@claude-plugins-official": true,
     "posthog@claude-plugins-official": false,
     "github@claude-plugins-official": false,
-    "postiz@skills-dir": false
+    "postiz@skills-dir": false,
+    "stripe@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "caveman": {
