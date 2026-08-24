@@ -829,10 +829,17 @@ installClaudeCode() {
   noteWarned "Claude Code" "not on PATH yet, open a new shell"
 }
 
+isZedInstalled() {
+  if command -v zed >/dev/null 2>&1; then
+    return 0
+  fi
+  [[ -x "$HOME/.local/bin/zed" ]]
+}
+
 installZed() {
   refreshSessionPath
   persistUserLocalBinOnPath
-  if command -v zed >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/zed" ]]; then
+  if isZedInstalled; then
     notePresent "Zed" "already installed"
     return 0
   fi
@@ -841,16 +848,22 @@ installZed() {
     return 0
   fi
   writeLine " .. " "$colorYellow" "Zed" "running official installer"
-  local installerLog
+  local installerLog installerScript
   installerLog="$(mktemp "${TMPDIR:-/tmp}/zed-install.XXXXXX")"
-  if ! (curl -f https://zed.dev/install.sh | sh) >"$installerLog" 2>&1; then
-    noteWarned "Zed" "official installer failed: $(lastLogLine "$installerLog")"
-    rm -f "$installerLog"
+  installerScript="$(mktemp "${TMPDIR:-/tmp}/zed-install-script.XXXXXX")"
+  if ! curl -fsSL https://zed.dev/install.sh -o "$installerScript" 2>"$installerLog"; then
+    noteWarned "Zed" "installer download failed: $(lastLogLine "$installerLog")"
+    rm -f "$installerLog" "$installerScript"
     return 0
   fi
-  rm -f "$installerLog"
+  if ! sh "$installerScript" >"$installerLog" 2>&1; then
+    noteWarned "Zed" "official installer failed: $(lastLogLine "$installerLog")"
+    rm -f "$installerLog" "$installerScript"
+    return 0
+  fi
+  rm -f "$installerLog" "$installerScript"
   refreshSessionPath
-  if command -v zed >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/zed" ]]; then
+  if isZedInstalled; then
     noteInstalled "Zed" "installed"
     return 0
   fi
@@ -886,9 +899,13 @@ exportFlatpakLauncherAssets() {
     cp -f "$desktopSrc" "$desktopDest"
     exported=1
   fi
+  local iconRoot="$exportShare/icons/hicolor"
+  if ! find -L "$iconRoot" -type f -path "*/apps/$appId.*" 2>/dev/null | grep -q .; then
+    iconRoot="$HOME/.local/share/flatpak/app/$appId/current/active/files/share/icons/hicolor"
+  fi
   while IFS= read -r iconSrc; do
     iconCount=$((iconCount + 1))
-    iconRelativePath="${iconSrc#"$exportShare/icons/"}"
+    iconRelativePath="hicolor/${iconSrc#"$iconRoot/"}"
     iconDest="$HOME/.local/share/icons/$iconRelativePath"
     mkdir -p "$(dirname -- "$iconDest")"
     if filesAreIdentical "$iconSrc" "$iconDest"; then
@@ -896,10 +913,9 @@ exportFlatpakLauncherAssets() {
     fi
     cp -f "$iconSrc" "$iconDest"
     exported=1
-  done < <(find "$exportShare/icons/hicolor" -type f -path "*/apps/$appId.*" 2>/dev/null)
+  done < <(find -L "$iconRoot" -type f -path "*/apps/$appId.*" 2>/dev/null)
   if ((iconCount == 0)); then
     noteWarned "$label icons" "flatpak icon export missing"
-    return 0
   fi
   refreshUserDesktopAssets
   if ((exported == 1)); then
@@ -909,26 +925,29 @@ exportFlatpakLauncherAssets() {
   notePresent "$label launcher" "already exported"
 }
 
-installBitwarden() {
+installFlatpakApp() {
+  local label="$1"
+  local appId="$2"
   if ! command -v flatpak >/dev/null 2>&1; then
-    noteWarned "Bitwarden" "flatpak not on PATH, install manually"
+    noteWarned "$label" "flatpak not on PATH, install manually"
     return 0
   fi
-  if flatpak info com.bitwarden.desktop >/dev/null 2>&1; then
-    notePresent "Bitwarden" "already installed"
+  if flatpak info "$appId" >/dev/null 2>&1; then
+    notePresent "$label" "already installed"
+    exportFlatpakLauncherAssets "$label" "$appId"
     return 0
   fi
-  writeLine " .. " "$colorYellow" "Bitwarden" "installing via flatpak"
+  writeLine " .. " "$colorYellow" "$label" "installing via flatpak"
   if ! flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1; then
-    noteWarned "Bitwarden" "flathub remote setup failed"
+    noteWarned "$label" "flathub remote setup failed"
     return 0
   fi
-  if ! flatpak install --user -y flathub com.bitwarden.desktop >/dev/null 2>&1; then
-    noteWarned "Bitwarden" "flatpak install failed"
+  if ! flatpak install --user -y flathub "$appId" >/dev/null 2>&1; then
+    noteWarned "$label" "flatpak install failed"
     return 0
   fi
-  noteInstalled "Bitwarden" "installed"
-  exportFlatpakLauncherAssets "Bitwarden" "com.bitwarden.desktop"
+  noteInstalled "$label" "installed"
+  exportFlatpakLauncherAssets "$label" "$appId"
 }
 
 isTailscaleAuthed() {
@@ -2465,7 +2484,9 @@ if stepEnabled "software"; then
   installPackageTool "VSCodium" "codium" "vscodium"
   installClaudeCode
   installZed
-  installBitwarden
+  installFlatpakApp "Bitwarden" "com.bitwarden.desktop"
+  installFlatpakApp "Discord" "com.discordapp.Discord"
+  installFlatpakApp "Remmina" "org.remmina.Remmina"
 fi
 if ! stepEnabled "tailscale"; then
   noteSkipped "Tailscale"
