@@ -775,9 +775,22 @@ installHeadsetControlBuildDeps() {
   return 1
 }
 
+runWarnStep() {
+  local label="$1"
+  local reason="$2"
+  local logFile="$3"
+  shift 3
+  if "$@" >>"$logFile" 2>&1; then
+    return 0
+  fi
+  noteWarned "$label" "$reason: $(lastLogLine "$logFile")"
+  return 1
+}
+
 installHeadsetControlUdevRules() {
   local binaryPath="$1"
-  local rulesLog
+  local rulesFile rulesLog
+  local generated=0
   if [[ ! -x "$binaryPath" ]]; then
     noteWarned "headsetcontrol udev" "built binary missing, skipping rules"
     return 0
@@ -786,24 +799,21 @@ installHeadsetControlUdevRules() {
     noteWarned "headsetcontrol udev" "udevadm not on PATH, skipping rules"
     return 0
   fi
+  rulesFile="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-rules.XXXXXX")"
   rulesLog="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-udev.XXXXXX")"
-  if ! "$binaryPath" -u | runPackageManagerCommand tee /etc/udev/rules.d/70-headset.rules >"$rulesLog" 2>&1; then
-    noteWarned "headsetcontrol udev" "rules install failed: $(lastLogLine "$rulesLog")"
-    rm -f "$rulesLog"
-    return 0
+  if "$binaryPath" -u >"$rulesFile" 2>"$rulesLog"; then
+    generated=1
   fi
-  if ! runPackageManagerCommand udevadm control --reload-rules >>"$rulesLog" 2>&1; then
-    noteWarned "headsetcontrol udev" "reload failed: $(lastLogLine "$rulesLog")"
-    rm -f "$rulesLog"
-    return 0
+  if ((generated == 0)); then
+    noteWarned "headsetcontrol udev" "rules generation failed: $(lastLogLine "$rulesLog")"
   fi
-  if ! runPackageManagerCommand udevadm trigger >>"$rulesLog" 2>&1; then
-    noteWarned "headsetcontrol udev" "trigger failed: $(lastLogLine "$rulesLog")"
-    rm -f "$rulesLog"
-    return 0
+  if ((generated == 1)) \
+    && runWarnStep "headsetcontrol udev" "rules install failed" "$rulesLog" runPackageManagerCommand install -m 0644 "$rulesFile" /etc/udev/rules.d/70-headset.rules \
+    && runWarnStep "headsetcontrol udev" "reload failed" "$rulesLog" runPackageManagerCommand udevadm control --reload-rules \
+    && runWarnStep "headsetcontrol udev" "trigger failed" "$rulesLog" runPackageManagerCommand udevadm trigger; then
+    noteApplied "headsetcontrol udev" "rules installed"
   fi
-  noteApplied "headsetcontrol udev" "rules installed"
-  rm -f "$rulesLog"
+  rm -f "$rulesFile" "$rulesLog"
 }
 
 installHeadsetControl() {
@@ -812,10 +822,6 @@ installHeadsetControl() {
   refreshSessionPath
   if command -v headsetcontrol >/dev/null 2>&1; then
     notePresent "headsetcontrol" "already installed"
-    return 0
-  fi
-  if ! command -v curl >/dev/null 2>&1; then
-    noteWarned "headsetcontrol" "curl not on PATH, install manually"
     return 0
   fi
   if ! command -v git >/dev/null 2>&1; then
@@ -833,33 +839,21 @@ installHeadsetControl() {
   cloneDir="$(mktemp -d "${TMPDIR:-/tmp}/headsetcontrol.XXXXXX")"
   installLog="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-build.XXXXXX")"
   writeLine " .. " "$colorYellow" "headsetcontrol" "building from source"
-  if ! git clone --depth 1 https://github.com/Sapd/HeadsetControl.git "$cloneDir" >"$installLog" 2>&1; then
-    noteWarned "headsetcontrol" "clone failed: $(lastLogLine "$installLog")"
-    rm -rf "$cloneDir"
-    rm -f "$installLog"
-    return 0
+  local built=0
+  if runWarnStep "headsetcontrol" "clone failed" "$installLog" git clone --depth 1 https://github.com/Sapd/HeadsetControl.git "$cloneDir" \
+    && runWarnStep "headsetcontrol" "configure failed" "$installLog" cmake -S "$cloneDir" -B "$cloneDir/build" -DCMAKE_BUILD_TYPE=Release \
+    && runWarnStep "headsetcontrol" "build failed" "$installLog" cmake --build "$cloneDir/build" \
+    && runWarnStep "headsetcontrol" "install failed" "$installLog" runPackageManagerCommand cmake --install "$cloneDir/build"; then
+    built=1
   fi
-  if ! cmake -S "$cloneDir" -B "$cloneDir/build" -DCMAKE_BUILD_TYPE=Release >>"$installLog" 2>&1; then
-    noteWarned "headsetcontrol" "configure failed: $(lastLogLine "$installLog")"
-    rm -rf "$cloneDir"
-    rm -f "$installLog"
-    return 0
+  if ((built == 1)); then
+    installHeadsetControlUdevRules "$cloneDir/build/headsetcontrol"
   fi
-  if ! cmake --build "$cloneDir/build" >>"$installLog" 2>&1; then
-    noteWarned "headsetcontrol" "build failed: $(lastLogLine "$installLog")"
-    rm -rf "$cloneDir"
-    rm -f "$installLog"
-    return 0
-  fi
-  if ! runPackageManagerCommand cmake --install "$cloneDir/build" >>"$installLog" 2>&1; then
-    noteWarned "headsetcontrol" "install failed: $(lastLogLine "$installLog")"
-    rm -rf "$cloneDir"
-    rm -f "$installLog"
-    return 0
-  fi
-  installHeadsetControlUdevRules "$cloneDir/build/headsetcontrol"
   rm -rf "$cloneDir"
   rm -f "$installLog"
+  if ((built == 0)); then
+    return 0
+  fi
   refreshSessionPath
   if command -v headsetcontrol >/dev/null 2>&1; then
     noteInstalled "headsetcontrol" "installed"
