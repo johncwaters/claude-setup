@@ -900,14 +900,13 @@ exportFlatpakLauncherAssets() {
     exported=1
   fi
   local iconRoot="$exportShare/icons/hicolor"
-  local iconList
-  iconList="$(mktemp "${TMPDIR:-/tmp}/flatpak-icons.XXXXXX")"
-  find -L "$iconRoot" -type f -path "*/apps/$appId.*" 2>/dev/null >"$iconList"
-  if [[ ! -s "$iconList" ]]; then
+  local -a iconFiles=()
+  mapfile -t iconFiles < <(find -L "$iconRoot" -type f -path "*/apps/$appId.*" 2>/dev/null)
+  if ((${#iconFiles[@]} == 0)); then
     iconRoot="$HOME/.local/share/flatpak/app/$appId/current/active/files/share/icons/hicolor"
-    find -L "$iconRoot" -type f -path "*/apps/$appId.*" 2>/dev/null >"$iconList"
+    mapfile -t iconFiles < <(find -L "$iconRoot" -type f -path "*/apps/$appId.*" 2>/dev/null)
   fi
-  while IFS= read -r iconSrc; do
+  for iconSrc in "${iconFiles[@]}"; do
     iconCount=$((iconCount + 1))
     iconRelativePath="hicolor/${iconSrc#"$iconRoot/"}"
     iconDest="$HOME/.local/share/icons/$iconRelativePath"
@@ -917,8 +916,7 @@ exportFlatpakLauncherAssets() {
     fi
     cp -f "$iconSrc" "$iconDest"
     exported=1
-  done <"$iconList"
-  rm -f "$iconList"
+  done
   if ((iconCount == 0)); then
     noteWarned "$label icons" "flatpak icon export missing"
   fi
