@@ -124,3 +124,13 @@ Gate every new doc (README section, wiki page, spec, process note, convention wr
 - Applies to newly introduced docs going forward, not retroactive deletion of existing ones.
 - Org-mandated docs (README standards, wiki requirements) still get written, but push their checkable claims into automation (the readme-lint pattern) rather than adding unenforced prose.
 </docs_must_be_enforceable>
+
+<doc_style_why_only>
+Docs and comments carry only the Why: rationale, tradeoffs, invariants with their reason, incident lessons. Never restate what code shows; that prose drifts and is never read.
+- Architecture reference is allowed as a lean map: file/module, one-line role, pointers. Navigation, not narration.
+- Never narrate mechanisms, data flow, or behavior a reader gets from the code or its tests. A test pins behavior better than a paragraph.
+- Project instruction files (AGENTS.md, CLAUDE.md) are instruction-tier: conventions, invariants plus why, lean map. Feature rationale stays out unless it changes how an agent must act.
+- A merged feature adds at most a few lines to any instruction file: the invariant, its why, a pointer. No design essays, no incident chronology beyond one line naming the lesson.
+- Growth is bounded: when a project has a size gate (budget test, lint) it is the enforcement; absent one, propose it before growing the file.
+- The docs_must_be_enforceable gate blocks NEW docs; this section governs the content of all docs. "The doc gate blocks a new file" is never a reason to dump prose into an existing one.
+</doc_style_why_only>
