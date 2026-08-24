@@ -829,6 +829,108 @@ installClaudeCode() {
   noteWarned "Claude Code" "not on PATH yet, open a new shell"
 }
 
+installZed() {
+  refreshSessionPath
+  persistUserLocalBinOnPath
+  if command -v zed >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/zed" ]]; then
+    notePresent "Zed" "already installed"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    noteWarned "Zed" "curl not on PATH, install manually"
+    return 0
+  fi
+  writeLine " .. " "$colorYellow" "Zed" "running official installer"
+  local installerLog
+  installerLog="$(mktemp "${TMPDIR:-/tmp}/zed-install.XXXXXX")"
+  if ! (curl -f https://zed.dev/install.sh | sh) >"$installerLog" 2>&1; then
+    noteWarned "Zed" "official installer failed: $(lastLogLine "$installerLog")"
+    rm -f "$installerLog"
+    return 0
+  fi
+  rm -f "$installerLog"
+  refreshSessionPath
+  if command -v zed >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/zed" ]]; then
+    noteInstalled "Zed" "installed"
+    return 0
+  fi
+  noteWarned "Zed" "installed, but not on PATH yet"
+}
+
+refreshUserDesktopAssets() {
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || noteWarned "desktop database" "refresh failed"
+  fi
+  if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || noteWarned "icon cache" "refresh failed"
+  fi
+}
+
+exportFlatpakLauncherAssets() {
+  local label="$1"
+  local appId="$2"
+  local exportShare="$HOME/.local/share/flatpak/exports/share"
+  local desktopSrc="$exportShare/applications/$appId.desktop"
+  local desktopDest="$HOME/.local/share/applications/$appId.desktop"
+  local iconSrc
+  local iconDest
+  local iconRelativePath
+  local exported=0
+  local iconCount=0
+  if [[ ! -f "$desktopSrc" ]]; then
+    noteWarned "$label launcher" "flatpak desktop export missing"
+    return 0
+  fi
+  mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor"
+  if ! filesAreIdentical "$desktopSrc" "$desktopDest"; then
+    cp -f "$desktopSrc" "$desktopDest"
+    exported=1
+  fi
+  while IFS= read -r iconSrc; do
+    iconCount=$((iconCount + 1))
+    iconRelativePath="${iconSrc#"$exportShare/icons/"}"
+    iconDest="$HOME/.local/share/icons/$iconRelativePath"
+    mkdir -p "$(dirname -- "$iconDest")"
+    if filesAreIdentical "$iconSrc" "$iconDest"; then
+      continue
+    fi
+    cp -f "$iconSrc" "$iconDest"
+    exported=1
+  done < <(find "$exportShare/icons/hicolor" -type f -path "*/apps/$appId.*" 2>/dev/null)
+  if ((iconCount == 0)); then
+    noteWarned "$label icons" "flatpak icon export missing"
+    return 0
+  fi
+  refreshUserDesktopAssets
+  if ((exported == 1)); then
+    noteApplied "$label launcher" "exported"
+    return 0
+  fi
+  notePresent "$label launcher" "already exported"
+}
+
+installBitwarden() {
+  if ! command -v flatpak >/dev/null 2>&1; then
+    noteWarned "Bitwarden" "flatpak not on PATH, install manually"
+    return 0
+  fi
+  if flatpak info com.bitwarden.desktop >/dev/null 2>&1; then
+    notePresent "Bitwarden" "already installed"
+    return 0
+  fi
+  writeLine " .. " "$colorYellow" "Bitwarden" "installing via flatpak"
+  if ! flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1; then
+    noteWarned "Bitwarden" "flathub remote setup failed"
+    return 0
+  fi
+  if ! flatpak install --user -y flathub com.bitwarden.desktop >/dev/null 2>&1; then
+    noteWarned "Bitwarden" "flatpak install failed"
+    return 0
+  fi
+  noteInstalled "Bitwarden" "installed"
+  exportFlatpakLauncherAssets "Bitwarden" "com.bitwarden.desktop"
+}
+
 isTailscaleAuthed() {
   tailscale status >/dev/null 2>&1
 }
@@ -2362,6 +2464,8 @@ if stepEnabled "software"; then
   installPackageTool "Python" "python3" "python"
   installPackageTool "VSCodium" "codium" "vscodium"
   installClaudeCode
+  installZed
+  installBitwarden
 fi
 if ! stepEnabled "tailscale"; then
   noteSkipped "Tailscale"
