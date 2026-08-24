@@ -801,7 +801,7 @@ installHeadsetControlUdevRules() {
   fi
   rulesFile="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-rules.XXXXXX")"
   rulesLog="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-udev.XXXXXX")"
-  if "$binaryPath" -u >"$rulesFile" 2>"$rulesLog"; then
+  if "$binaryPath" -u >"$rulesFile" 2>"$rulesLog" && [[ -s "$rulesFile" ]]; then
     generated=1
   fi
   if ((generated == 0)); then
