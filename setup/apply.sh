@@ -873,9 +873,14 @@ ensureGithubAuth() {
   fi
   if canPromptUser && openPromptInput && promptYesNo "Log in to GitHub now (gh auth login)?"; then
     printf '%s        Ctrl-C skips login and setup continues. If no browser opens, enter the code at https://github.com/login/device%s\n' "$colorDarkGray" "$colorReset"
+    local priorIntTrap
+    priorIntTrap="$(trap -p INT)"
     trap ':' INT
     gh auth login || true
     trap - INT
+    if [[ -n "$priorIntTrap" ]]; then
+      eval "$priorIntTrap"
+    fi
     if gh auth status >/dev/null 2>&1; then
       noteApplied "GitHub auth" "logged in"
       return 0
