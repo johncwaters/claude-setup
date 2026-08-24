@@ -534,6 +534,18 @@ packageNamesForTool() {
       printf 'github-cli\n'
       return 0
       ;;
+    solaar:apt-get)
+      printf 'solaar\n'
+      return 0
+      ;;
+    ratbagd:apt-get)
+      printf 'ratbagd\n'
+      return 0
+      ;;
+    piper:apt-get)
+      printf 'piper\n'
+      return 0
+      ;;
   esac
   return 1
 }
@@ -719,6 +731,141 @@ installPackageTool() {
     return 0
   fi
   noteWarned "$label" "installed, but open a new shell for PATH"
+}
+
+installLogitechTools() {
+  local solaarWasPresent=0
+  if command -v solaar >/dev/null 2>&1; then
+    solaarWasPresent=1
+  fi
+  installPackageTool "Solaar" "solaar" "solaar"
+  if ((solaarWasPresent == 0)) && command -v solaar >/dev/null 2>&1; then
+    printf '%s        Replug the Logitech receiver so Solaar can see it; its udev rule fires only on device add.%s\n' "$colorDarkGray" "$colorReset"
+  fi
+  installPackageTool "ratbagd" "ratbagd" "ratbagd"
+  installPackageTool "Piper" "piper" "piper"
+}
+
+installHeadsetControlBuildDeps() {
+  local manager
+  local installLog
+  if ! manager="$(detectPackageManager)"; then
+    noteWarned "headsetcontrol" "no supported package manager, install build deps manually"
+    return 1
+  fi
+  if [[ "$manager" != "apt-get" ]]; then
+    noteWarned "headsetcontrol" "build deps not mapped for $manager"
+    return 1
+  fi
+  if ! canInstallSystemPackages; then
+    noteWarned "headsetcontrol" "$manager needs root or sudo, install manually"
+    return 1
+  fi
+  writeLine " .. " "$colorYellow" "headsetcontrol" "installing build deps via $manager"
+  installLog="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-deps.XXXXXX")"
+  packageInstallLog="$installLog"
+  if installSystemPackages "$manager" cmake libhidapi-dev pkg-config build-essential; then
+    packageInstallLog=""
+    rm -f "$installLog"
+    return 0
+  fi
+  packageInstallLog=""
+  noteWarned "headsetcontrol" "build deps failed: $(lastLogLine "$installLog")"
+  rm -f "$installLog"
+  return 1
+}
+
+installHeadsetControlUdevRules() {
+  local binaryPath="$1"
+  local rulesLog
+  if [[ ! -x "$binaryPath" ]]; then
+    noteWarned "headsetcontrol udev" "built binary missing, skipping rules"
+    return 0
+  fi
+  if ! command -v udevadm >/dev/null 2>&1; then
+    noteWarned "headsetcontrol udev" "udevadm not on PATH, skipping rules"
+    return 0
+  fi
+  rulesLog="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-udev.XXXXXX")"
+  if ! "$binaryPath" -u | runPackageManagerCommand tee /etc/udev/rules.d/70-headset.rules >"$rulesLog" 2>&1; then
+    noteWarned "headsetcontrol udev" "rules install failed: $(lastLogLine "$rulesLog")"
+    rm -f "$rulesLog"
+    return 0
+  fi
+  if ! runPackageManagerCommand udevadm control --reload-rules >>"$rulesLog" 2>&1; then
+    noteWarned "headsetcontrol udev" "reload failed: $(lastLogLine "$rulesLog")"
+    rm -f "$rulesLog"
+    return 0
+  fi
+  if ! runPackageManagerCommand udevadm trigger >>"$rulesLog" 2>&1; then
+    noteWarned "headsetcontrol udev" "trigger failed: $(lastLogLine "$rulesLog")"
+    rm -f "$rulesLog"
+    return 0
+  fi
+  noteApplied "headsetcontrol udev" "rules installed"
+  rm -f "$rulesLog"
+}
+
+installHeadsetControl() {
+  local cloneDir
+  local installLog
+  refreshSessionPath
+  if command -v headsetcontrol >/dev/null 2>&1; then
+    notePresent "headsetcontrol" "already installed"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    noteWarned "headsetcontrol" "curl not on PATH, install manually"
+    return 0
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    noteWarned "headsetcontrol" "git not on PATH, install manually"
+    return 0
+  fi
+  if ! installHeadsetControlBuildDeps; then
+    return 0
+  fi
+  refreshSessionPath
+  if ! command -v cmake >/dev/null 2>&1; then
+    noteWarned "headsetcontrol" "cmake not on PATH, install manually"
+    return 0
+  fi
+  cloneDir="$(mktemp -d "${TMPDIR:-/tmp}/headsetcontrol.XXXXXX")"
+  installLog="$(mktemp "${TMPDIR:-/tmp}/headsetcontrol-build.XXXXXX")"
+  writeLine " .. " "$colorYellow" "headsetcontrol" "building from source"
+  if ! git clone --depth 1 https://github.com/Sapd/HeadsetControl.git "$cloneDir" >"$installLog" 2>&1; then
+    noteWarned "headsetcontrol" "clone failed: $(lastLogLine "$installLog")"
+    rm -rf "$cloneDir"
+    rm -f "$installLog"
+    return 0
+  fi
+  if ! cmake -S "$cloneDir" -B "$cloneDir/build" -DCMAKE_BUILD_TYPE=Release >>"$installLog" 2>&1; then
+    noteWarned "headsetcontrol" "configure failed: $(lastLogLine "$installLog")"
+    rm -rf "$cloneDir"
+    rm -f "$installLog"
+    return 0
+  fi
+  if ! cmake --build "$cloneDir/build" >>"$installLog" 2>&1; then
+    noteWarned "headsetcontrol" "build failed: $(lastLogLine "$installLog")"
+    rm -rf "$cloneDir"
+    rm -f "$installLog"
+    return 0
+  fi
+  if ! runPackageManagerCommand cmake --install "$cloneDir/build" >>"$installLog" 2>&1; then
+    noteWarned "headsetcontrol" "install failed: $(lastLogLine "$installLog")"
+    rm -rf "$cloneDir"
+    rm -f "$installLog"
+    return 0
+  fi
+  installHeadsetControlUdevRules "$cloneDir/build/headsetcontrol"
+  rm -rf "$cloneDir"
+  rm -f "$installLog"
+  refreshSessionPath
+  if command -v headsetcontrol >/dev/null 2>&1; then
+    noteInstalled "headsetcontrol" "installed"
+    return 0
+  fi
+  noteWarned "headsetcontrol" "installed, but open a new shell for PATH"
 }
 
 nodeSourceSetupUrl() {
@@ -2490,6 +2637,13 @@ if stepEnabled "software"; then
   installFlatpakApp "Bitwarden" "com.bitwarden.desktop"
   installFlatpakApp "Discord" "com.discordapp.Discord"
   installFlatpakApp "Remmina" "org.remmina.Remmina"
+  if [[ "$profile" == "personal" ]]; then
+    installLogitechTools
+    installHeadsetControl
+  fi
+  if [[ "$profile" != "personal" ]]; then
+    noteSkipped "peripheral tools"
+  fi
 fi
 if ! stepEnabled "tailscale"; then
   noteSkipped "Tailscale"
