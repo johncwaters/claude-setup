@@ -21,6 +21,7 @@ scriptStartSeconds="$SECONDS"
 promptInputOpen=0
 glissaRemoteSettingsRewritten=0
 glissaServeStarted=0
+lastCopyConfigChanged=0
 
 setupDir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repoRoot="$(cd -- "$setupDir/.." && pwd)"
@@ -222,40 +223,29 @@ copyConfig() {
   local label="$1"
   local src="$2"
   local dest="$3"
+  local mode="${4:-}"
+  lastCopyConfigChanged=0
   if [[ ! -f "$src" ]]; then
     noteWarned "$label" "not in repo"
     return 0
   fi
   mkdir -p "$(dirname -- "$dest")"
   if filesAreIdentical "$src" "$dest"; then
+    if [[ "$mode" == "executable" && ! -x "$dest" ]]; then
+      chmod +x "$dest"
+      lastCopyConfigChanged=1
+      noteApplied "$label" "marked executable"
+      return 0
+    fi
     notePresent "$label" "up to date"
     return 0
   fi
   cp -f "$src" "$dest"
-  noteApplied "$label" "updated"
-}
-
-copyExecutableConfig() {
-  local label="$1"
-  local src="$2"
-  local dest="$3"
-  if [[ ! -f "$src" ]]; then
-    noteWarned "$label" "not in repo"
-    return 0
-  fi
-  mkdir -p "$(dirname -- "$dest")"
-  if filesAreIdentical "$src" "$dest" && [[ -x "$dest" ]]; then
-    notePresent "$label" "up to date"
-    return 0
-  fi
-  if ! filesAreIdentical "$src" "$dest"; then
-    cp -f "$src" "$dest"
+  if [[ "$mode" == "executable" ]]; then
     chmod +x "$dest"
-    noteApplied "$label" "updated"
-    return 0
   fi
-  chmod +x "$dest"
-  noteApplied "$label" "marked executable"
+  lastCopyConfigChanged=1
+  noteApplied "$label" "updated"
 }
 
 copyGlissaSeedConfig() {
@@ -882,7 +872,7 @@ installCosmicScreenshotShortcuts() {
 installScreenshotTools() {
   installPackageTool "Flameshot" "flameshot" "flameshot"
   installPackageTool "wl-clipboard" "wl-copy" "wl-clipboard"
-  copyExecutableConfig "flameshot save-path wrapper" "$setupDir/screenshot/flameshot-save-path" "$HOME/.local/bin/flameshot-save-path"
+  copyConfig "flameshot save-path wrapper" "$setupDir/screenshot/flameshot-save-path" "$HOME/.local/bin/flameshot-save-path" "executable"
   copyConfig "Flameshot autostart" "$setupDir/screenshot/Flameshot.desktop" "$HOME/.config/autostart/Flameshot.desktop"
   installCosmicScreenshotShortcuts
 }
@@ -896,6 +886,7 @@ installYdotooldService() {
   local wasEnabled=0
   local wasActive=0
   copyConfig "ydotoold service" "$setupDir/dictation/ydotoold.service" "$serviceDest"
+  local serviceUnitChanged="$lastCopyConfigChanged"
   if ! systemdUserManagerIsReachable; then
     noteWarned "ydotoold service" "unit installed, systemctl --user unavailable"
     return 0
@@ -906,12 +897,22 @@ installYdotooldService() {
   if systemctl --user is-active ydotoold.service >/dev/null 2>&1; then
     wasActive=1
   fi
-  if ! systemctl --user daemon-reload >/dev/null 2>&1; then
-    noteWarned "ydotoold service" "daemon-reload failed"
-    return 0
+  if ((serviceUnitChanged == 1)); then
+    if ! systemctl --user daemon-reload >/dev/null 2>&1; then
+      noteWarned "ydotoold service" "daemon-reload failed"
+      return 0
+    fi
   fi
   if ! systemctl --user enable --now ydotoold.service >/dev/null 2>&1; then
     noteWarned "ydotoold service" "enable/start failed"
+    return 0
+  fi
+  if ((serviceUnitChanged == 1)); then
+    if ! systemctl --user restart ydotoold.service >/dev/null 2>&1; then
+      noteWarned "ydotoold service" "restart failed"
+      return 0
+    fi
+    noteApplied "ydotoold service" "enabled and restarted"
     return 0
   fi
   if ((wasEnabled == 1)) && ((wasActive == 1)); then
@@ -938,8 +939,27 @@ installInputGroupMembership() {
 }
 
 installDictationPasteTools() {
+  local manager
   installPackageTool "ydotool" "ydotool" "ydotool"
-  installPackageTool "ydotoold" "ydotoold" "ydotoold"
+  if ! manager="$(detectPackageManager)"; then
+    if ! command -v ydotoold >/dev/null 2>&1; then
+      noteWarned "ydotoold" "install manually"
+    fi
+    installYdotooldService
+    installInputGroupMembership
+    return 0
+  fi
+  if [[ "$manager" == "apt-get" ]]; then
+    installPackageTool "ydotoold" "ydotoold" "ydotoold"
+    installYdotooldService
+    installInputGroupMembership
+    return 0
+  fi
+  if [[ "$manager" != "dnf" && "$manager" != "pacman" && "$manager" != "zypper" ]]; then
+    if ! command -v ydotoold >/dev/null 2>&1; then
+      noteWarned "ydotoold" "install manually"
+    fi
+  fi
   installYdotooldService
   installInputGroupMembership
 }

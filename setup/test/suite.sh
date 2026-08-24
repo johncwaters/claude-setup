@@ -335,17 +335,34 @@ STUB
   runSuiteRootCommand mkdir -p /run/systemd/system
 }
 
-installScreenshotToolStubs() {
+installSoftwarePathStubs() {
   local fixtureBin="$1"
+  local packageManager="${2:-}"
+  local ydotoolMode="${3:-present}"
   local toolName
   mkdir -p "$fixtureBin"
-  for toolName in git gh python3 codium claude zed solaar ratbagd piper headsetcontrol flameshot wl-copy ydotool ydotoold; do
+  for toolName in bash basename cat chmod cp cut dirname grep head mkdir mktemp pwd rm sed sha256sum tail tr; do
+    ln -sf "$(type -P "$toolName")" "$fixtureBin/$toolName"
+  done
+  for toolName in git gh python3 codium claude zed solaar ratbagd piper headsetcontrol flameshot wl-copy; do
     cat >"$fixtureBin/$toolName" <<'STUB'
 #!/usr/bin/env bash
 exit 0
 STUB
     chmod +x "$fixtureBin/$toolName"
   done
+  if [[ "$ydotoolMode" == "present" ]]; then
+    for toolName in ydotool ydotoold; do
+      cat >"$fixtureBin/$toolName" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+      chmod +x "$fixtureBin/$toolName"
+    done
+  fi
+  if [[ "$ydotoolMode" == "missing" ]]; then
+    rm -f "$fixtureBin/ydotool" "$fixtureBin/ydotoold"
+  fi
   cat >"$fixtureBin/node" <<'STUB'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "-v" ]]; then
@@ -369,16 +386,31 @@ if [[ "${1:-}" == "-nG" ]]; then
 fi
 exec /usr/bin/id "$@"
 STUB
+  if [[ "$packageManager" == "dnf" ]]; then
+    cat >"$fixtureBin/dnf" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+    cat >"$fixtureBin/sudo" <<'STUB'
+#!/usr/bin/env bash
+"$@"
+STUB
+    chmod +x "$fixtureBin/dnf" "$fixtureBin/sudo"
+  fi
   cat >"$fixtureBin/systemctl" <<'STUB'
 #!/usr/bin/env bash
 case "$*" in
-  "--user show-environment"|"--user is-enabled ydotoold.service"|"--user is-active ydotoold.service"|"--user daemon-reload"|"--user enable --now ydotoold.service")
+  "--user show-environment"|"--user is-enabled ydotoold.service"|"--user is-active ydotoold.service"|"--user daemon-reload"|"--user enable --now ydotoold.service"|"--user restart ydotoold.service")
     exit 0
     ;;
 esac
 exit 1
 STUB
   chmod +x "$fixtureBin/node" "$fixtureBin/flatpak" "$fixtureBin/id" "$fixtureBin/systemctl"
+}
+
+installScreenshotToolStubs() {
+  installSoftwarePathStubs "$1"
 }
 
 runGlissaServerApply() {
@@ -628,6 +660,14 @@ assertFile "creates COSMIC custom shortcuts" "$screenshotShortcuts"
 assertMatch "creates the Print clipboard shortcut" 'key: "Print".*--clipboard' "$(cat "$screenshotShortcuts")"
 assertMatch "creates the save-path shortcut with the fixture HOME" "$screenshotHome/.local/bin/flameshot-save-path" "$(cat "$screenshotShortcuts")"
 
+chmod -x "$screenshotHome/.local/bin/flameshot-save-path"
+screenshotExecutableRepairOutput="$(HOME="$screenshotHome" PATH="$screenshotBin:/usr/bin:/bin" bash "$screenshotHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+screenshotExecutableRepairStatus="${PIPESTATUS[0]}"
+assertOk "screenshot executable repair apply completes" "$screenshotExecutableRepairStatus"
+assertMatch "screenshot executable repair reports chmod" "flameshot save-path wrapper +marked executable" "$screenshotExecutableRepairOutput"
+[[ -x "$screenshotHome/.local/bin/flameshot-save-path" ]]
+assertOk "save-path wrapper is executable after repair" $?
+
 screenshotTreeBefore="$(hashTree "$screenshotHome")"
 screenshotRerunOutput="$(HOME="$screenshotHome" PATH="$screenshotBin:/usr/bin:/bin" bash "$screenshotHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
 screenshotRerunStatus="${PIPESTATUS[0]}"
@@ -703,6 +743,78 @@ assertOk "dictation no-user-manager apply completes" "$dictationNoManagerStatus"
 assertFile "dictation no-user-manager installs unit" "$dictationNoManagerHome/.config/systemd/user/ydotoold.service"
 assertEquals "dictation no-user-manager unit matches the tracked copy" "$(sha256sum < "$dictationNoManagerHome/.claude/setup/dictation/ydotoold.service" | cut -d' ' -f1)" "$(sha256sum < "$dictationNoManagerHome/.config/systemd/user/ydotoold.service" | cut -d' ' -f1)"
 assertMatch "dictation no-user-manager warns" "ydotoold service +unit installed, systemctl --user unavailable" "$dictationNoManagerOutput"
+
+dictationRestartHome="/tmp/dictation-restart-home"
+dictationRestartBin="/tmp/dictation-restart-bin"
+dictationRestartSystemctlLog="$dictationRestartHome/systemctl.log"
+mkdir -p "$dictationRestartHome"
+(
+  export HOME="$dictationRestartHome"
+  bootstrapCheckout "$dictationRestartHome/.claude"
+) >/dev/null 2>&1
+installScreenshotToolStubs "$dictationRestartBin"
+printf '%s\n' '{ "steps": ["software"] }' > "$dictationRestartHome/.claude/profiles/personal/profile.json"
+cat >"$dictationRestartBin/systemctl" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${SYSTEMCTL_LOG:-/tmp/systemctl.log}"
+case "$*" in
+  "--user show-environment"|"--user daemon-reload"|"--user enable --now ydotoold.service"|"--user restart ydotoold.service")
+    exit 0
+    ;;
+esac
+exit 1
+STUB
+chmod +x "$dictationRestartBin/systemctl"
+dictationRestartOutput="$(HOME="$dictationRestartHome" PATH="$dictationRestartBin:/usr/bin:/bin" SYSTEMCTL_LOG="$dictationRestartSystemctlLog" bash "$dictationRestartHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+dictationRestartStatus="${PIPESTATUS[0]}"
+assertOk "dictation changed unit apply completes" "$dictationRestartStatus"
+assertMatch "dictation changed unit reports restart" "ydotoold service +enabled and restarted" "$dictationRestartOutput"
+assertMatch "dictation changed unit reloads systemd" "--user daemon-reload" "$(cat "$dictationRestartSystemctlLog")"
+assertMatch "dictation changed unit enables service" "--user enable --now ydotoold.service" "$(cat "$dictationRestartSystemctlLog")"
+assertMatch "dictation changed unit restarts service" "--user restart ydotoold.service" "$(cat "$dictationRestartSystemctlLog")"
+printf '' >"$dictationRestartSystemctlLog"
+dictationUnchangedOutput="$(HOME="$dictationRestartHome" PATH="$dictationRestartBin:/usr/bin:/bin" SYSTEMCTL_LOG="$dictationRestartSystemctlLog" bash "$dictationRestartHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+dictationUnchangedStatus="${PIPESTATUS[0]}"
+assertOk "dictation unchanged unit apply completes" "$dictationUnchangedStatus"
+assertMatch "dictation unchanged unit reports start" "ydotoold service +enabled and started" "$dictationUnchangedOutput"
+assertMatch "dictation unchanged unit enables service" "--user enable --now ydotoold.service" "$(cat "$dictationRestartSystemctlLog")"
+assertNoMatch "dictation unchanged unit skips daemon reload" "--user daemon-reload" "$(cat "$dictationRestartSystemctlLog")"
+assertNoMatch "dictation unchanged unit skips restart" "--user restart ydotoold.service" "$(cat "$dictationRestartSystemctlLog")"
+
+dictationDnfHome="/tmp/dictation-dnf-home"
+dictationDnfBin="/tmp/dictation-dnf-bin"
+mkdir -p "$dictationDnfHome"
+(
+  export HOME="$dictationDnfHome"
+  bootstrapCheckout "$dictationDnfHome/.claude"
+) >/dev/null 2>&1
+installSoftwarePathStubs "$dictationDnfBin" "dnf" "missing"
+printf '%s\n' '{ "steps": ["software"] }' > "$dictationDnfHome/.claude/profiles/personal/profile.json"
+dictationDnfOutput="$(HOME="$dictationDnfHome" PATH="$dictationDnfBin" /usr/bin/bash "$dictationDnfHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+dictationDnfStatus="${PIPESTATUS[0]}"
+assertOk "dictation dnf apply completes" "$dictationDnfStatus"
+assertMatch "dictation dnf installs ydotool once" "ydotool +installing via dnf" "$dictationDnfOutput"
+assertEquals "dictation dnf makes one ydotool package call" "1" "$(grep -Ec 'ydotool +installing via dnf' <<<"$dictationDnfOutput")"
+assertNoMatch "dictation dnf skips ydotoold install tool" "ydotoold +installing via dnf" "$dictationDnfOutput"
+
+dictationNoPackageManagerHome="/tmp/dictation-no-package-manager-home"
+dictationNoPackageManagerBin="/tmp/dictation-no-package-manager-bin"
+mkdir -p "$dictationNoPackageManagerHome"
+(
+  export HOME="$dictationNoPackageManagerHome"
+  bootstrapCheckout "$dictationNoPackageManagerHome/.claude"
+) >/dev/null 2>&1
+installSoftwarePathStubs "$dictationNoPackageManagerBin" "" "missing"
+cat >"$dictationNoPackageManagerBin/ydotool" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+chmod +x "$dictationNoPackageManagerBin/ydotool"
+printf '%s\n' '{ "steps": ["software"] }' > "$dictationNoPackageManagerHome/.claude/profiles/personal/profile.json"
+dictationNoPackageManagerOutput="$(HOME="$dictationNoPackageManagerHome" PATH="$dictationNoPackageManagerBin" /usr/bin/bash "$dictationNoPackageManagerHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+dictationNoPackageManagerStatus="${PIPESTATUS[0]}"
+assertOk "dictation no package manager apply completes" "$dictationNoPackageManagerStatus"
+assertMatch "dictation no package manager warns for ydotoold" "ydotoold +install manually" "$dictationNoPackageManagerOutput"
 
 # ---------------------------------------------------------------------------
 phase "dry run"
