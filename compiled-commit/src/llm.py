@@ -138,7 +138,9 @@ class LlmClient:
             "--model",
             self.model,
             "--max-turns",
-            "2",
+            "1",
+            # No MCP: a repo .mcp.json invites a tool round-trip whose continuation is cache-cold (189k cacheW, cacheR 0 measured)
+            "--strict-mcp-config",
             "--disallowedTools",
             "Bash,PowerShell,Read,Grep,Glob,Edit,Write,WebFetch,WebSearch,"
             "Task,Agent,TodoWrite,NotebookEdit,Skill,ToolSearch",
