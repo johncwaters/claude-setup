@@ -2628,6 +2628,7 @@ if stepEnabled "software"; then
   installPackageTool "VSCodium" "codium" "vscodium"
   installClaudeCode
   installZed
+  installFlatpakApp "Zen" "app.zen_browser.zen"
   installFlatpakApp "Bitwarden" "com.bitwarden.desktop"
   installFlatpakApp "Discord" "com.discordapp.Discord"
   installFlatpakApp "Remmina" "org.remmina.Remmina"
