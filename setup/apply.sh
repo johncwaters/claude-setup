@@ -9,6 +9,7 @@ countsInstalled=0
 countsPresent=0
 countsWarned=0
 retrySettingsRender=0
+retryRemoveRetiredPlugins=0
 aptUpdated=0
 operatorGitHubOwner=""
 detectedPackageManager=""
@@ -454,6 +455,15 @@ ensureUserNpmPrefix() {
   writeLine " ok " "$colorGreen" "npm prefix" "global root not writable, using ~/.npm-global"
 }
 
+# Pop!_OS ~/.profile adds ~/.local/bin only if it exists at login; the installer creates it later this run.
+persistUserLocalBinOnPath() {
+  if [[ -f "$HOME/.bashrc" ]] && grep -q '\.local/bin' "$HOME/.bashrc"; then
+    return 0
+  fi
+  printf 'export PATH="$HOME/.local/bin:$PATH"\n' >>"$HOME/.bashrc"
+  noteApplied "~/.bashrc PATH" "added ~/.local/bin"
+}
+
 # Global installs straight from a git spec run native postinstalls (glissa's
 # node-pty) in a directory npm has already moved, dying with ENOENT uv_cwd
 # (github.com/emiasims/tree-sitter-org/issues/37), so pack first and install
@@ -793,6 +803,7 @@ installNodeJs() {
 
 installClaudeCode() {
   refreshSessionPath
+  persistUserLocalBinOnPath
   if command -v claude >/dev/null 2>&1; then
     notePresent "Claude Code" "already installed"
     return 0
@@ -861,7 +872,10 @@ ensureGithubAuth() {
     return 0
   fi
   if canPromptUser && openPromptInput && promptYesNo "Log in to GitHub now (gh auth login)?"; then
+    printf '%s        Ctrl-C skips login and setup continues. If no browser opens, enter the code at https://github.com/login/device%s\n' "$colorDarkGray" "$colorReset"
+    trap ':' INT
     gh auth login || true
+    trap - INT
     if gh auth status >/dev/null 2>&1; then
       noteApplied "GitHub auth" "logged in"
       return 0
@@ -2051,11 +2065,13 @@ removeRetiredPlugins() {
     notePresent "plugin removals" "none listed"
     return 0
   fi
+  retryRemoveRetiredPlugins=0
   if command -v node >/dev/null 2>&1; then
     nodeCanEditJson=1
   fi
   if ((nodeCanEditJson == 0)); then
-    noteWarned "plugin removals" "node not on PATH, settings.json and plugin registries left unchanged"
+    noteWarned "plugin removals" "node not on PATH, will retry after installs (settings.json and plugin registries unchanged)"
+    retryRemoveRetiredPlugins=1
   fi
   for entry in "${entries[@]}"; do
     read -r -a tokens <<<"$entry"
@@ -2351,6 +2367,10 @@ fi
 
 if ((retrySettingsRender == 1)); then
   invokeSettingsRender
+fi
+
+if ((retryRemoveRetiredPlugins == 1)); then
+  removeRetiredPlugins
 fi
 
 writeSection "Glissa server"
