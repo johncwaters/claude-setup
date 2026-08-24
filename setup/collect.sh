@@ -164,6 +164,15 @@ collectNpmGlobals() {
   replaceListFile "npm globals" "$setupDir/npm-globals.txt" "$packageNames"
 }
 
+collectScreenshotConfig() {
+  copyIfExists "$HOME/.local/bin/flameshot-save-path" "$setupDir/screenshot/flameshot-save-path"
+  copyIfExists "$HOME/.config/autostart/Flameshot.desktop" "$setupDir/screenshot/Flameshot.desktop"
+}
+
+collectDictationConfig() {
+  copyIfExists "$HOME/.config/systemd/user/ydotoold.service" "$setupDir/dictation/ydotoold.service"
+}
+
 collectVscodium
 
 if [[ "$machineProfile" == "work" ]]; then
@@ -177,6 +186,8 @@ collectGitConfig
 
 printf 'Windows Terminal: not applicable on Linux\n'
 
+collectScreenshotConfig
+collectDictationConfig
 collectNpmGlobals
 
 printf 'done. Review changes with: git -C "%s/.claude" status\n' "$HOME"

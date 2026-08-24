@@ -235,6 +235,29 @@ copyConfig() {
   noteApplied "$label" "updated"
 }
 
+copyExecutableConfig() {
+  local label="$1"
+  local src="$2"
+  local dest="$3"
+  if [[ ! -f "$src" ]]; then
+    noteWarned "$label" "not in repo"
+    return 0
+  fi
+  mkdir -p "$(dirname -- "$dest")"
+  if filesAreIdentical "$src" "$dest" && [[ -x "$dest" ]]; then
+    notePresent "$label" "up to date"
+    return 0
+  fi
+  if ! filesAreIdentical "$src" "$dest"; then
+    cp -f "$src" "$dest"
+    chmod +x "$dest"
+    noteApplied "$label" "updated"
+    return 0
+  fi
+  chmod +x "$dest"
+  noteApplied "$label" "marked executable"
+}
+
 copyGlissaSeedConfig() {
   local src="$1"
   local dest="$2"
@@ -546,6 +569,26 @@ packageNamesForTool() {
       printf 'piper\n'
       return 0
       ;;
+    flameshot:apt-get|flameshot:dnf|flameshot:pacman|flameshot:zypper)
+      printf 'flameshot\n'
+      return 0
+      ;;
+    wl-clipboard:apt-get|wl-clipboard:dnf|wl-clipboard:pacman|wl-clipboard:zypper)
+      printf 'wl-clipboard\n'
+      return 0
+      ;;
+    ydotool:apt-get)
+      printf 'ydotool\n'
+      return 0
+      ;;
+    ydotoold:apt-get)
+      printf 'ydotoold\n'
+      return 0
+      ;;
+    ydotool:dnf|ydotool:pacman|ydotool:zypper|ydotoold:dnf|ydotoold:pacman|ydotoold:zypper)
+      printf 'ydotool\n'
+      return 0
+      ;;
   esac
   return 1
 }
@@ -744,6 +787,161 @@ installLogitechTools() {
   fi
   installPackageTool "ratbagd" "ratbagd" "ratbagd"
   installPackageTool "Piper" "piper" "piper"
+}
+
+cosmicScreenshotShortcutLine() {
+  local shortcutName="$1"
+  if [[ "$shortcutName" == "clipboard" ]]; then
+    printf '    (modifiers: [], key: "Print"): Spawn("env XDG_CURRENT_DESKTOP=sway flameshot gui --accept-on-select --clipboard"),\n'
+    return 0
+  fi
+  if [[ "$shortcutName" == "save-path" ]]; then
+    printf '    (modifiers: [Ctrl], key: "g"): Spawn("%s/.local/bin/flameshot-save-path"),\n' "$HOME"
+    return 0
+  fi
+  return 1
+}
+
+cosmicShortcutExists() {
+  local customShortcutsPath="$1"
+  local shortcutPrefix="$2"
+  local shortcutLine
+  local shortcutLineWithoutIndent
+  while IFS= read -r shortcutLine || [[ -n "$shortcutLine" ]]; do
+    shortcutLineWithoutIndent="${shortcutLine#"${shortcutLine%%[![:space:]]*}"}"
+    if [[ "$shortcutLineWithoutIndent" == "$shortcutPrefix"* ]]; then
+      return 0
+    fi
+  done <"$customShortcutsPath"
+  return 1
+}
+
+writeCosmicScreenshotShortcuts() {
+  local customShortcutsPath="$1"
+  {
+    printf '{\n'
+    cosmicScreenshotShortcutLine "clipboard"
+    cosmicScreenshotShortcutLine "save-path"
+    printf '}\n'
+  } >"$customShortcutsPath"
+  noteApplied "COSMIC screenshot shortcuts" "created"
+}
+
+mergeCosmicScreenshotShortcuts() {
+  local customShortcutsPath="$1"
+  local addClipboard=0
+  local addSavePath=0
+  local tempShortcuts
+  local clipboardLine
+  local savePathLine
+  if ! cosmicShortcutExists "$customShortcutsPath" '(modifiers: [], key: "Print")'; then
+    addClipboard=1
+  fi
+  if ! cosmicShortcutExists "$customShortcutsPath" '(modifiers: [Ctrl], key: "g")'; then
+    addSavePath=1
+  fi
+  if ((addClipboard == 0)) && ((addSavePath == 0)); then
+    notePresent "COSMIC screenshot shortcuts" "already present"
+    return 0
+  fi
+  if ! grep -Eq '^[[:space:]]*}[[:space:]]*$' "$customShortcutsPath"; then
+    noteWarned "COSMIC screenshot shortcuts" "custom file has no closing brace"
+    return 0
+  fi
+  clipboardLine="$(cosmicScreenshotShortcutLine "clipboard")"
+  savePathLine="$(cosmicScreenshotShortcutLine "save-path")"
+  tempShortcuts="$(mktemp "${TMPDIR:-/tmp}/claude-cosmic-shortcuts.XXXXXX")"
+  awk -v addClipboard="$addClipboard" -v addSavePath="$addSavePath" -v clipboardLine="$clipboardLine" -v savePathLine="$savePathLine" '
+    /^[[:space:]]*}[[:space:]]*$/ && inserted == 0 {
+      if (addClipboard == 1) print clipboardLine
+      if (addSavePath == 1) print savePathLine
+      inserted = 1
+    }
+    { print }
+  ' "$customShortcutsPath" >"$tempShortcuts"
+  mv -f "$tempShortcuts" "$customShortcutsPath"
+  noteApplied "COSMIC screenshot shortcuts" "merged"
+}
+
+installCosmicScreenshotShortcuts() {
+  local cosmicConfigDir="$HOME/.config/cosmic"
+  local shortcutDir="$cosmicConfigDir/com.system76.CosmicSettings.Shortcuts/v1"
+  local customShortcutsPath="$shortcutDir/custom"
+  if [[ ! -d "$cosmicConfigDir" ]]; then
+    noteSkipped "COSMIC screenshot shortcuts"
+    return 0
+  fi
+  mkdir -p "$shortcutDir"
+  if [[ ! -f "$customShortcutsPath" ]]; then
+    writeCosmicScreenshotShortcuts "$customShortcutsPath"
+    return 0
+  fi
+  mergeCosmicScreenshotShortcuts "$customShortcutsPath"
+}
+
+installScreenshotTools() {
+  installPackageTool "Flameshot" "flameshot" "flameshot"
+  installPackageTool "wl-clipboard" "wl-copy" "wl-clipboard"
+  copyExecutableConfig "flameshot save-path wrapper" "$setupDir/screenshot/flameshot-save-path" "$HOME/.local/bin/flameshot-save-path"
+  copyConfig "Flameshot autostart" "$setupDir/screenshot/Flameshot.desktop" "$HOME/.config/autostart/Flameshot.desktop"
+  installCosmicScreenshotShortcuts
+}
+
+systemdUserManagerIsReachable() {
+  systemctl --user show-environment >/dev/null 2>&1
+}
+
+installYdotooldService() {
+  local serviceDest="$HOME/.config/systemd/user/ydotoold.service"
+  local wasEnabled=0
+  local wasActive=0
+  copyConfig "ydotoold service" "$setupDir/dictation/ydotoold.service" "$serviceDest"
+  if ! systemdUserManagerIsReachable; then
+    noteWarned "ydotoold service" "unit installed, systemctl --user unavailable"
+    return 0
+  fi
+  if systemctl --user is-enabled ydotoold.service >/dev/null 2>&1; then
+    wasEnabled=1
+  fi
+  if systemctl --user is-active ydotoold.service >/dev/null 2>&1; then
+    wasActive=1
+  fi
+  if ! systemctl --user daemon-reload >/dev/null 2>&1; then
+    noteWarned "ydotoold service" "daemon-reload failed"
+    return 0
+  fi
+  if ! systemctl --user enable --now ydotoold.service >/dev/null 2>&1; then
+    noteWarned "ydotoold service" "enable/start failed"
+    return 0
+  fi
+  if ((wasEnabled == 1)) && ((wasActive == 1)); then
+    notePresent "ydotoold service" "enabled and active"
+    return 0
+  fi
+  noteApplied "ydotoold service" "enabled and started"
+}
+
+installInputGroupMembership() {
+  if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx input; then
+    notePresent "input group" "already present"
+    return 0
+  fi
+  if ! canInstallSystemPackages; then
+    noteWarned "input group" "run: sudo usermod -aG input $USER, then log out and back in"
+    return 0
+  fi
+  if runPackageManagerCommand usermod -aG input "$USER" >/dev/null 2>&1; then
+    noteApplied "input group" "added, log out and back in"
+    return 0
+  fi
+  noteWarned "input group" "run: sudo usermod -aG input $USER, then log out and back in"
+}
+
+installDictationPasteTools() {
+  installPackageTool "ydotool" "ydotool" "ydotool"
+  installPackageTool "ydotoold" "ydotoold" "ydotoold"
+  installYdotooldService
+  installInputGroupMembership
 }
 
 installHeadsetControlBuildDeps() {
@@ -2635,6 +2833,8 @@ if stepEnabled "software"; then
   if [[ "$profile" == "personal" ]]; then
     installLogitechTools
     installHeadsetControl
+    installScreenshotTools
+    installDictationPasteTools
   fi
   if [[ "$profile" != "personal" ]]; then
     noteSkipped "peripheral tools"

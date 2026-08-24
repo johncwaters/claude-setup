@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+screenshotDir="$HOME/Pictures/Screenshots"
+mkdir -p "$screenshotDir"
+savedPath="$(XDG_CURRENT_DESKTOP=sway flameshot gui --accept-on-select --path "$screenshotDir" 2>&1 | sed -n 's/^flameshot: info: Capture saved as //p')"
+[[ -n "$savedPath" ]] || exit 0
+printf "%s" "$savedPath" | wl-copy --trim-newline

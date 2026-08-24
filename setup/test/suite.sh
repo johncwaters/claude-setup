@@ -335,6 +335,52 @@ STUB
   runSuiteRootCommand mkdir -p /run/systemd/system
 }
 
+installScreenshotToolStubs() {
+  local fixtureBin="$1"
+  local toolName
+  mkdir -p "$fixtureBin"
+  for toolName in git gh python3 codium claude zed solaar ratbagd piper headsetcontrol flameshot wl-copy ydotool ydotoold; do
+    cat >"$fixtureBin/$toolName" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+    chmod +x "$fixtureBin/$toolName"
+  done
+  cat >"$fixtureBin/node" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-v" ]]; then
+  printf 'v99.0.0\n'
+  exit 0
+fi
+exit 0
+STUB
+  cat >"$fixtureBin/flatpak" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "info" ]]; then
+  exit 0
+fi
+exit 0
+STUB
+  cat >"$fixtureBin/id" <<'STUB'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-nG" ]]; then
+  printf 'input\n'
+  exit 0
+fi
+exec /usr/bin/id "$@"
+STUB
+  cat >"$fixtureBin/systemctl" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "--user show-environment"|"--user is-enabled ydotoold.service"|"--user is-active ydotoold.service"|"--user daemon-reload"|"--user enable --now ydotoold.service")
+    exit 0
+    ;;
+esac
+exit 1
+STUB
+  chmod +x "$fixtureBin/node" "$fixtureBin/flatpak" "$fixtureBin/id" "$fixtureBin/systemctl"
+}
+
 runGlissaServerApply() {
   local fixtureHome="$1"
   local fixtureBin="$2"
@@ -551,6 +597,112 @@ assertMatch "second apply changes nothing" "Done in [0-9]+s: 0 updated" "$rerunO
 assertNoMatch "second apply installs nothing" '\[ \+\+ \]' "$rerunOutput"
 assertMatch "second apply reuses the stored profile" "not applicable on Linux" "$rerunOutput"
 assertNoFile "no backup on an unchanged rerun" "$claudeHome/CLAUDE.md.pre-profile.bak"
+
+phase "screenshot tooling"
+
+screenshotHome="/tmp/screenshot-home"
+screenshotBin="/tmp/screenshot-bin"
+mkdir -p "$screenshotHome"
+(
+  export HOME="$screenshotHome"
+  bootstrapCheckout "$screenshotHome/.claude"
+) >/dev/null 2>&1
+installScreenshotToolStubs "$screenshotBin"
+printf '%s\n' '{ "steps": ["software"] }' > "$screenshotHome/.claude/profiles/personal/profile.json"
+mkdir -p "$screenshotHome/.config/cosmic"
+
+screenshotOutput="$(HOME="$screenshotHome" PATH="$screenshotBin:/usr/bin:/bin" bash "$screenshotHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+screenshotStatus="${PIPESTATUS[0]}"
+assertOk "screenshot tooling apply completes" "$screenshotStatus"
+assertFile "installs the Flameshot save-path wrapper" "$screenshotHome/.local/bin/flameshot-save-path"
+assertFile "installs the Flameshot autostart entry" "$screenshotHome/.config/autostart/Flameshot.desktop"
+assertFile "installs the ydotoold unit" "$screenshotHome/.config/systemd/user/ydotoold.service"
+assertEquals "save-path wrapper matches the tracked copy" "$(sha256sum < "$screenshotHome/.claude/setup/screenshot/flameshot-save-path" | cut -d' ' -f1)" "$(sha256sum < "$screenshotHome/.local/bin/flameshot-save-path" | cut -d' ' -f1)"
+assertEquals "autostart entry matches the tracked copy" "$(sha256sum < "$screenshotHome/.claude/setup/screenshot/Flameshot.desktop" | cut -d' ' -f1)" "$(sha256sum < "$screenshotHome/.config/autostart/Flameshot.desktop" | cut -d' ' -f1)"
+assertEquals "ydotoold unit matches the tracked copy" "$(sha256sum < "$screenshotHome/.claude/setup/dictation/ydotoold.service" | cut -d' ' -f1)" "$(sha256sum < "$screenshotHome/.config/systemd/user/ydotoold.service" | cut -d' ' -f1)"
+[[ -x "$screenshotHome/.local/bin/flameshot-save-path" ]]
+assertOk "save-path wrapper is executable" $?
+assertMatch "dictation input group already present" "input group +already present" "$screenshotOutput"
+screenshotShortcuts="$screenshotHome/.config/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom"
+assertFile "creates COSMIC custom shortcuts" "$screenshotShortcuts"
+assertMatch "creates the Print clipboard shortcut" 'key: "Print".*--clipboard' "$(cat "$screenshotShortcuts")"
+assertMatch "creates the save-path shortcut with the fixture HOME" "$screenshotHome/.local/bin/flameshot-save-path" "$(cat "$screenshotShortcuts")"
+
+screenshotTreeBefore="$(hashTree "$screenshotHome")"
+screenshotRerunOutput="$(HOME="$screenshotHome" PATH="$screenshotBin:/usr/bin:/bin" bash "$screenshotHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+screenshotRerunStatus="${PIPESTATUS[0]}"
+screenshotTreeAfter="$(hashTree "$screenshotHome")"
+assertOk "second screenshot tooling apply completes" "$screenshotRerunStatus"
+assertEquals "second screenshot tooling apply changes nothing" "$screenshotTreeBefore" "$screenshotTreeAfter"
+assertMatch "second screenshot apply reports wrapper present" "flameshot save-path wrapper +up to date" "$screenshotRerunOutput"
+assertMatch "second screenshot apply reports autostart present" "Flameshot autostart +up to date" "$screenshotRerunOutput"
+assertMatch "second screenshot apply reports shortcuts present" "COSMIC screenshot shortcuts +already present" "$screenshotRerunOutput"
+assertMatch "second screenshot apply reports ydotoold unit present" "ydotoold service +up to date" "$screenshotRerunOutput"
+assertEquals "second screenshot apply keeps one Print shortcut" "1" "$(grep -Fc '(modifiers: [], key: "Print")' "$screenshotShortcuts")"
+assertEquals "second screenshot apply keeps one save-path shortcut" "1" "$(grep -Fc '(modifiers: [Ctrl], key: "g")' "$screenshotShortcuts")"
+
+screenshotMergeHome="/tmp/screenshot-merge-home"
+screenshotMergeBin="/tmp/screenshot-merge-bin"
+mkdir -p "$screenshotMergeHome"
+(
+  export HOME="$screenshotMergeHome"
+  bootstrapCheckout "$screenshotMergeHome/.claude"
+) >/dev/null 2>&1
+installScreenshotToolStubs "$screenshotMergeBin"
+printf '%s\n' '{ "steps": ["software"] }' > "$screenshotMergeHome/.claude/profiles/personal/profile.json"
+screenshotMergeShortcuts="$screenshotMergeHome/.config/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom"
+mkdir -p "$(dirname -- "$screenshotMergeShortcuts")"
+cat >"$screenshotMergeShortcuts" <<'RON'
+{
+    (modifiers: [Alt], key: "x"): Spawn("keep-me"),
+    (modifiers: [], key: "Print"): Spawn("keep-existing-print"),
+}
+RON
+screenshotMergeOutput="$(HOME="$screenshotMergeHome" PATH="$screenshotMergeBin:/usr/bin:/bin" bash "$screenshotMergeHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+screenshotMergeStatus="${PIPESTATUS[0]}"
+screenshotMergeContent="$(cat "$screenshotMergeShortcuts")"
+assertOk "screenshot shortcut merge apply completes" "$screenshotMergeStatus"
+assertMatch "screenshot shortcut merge reports a merge" "COSMIC screenshot shortcuts +merged" "$screenshotMergeOutput"
+assertMatch "screenshot shortcut merge keeps unrelated entries" 'key: "x".*keep-me' "$screenshotMergeContent"
+assertMatch "screenshot shortcut merge keeps existing Print command" "keep-existing-print" "$screenshotMergeContent"
+assertEquals "screenshot shortcut merge does not duplicate Print" "1" "$(grep -Fc '(modifiers: [], key: "Print")' "$screenshotMergeShortcuts")"
+assertEquals "screenshot shortcut merge adds one save-path entry" "1" "$(grep -Fc '(modifiers: [Ctrl], key: "g")' "$screenshotMergeShortcuts")"
+
+screenshotSkipHome="/tmp/screenshot-skip-home"
+screenshotSkipBin="/tmp/screenshot-skip-bin"
+mkdir -p "$screenshotSkipHome"
+(
+  export HOME="$screenshotSkipHome"
+  bootstrapCheckout "$screenshotSkipHome/.claude"
+) >/dev/null 2>&1
+installScreenshotToolStubs "$screenshotSkipBin"
+printf '%s\n' '{ "steps": ["software"] }' > "$screenshotSkipHome/.claude/profiles/personal/profile.json"
+screenshotSkipOutput="$(HOME="$screenshotSkipHome" PATH="$screenshotSkipBin:/usr/bin:/bin" bash "$screenshotSkipHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+screenshotSkipStatus="${PIPESTATUS[0]}"
+assertOk "non-COSMIC screenshot apply completes" "$screenshotSkipStatus"
+assertMatch "non-COSMIC screenshot apply reports shortcuts skipped" "COSMIC screenshot shortcuts.*skipped \(personal profile\)" "$screenshotSkipOutput"
+assertNoFile "non-COSMIC screenshot apply writes no shortcut file" "$screenshotSkipHome/.config/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom"
+
+dictationNoManagerHome="/tmp/dictation-no-manager-home"
+dictationNoManagerBin="/tmp/dictation-no-manager-bin"
+mkdir -p "$dictationNoManagerHome"
+(
+  export HOME="$dictationNoManagerHome"
+  bootstrapCheckout "$dictationNoManagerHome/.claude"
+) >/dev/null 2>&1
+installScreenshotToolStubs "$dictationNoManagerBin"
+printf '%s\n' '{ "steps": ["software"] }' > "$dictationNoManagerHome/.claude/profiles/personal/profile.json"
+cat >"$dictationNoManagerBin/systemctl" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+chmod +x "$dictationNoManagerBin/systemctl"
+dictationNoManagerOutput="$(HOME="$dictationNoManagerHome" PATH="$dictationNoManagerBin:/usr/bin:/bin" bash "$dictationNoManagerHome/.claude/setup/apply.sh" --profile personal 2>&1 | stripColor)"
+dictationNoManagerStatus="${PIPESTATUS[0]}"
+assertOk "dictation no-user-manager apply completes" "$dictationNoManagerStatus"
+assertFile "dictation no-user-manager installs unit" "$dictationNoManagerHome/.config/systemd/user/ydotoold.service"
+assertEquals "dictation no-user-manager unit matches the tracked copy" "$(sha256sum < "$dictationNoManagerHome/.claude/setup/dictation/ydotoold.service" | cut -d' ' -f1)" "$(sha256sum < "$dictationNoManagerHome/.config/systemd/user/ydotoold.service" | cut -d' ' -f1)"
+assertMatch "dictation no-user-manager warns" "ydotoold service +unit installed, systemctl --user unavailable" "$dictationNoManagerOutput"
 
 # ---------------------------------------------------------------------------
 phase "dry run"
@@ -887,6 +1039,12 @@ mkdir -p "$HOME/nonrepo"
 codiumUser="$HOME/.config/VSCodium/User"
 printf '{"editor.fontSize": 42}\n' > "$codiumUser/settings.json"
 printf '[{"key": "ctrl+k"}]\n' > "$codiumUser/keybindings.json"
+mkdir -p "$HOME/.local/bin" "$HOME/.config/autostart"
+printf '#!/usr/bin/env bash\nprintf screenshot\n' > "$HOME/.local/bin/flameshot-save-path"
+chmod +x "$HOME/.local/bin/flameshot-save-path"
+printf '[Desktop Entry]\nName=flameshot-test\n' > "$HOME/.config/autostart/Flameshot.desktop"
+mkdir -p "$HOME/.config/systemd/user"
+printf '[Unit]\nDescription=ydotoold-test\n' > "$HOME/.config/systemd/user/ydotoold.service"
 
 fakeCodiumScript="$(mktemp)"
 cat > "$fakeCodiumScript" <<'FAKE'
@@ -938,6 +1096,9 @@ assertMatch "writes the placeholder email" "email = you@example.com" "$collected
 assertMatch "leaves an alias called name alone" "name = rev-parse" "$collectedGitConfig"
 assertMatch "keeps unrelated sections" "autocrlf = false" "$collectedGitConfig"
 assertMatch "keeps the placeholder header" "before running the apply script" "$collectedGitConfig"
+assertMatch "collects the Flameshot save-path wrapper" "printf screenshot" "$(cat "$claudeHome/setup/screenshot/flameshot-save-path")"
+assertMatch "collects the Flameshot autostart entry" "flameshot-test" "$(cat "$claudeHome/setup/screenshot/Flameshot.desktop")"
+assertMatch "collects the ydotoold service" "ydotoold-test" "$(cat "$claudeHome/setup/dictation/ydotoold.service")"
 
 fakeCodiumScript="$(mktemp)"
 cat > "$fakeCodiumScript" <<'FAKE'

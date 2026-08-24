@@ -1,0 +1,14 @@
+[Unit]
+Description=Starts ydotoold Daemon
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/ydotoold
+Restart=always
+RestartSec=3
+KillMode=process
+TimeoutStopSec=180
+
+[Install]
+WantedBy=default.target
