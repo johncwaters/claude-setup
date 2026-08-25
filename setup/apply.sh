@@ -2849,6 +2849,7 @@ if stepEnabled "software"; then
   installFlatpakApp "Zen" "app.zen_browser.zen"
   installFlatpakApp "Bitwarden" "com.bitwarden.desktop"
   installFlatpakApp "Discord" "com.discordapp.Discord"
+  installFlatpakApp "Slack" "com.slack.Slack"
   installFlatpakApp "Remmina" "org.remmina.Remmina"
   if [[ "$profile" == "personal" ]]; then
     installLogitechTools
