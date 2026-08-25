@@ -178,6 +178,13 @@ class GitOps:
             refs=parse_push_porcelain(proc.stdout),
         )
 
+    def delete_remote_branch(self, remote, branch):
+        return self._run(["push", "--porcelain", remote, "--delete", branch])
+
+    def is_ancestor(self, ancestor_ref, descendant_ref):
+        proc = self._run(["merge-base", "--is-ancestor", ancestor_ref, descendant_ref])
+        return proc.returncode == 0
+
 
 def parse_push_porcelain(stdout):
     parsed = {}

@@ -118,6 +118,40 @@ def _write_one_time_update_reject_hook(origin, branch):
     os.chmod(hook_path, 0o755)
 
 
+def _write_update_reject_hook(origin, branch):
+    hook_path = os.path.join(origin, "hooks", "update")
+    with open(hook_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(
+            "#!/bin/sh\n"
+            "ref_name=\"$1\"\n"
+            f"if [ \"$ref_name\" != \"refs/heads/{branch}\" ]; then\n"
+            "  exit 0\n"
+            "fi\n"
+            f"echo \"rejecting {branch}\" >&2\n"
+            "exit 1\n"
+        )
+    os.chmod(hook_path, 0o755)
+
+
+def _write_delete_reject_hook(origin, branch):
+    hook_path = os.path.join(origin, "hooks", "update")
+    with open(hook_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(
+            "#!/bin/sh\n"
+            "ref_name=\"$1\"\n"
+            "new_sha=\"$3\"\n"
+            f"if [ \"$ref_name\" != \"refs/heads/{branch}\" ]; then\n"
+            "  exit 0\n"
+            "fi\n"
+            "if [ \"$new_sha\" != \"0000000000000000000000000000000000000000\" ]; then\n"
+            "  exit 0\n"
+            "fi\n"
+            f"echo \"rejecting deletion of {branch}\" >&2\n"
+            "exit 1\n"
+        )
+    os.chmod(hook_path, 0o755)
+
+
 class PromoteTests(unittest.TestCase):
     def test_find_worktree_for_branch_skips_detached_and_bare_blocks(self):
         porcelain = "\n".join(
@@ -152,6 +186,7 @@ class PromoteTests(unittest.TestCase):
             run_git(seed, ["push", "-u", "origin", "develop"])
             run_git(seed, ["checkout", "-b", "feature"])
             run_git(seed, ["push", "-u", "origin", "feature"])
+            feature_before = _origin_ref(origin, "feature")
 
             clone_repo(origin, local)
             run_git(local, ["branch", "develop", "origin/develop"])
@@ -170,9 +205,62 @@ class PromoteTests(unittest.TestCase):
             self.assertEqual(_origin_ref(origin, "main"), result.commit_hash)
             push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
             self.assertEqual(len(push_calls), 1)
-            self.assertIn("refs/heads/feature:refs/heads/feature", push_calls[0])
+            self.assertNotIn("refs/heads/feature:refs/heads/feature", push_calls[0])
             self.assertIn("refs/heads/develop:refs/heads/develop", push_calls[0])
             self.assertIn("refs/heads/main:refs/heads/main", push_calls[0])
+            self.assertEqual(_origin_ref(origin, "feature"), feature_before)
+            self.assertEqual(result.deleted_remote_branches, [])
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_mainline_promote_omits_feature_push_and_deletes_merged_glissa_branch(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        feature_branch = "glissa/session/delete-after-mainline"
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+            run_git(seed, ["checkout", "-b", feature_branch])
+            run_git(seed, ["push", "-u", "origin", feature_branch])
+
+            clone_repo(origin, local)
+            run_git(local, ["branch", "develop", "origin/develop"])
+            run_git(local, ["checkout", "-b", feature_branch, f"origin/{feature_branch}"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+
+            pipeline = _make_pipeline(local)
+            recording_git = RecordingGitOps(local)
+            pipeline.git = recording_git
+            result = pipeline.run()
+
+            promoted_pushes = [
+                call for call in recording_git.calls
+                if call[:2] == ["push", "--porcelain"] and "--delete" not in call
+            ]
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertFalse(result.pushed)
+            self.assertEqual(result.deleted_remote_branches, [feature_branch])
+            self.assertEqual(_origin_ref(origin, feature_branch), None)
+            self.assertEqual(len(promoted_pushes), 1)
+            self.assertNotIn(
+                f"refs/heads/{feature_branch}:refs/heads/{feature_branch}",
+                promoted_pushes[0],
+            )
+            self.assertIn(
+                ["push", "--porcelain", "origin", "--delete", feature_branch],
+                recording_git.calls,
+            )
+            tracking_ref = run_git(
+                local,
+                ["rev-parse", "-q", "--verify", f"refs/remotes/origin/{feature_branch}"],
+                check=False,
+            )
+            self.assertNotEqual(tracking_ref.returncode, 0)
         finally:
             cleanup(origin, seed, local_parent)
 
@@ -244,12 +332,19 @@ class PromoteTests(unittest.TestCase):
             run_git(local, ["checkout", "-b", "feature", "origin/feature"])
             write_file(local, "base.txt", "base\nfeature change\n")
 
-            result = _make_pipeline(local, promote_target="develop").run()
+            pipeline = _make_pipeline(local, promote_target="develop")
+            recording_git = RecordingGitOps(local)
+            pipeline.git = recording_git
+            result = pipeline.run()
 
             self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertTrue(result.pushed)
             self.assertEqual(result.promoted, ["develop"])
+            self.assertEqual(_origin_ref(origin, "feature"), result.commit_hash)
             self.assertEqual(_origin_ref(origin, "develop"), result.commit_hash)
             self.assertEqual(_origin_ref(origin, "main"), main_before)
+            push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
+            self.assertIn("refs/heads/feature:refs/heads/feature", push_calls[0])
         finally:
             cleanup(origin, seed, local_parent)
 
@@ -671,7 +766,7 @@ class PromoteTests(unittest.TestCase):
         finally:
             cleanup(origin, seed, local_parent)
 
-    def test_promote_feature_ref_rejection_maps_to_push_failed(self):
+    def test_develop_promote_feature_ref_rejection_maps_to_push_failed(self):
         origin = make_bare_origin()
         seed = make_repo()
         local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
@@ -691,10 +786,75 @@ class PromoteTests(unittest.TestCase):
             write_file(local, "base.txt", "base\nfeature change\n")
             _write_one_time_update_reject_hook(origin, "feature")
 
-            result = _make_pipeline(local).run()
+            result = _make_pipeline(local, promote_target="develop").run()
 
             self.assertEqual(result.outcome, Outcome.PUSH_FAILED)
             self.assertFalse(result.pushed)
+        finally:
+            cleanup(origin, seed, local_parent)
+
+    def test_mainline_promote_failure_pushes_feature_as_safety_net(self):
+        origin = make_bare_origin()
+        repo = make_repo()
+        feature_branch = "glissa/session/promotion-fallback"
+        try:
+            run_git(repo, ["remote", "add", "origin", origin])
+            commit_file(repo, "base.txt", "base\n", "init")
+            run_git(repo, ["push", "-u", "origin", "main"])
+            run_git(repo, ["checkout", "-b", "develop"])
+            run_git(repo, ["push", "-u", "origin", "develop"])
+            run_git(repo, ["checkout", "-b", feature_branch])
+            write_file(repo, "base.txt", "base\nfeature change\n")
+            _write_update_reject_hook(origin, "main")
+
+            pipeline = _make_pipeline(repo)
+            recording_git = RecordingGitOps(repo)
+            pipeline.git = recording_git
+            result = pipeline.run()
+
+            push_calls = [call for call in recording_git.calls if call[:2] == ["push", "--porcelain"]]
+            feature_refspec = f"refs/heads/{feature_branch}:refs/heads/{feature_branch}"
+            self.assertEqual(result.outcome, Outcome.PROMOTE_FAILED)
+            self.assertTrue(result.pushed)
+            self.assertEqual(_origin_ref(origin, feature_branch), result.commit_hash)
+            self.assertEqual(push_calls[-1][-1], feature_refspec)
+            self.assertNotIn(feature_refspec, push_calls[0])
+            self.assertEqual(result.deleted_remote_branches, [])
+        finally:
+            cleanup(repo, origin)
+
+    def test_remote_delete_failure_is_warning_only(self):
+        origin = make_bare_origin()
+        seed = make_repo()
+        local_parent = tempfile.mkdtemp(prefix="cc-test-local-parent-")
+        local = os.path.join(local_parent, "local")
+        feature_branch = "glissa/session/delete-rejected"
+        try:
+            run_git(seed, ["remote", "add", "origin", origin])
+            commit_file(seed, "base.txt", "base\n", "init")
+            run_git(seed, ["push", "-u", "origin", "main"])
+            run_git(seed, ["checkout", "-b", "develop"])
+            run_git(seed, ["push", "-u", "origin", "develop"])
+            run_git(seed, ["checkout", "-b", feature_branch])
+            run_git(seed, ["push", "-u", "origin", feature_branch])
+
+            clone_repo(origin, local)
+            run_git(local, ["branch", "develop", "origin/develop"])
+            run_git(local, ["checkout", "-b", feature_branch, f"origin/{feature_branch}"])
+            write_file(local, "base.txt", "base\nfeature change\n")
+            _write_delete_reject_hook(origin, feature_branch)
+
+            result = _make_pipeline(local).run()
+
+            self.assertEqual(result.outcome, Outcome.COMMITTED)
+            self.assertEqual(result.deleted_remote_branches, [])
+            self.assertIsNotNone(_origin_ref(origin, feature_branch))
+            self.assertTrue(
+                any(
+                    f"could not delete merged remote branch {feature_branch}" in warning
+                    for warning in result.warnings
+                )
+            )
         finally:
             cleanup(origin, seed, local_parent)
 

@@ -51,6 +51,33 @@ class PushStageTests(unittest.TestCase):
         self.assertEqual(parsed["refs/heads/release"]["status"], "rejected")
         self.assertEqual(parsed["refs/heads/release"]["summary"], "[rejected] fetch first")
 
+    def test_delete_remote_branch_uses_porcelain_and_updates_tracking_ref(self):
+        origin = make_bare_origin()
+        repo = make_repo()
+        feature_branch = "glissa/session/delete-method"
+        try:
+            run_git(repo, ["remote", "add", "origin", origin])
+            commit_file(repo, "base.txt", "base\n", "init")
+            run_git(repo, ["checkout", "-b", feature_branch])
+            run_git(repo, ["push", "-u", "origin", feature_branch])
+            recording_git = RecordingGitOps(repo)
+
+            deletion = recording_git.delete_remote_branch("origin", feature_branch)
+
+            self.assertEqual(deletion.returncode, 0)
+            self.assertIn(
+                ["push", "--porcelain", "origin", "--delete", feature_branch],
+                recording_git.calls,
+            )
+            remote_ref = run_git(
+                repo,
+                ["rev-parse", "-q", "--verify", f"refs/remotes/origin/{feature_branch}"],
+                check=False,
+            )
+            self.assertNotEqual(remote_ref.returncode, 0)
+        finally:
+            cleanup(repo, origin)
+
     def test_push_from_feature_branch_advances_origin_ref(self):
         origin = make_bare_origin()
         repo = make_repo()

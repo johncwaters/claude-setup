@@ -42,7 +42,8 @@ HOOK_FAILED, PUSH_FAILED, PROMOTE_CONFLICT, PROMOTE_FAILED.
 
 Result object (dataclass, serialized to JSON on stdout at end): outcome, commit_hash,
 commit_message, pushed, promoted (list of branch names promotion advanced, empty by
-default), findings (slop + review), warnings, llm_usage (per call: name, model,
+default), deleted_remote_branches (list of merged remote `glissa/` branches removed after
+mainline promotion, empty by default), findings (slop + review), warnings, llm_usage (per call: name, model,
 input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens,
 duration_ms, retries), git_op_count, wall_time_sec, stages_run.
 
@@ -125,6 +126,9 @@ when it does not. A nonzero push exit records a warning containing the attempt n
 and stderr, then retries up to 2 more times after `push_retry_delay_sec` seconds (3 total
 attempts). All attempts nonzero -> PUSH_FAILED; commit_hash from Stage 8 is still
 populated in the result. Success on any attempt: result field `pushed` set true.
+With --promote unless --no-push, the feature ref is deferred to Stage 10. A develop target
+includes it in the promoted batch, while a mainline target omits it unless promotion fails
+and needs the safety push described below.
 
 ### Stage 10 PROMOTE (runs only with --promote, after a successful COMMIT and a successful
 or skipped-by---no-push PUSH; skipped entirely when --promote is absent, contributing
@@ -185,17 +189,19 @@ Each hop src -> dst, in order:
    "checked out") -> find that worktree and run `git merge --ff-only <src>` there.
    If the holder is missing, dirty aside from untracked files, or cannot fast-forward
    dst, PROMOTE_FAILED with a warning; on success, continue to push.
-5. Push: origin present -> `git push origin <dst>` (plain refspec, no checkout). A
-   nonzero push records a warning containing the attempt number and stderr, then retries
-   up to 2 more times after `push_retry_delay_sec` seconds (3 total attempts). If stderr
-   indicates a fetch-first or non-fast-forward rejection (`non-fast-forward`,
-   `fetch first`, or `rejected`), first re-run the dst sync cycle and `git fetch .
-   <src>:<dst>` before the next push attempt, with the same conflict and failure handling
-   as steps 1 through 4. Other push failures just wait and retry. All push attempts
-   nonzero -> PROMOTE_FAILED with the accumulated warnings. No origin -> a single stage
-   warning "no origin remote; promoted branches updated locally only", keep going.
-6. On success append dst to the result list `promoted`.
-Never force-push, never delete branches, never auto-resolve conflicts, never `--no-verify`.
+5. Push all changed refs in one porcelain batch. A develop target includes the feature
+   ref; a mainline target includes only the promotion refs. Transport failures retry up to
+   2 more times after `push_retry_delay_sec` seconds (3 total attempts). A rejected
+   promotion ref runs the destination sync cycle and retries only rejected promotion
+   refs once. Any PROMOTE_FAILED result from a mainline batch triggers a separate feature
+   ref push as a safety net without changing the promotion outcome. No origin -> a single
+   stage warning "no origin remote; promoted branches updated locally only", keep going.
+6. On success append each destination to `promoted`. After successful mainline state, fetch
+   an existing remote feature ref whose name starts with `glissa/`; delete it only when its
+   tip is an ancestor of the pushed mainline tip. Record successful deletion in
+   `deleted_remote_branches`; deletion failure adds a warning without changing the outcome.
+Never force-push, never delete a branch outside the guarded merged `glissa/` cleanup,
+never auto-resolve conflicts, never `--no-verify`.
 PROMOTE_CONFLICT and PROMOTE_FAILED are terminal but leave commit_hash, commit_message,
 pushed, and findings from earlier stages intact.
 

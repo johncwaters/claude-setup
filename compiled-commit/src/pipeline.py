@@ -662,9 +662,10 @@ class Pipeline:
         if not origin_exists:
             return None
 
+        feature_branch = self._feature_branch_for_promotion(current, mainline)
         pending_refs = []
-        if self._deferred_feature_branch:
-            pending_refs.append(PendingPushRef(branch=self._deferred_feature_branch, kind="feature"))
+        if feature_branch and self.config.promote_target == "develop":
+            pending_refs.append(PendingPushRef(branch=feature_branch, kind="feature"))
         pending_refs.extend(
             PendingPushRef(branch=dst, kind="promote", source=src)
             for src, dst in hops
@@ -672,11 +673,70 @@ class Pipeline:
 
         outcome = self._push_promoted_batch(pending_refs, promoted_branches)
         if outcome:
+            self._push_feature_after_failed_mainline_promotion(feature_branch, outcome)
             return outcome
 
+        self._delete_merged_remote_feature_branch(feature_branch, mainline)
         self.result.stages_run.append("PROMOTE(pushed)")
         self._checkpoint("PROMOTE(pushed)")
         return None
+
+    def _feature_branch_for_promotion(self, current, mainline):
+        if self._deferred_feature_branch:
+            return self._deferred_feature_branch
+        if self.config.no_push:
+            return None
+        if current == "develop" or current == mainline:
+            return None
+        return current
+
+    def _push_feature_after_failed_mainline_promotion(self, feature_branch, outcome):
+        if self.config.promote_target != "mainline":
+            return
+        if outcome != Outcome.PROMOTE_FAILED:
+            return
+        if not feature_branch:
+            return
+
+        pending_feature_ref = PendingPushRef(branch=feature_branch, kind="feature")
+        push_outcome = self._push_pending_refs(
+            [pending_feature_ref],
+            set_upstream=False,
+            exhausted_outcome=Outcome.PUSH_FAILED,
+        )
+        if not push_outcome:
+            self.result.pushed = True
+            return
+        self.result.warnings.append(
+            f"promotion failed and safety push of {feature_branch} also failed"
+        )
+
+    def _delete_merged_remote_feature_branch(self, feature_branch, mainline):
+        if not feature_branch or not feature_branch.startswith("glissa/"):
+            return
+        if mainline is None or mainline not in self.result.promoted:
+            return
+
+        fetch = self.git.fetch("origin", feature_branch)
+        if fetch.returncode != 0:
+            return
+
+        remote_feature_tip = self.git.rev_parse_ref("FETCH_HEAD")
+        local_mainline_ref = f"refs/heads/{mainline}"
+        if remote_feature_tip is None:
+            return
+        if not self.git.is_ancestor(remote_feature_tip, local_mainline_ref):
+            return
+
+        deletion = self.git.delete_remote_branch("origin", feature_branch)
+        if deletion.returncode == 0:
+            self.result.deleted_remote_branches.append(feature_branch)
+            return
+
+        failure_text = (deletion.stderr or deletion.stdout or "unknown error").strip()
+        self.result.warnings.append(
+            f"could not delete merged remote branch {feature_branch}: {failure_text}"
+        )
 
     def _promotion_hops(self, current, mainline):
         if self.config.promote_target == "develop":
