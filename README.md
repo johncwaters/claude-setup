@@ -191,6 +191,7 @@ Nothing secret syncs through this repo, so log in fresh:
 - [ ] `codex login` (Codex CLI; ChatGPT sign-in, needed for Codex routing)
 - [ ] `grok login` (Grok Build CLI; grok.com sign-in, or set `XAI_API_KEY`; manual use only, not in routing)
 - [ ] `claude mcp add --transport http posthog https://mcp.posthog.com/mcp -s user` (PostHog MCP; OAuth browser login on first use)
+- [ ] Slack MCP: connect Slack at claude.ai Settings > Connectors; it then shows up in Claude Code automatically (`claude mcp list`). Plain `claude mcp add` fails because `mcp.slack.com` has no dynamic client registration; the local fallback is a Slack app (api.slack.com/apps) with redirect URI `http://localhost:8123/callback` and the user scopes from `https://mcp.slack.com/.well-known/oauth-protected-resource`, then `claude mcp add --transport http slack https://mcp.slack.com/mcp -s user --client-id <id> --client-secret --callback-port 8123`
 - [ ] VSCodium: re-auth MCP servers (PostHog) on first use
 - [ ] Anything project-specific (.env files) stays per-repo, not here
 
