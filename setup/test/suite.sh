@@ -1697,6 +1697,24 @@ assertMatch "the Python denial locates the error" "line 1" "$badPyResult"
 
 assertMatch "a long dash is denied" '"permissionDecision": *"deny"' "$(runHook "$dashed")"
 
+emojiChar="$(printf '\xf0\x9f\x9a\x80')"
+emojiWrite="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"a.md\",\"content\":\"one ${emojiChar} two\"}}"
+assertMatch "a new emoji is denied" '"permissionDecision": *"deny"' "$(runHook "$emojiWrite")"
+
+hookFixtureDir="$(mktemp -d)"
+printf 'kept %s here\n' "$emojiChar" > "$hookFixtureDir/has-emoji.md"
+emojiKept="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$hookFixtureDir/has-emoji.md\",\"content\":\"kept ${emojiChar} here and ${emojiChar}\"}}"
+assertEquals "an emoji is allowed in a file that already has one" "" "$(runHook "$emojiKept")"
+
+oversized="$(printf 'y%.0s' {1..20000})"
+printf '%s' "$oversized" > "$hookFixtureDir/AGENTS.md"
+grown="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$hookFixtureDir/absent/AGENTS.md\",\"content\":\"$oversized\"}}"
+assertMatch "growing AGENTS.md past its cap is denied" '"permissionDecision": *"deny"' "$(runHook "$grown")"
+
+shrunk="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$hookFixtureDir/AGENTS.md\",\"content\":\"${oversized:0:19000}\"}}"
+assertEquals "shrinking an oversized AGENTS.md is allowed" "" "$(runHook "$shrunk")"
+rm -rf "$hookFixtureDir"
+
 printf '\n%s passed, %s failed (full mode)\n' "$passCount" "$failCount"
 if ((failCount > 0)); then
   exit 1

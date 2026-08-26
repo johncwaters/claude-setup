@@ -701,6 +701,15 @@ Assert-Equals "JSONC in tsconfig.json is allowed" "" (Invoke-NodeWithInput $hook
 Assert-Match "invalid JSON is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $badJson).Output
 Assert-Match "a long dash is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $dashed).Output
 
+$emojiChar = [string][char]0x2705
+$emojiWrite = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""a.md"",""content"":""one $emojiChar two""}}"
+Assert-Match "a new emoji is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $emojiWrite).Output
+
+$oversized = "y" * 20000
+$grownPath = (Join-Path ([System.IO.Path]::GetTempPath()) "absent-dir/AGENTS.md").Replace('\', '/')
+$grown = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""$grownPath"",""content"":""$oversized""}}"
+Assert-Match "growing AGENTS.md past its cap is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $grown).Output
+
 # Runs in both modes: the runner hands the hook the real npm global root, so the
 # biome and ruff engines are reachable from a host sandbox run too.
 $goodTs = '{"tool_name":"Write","tool_input":{"file_path":"a.ts","content":"const value: number = 1;"}}'

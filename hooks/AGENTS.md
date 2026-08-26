@@ -11,6 +11,7 @@ of them as production and follow the shared rule below before editing any hook.
 |--------|-------|-----------|------|
 | `validate-file.mjs` | `PreToolUse` (Write/Edit/MultiEdit) | Yes, denies malformed writes | `README.md`, this file |
 | `enforce-spawn-model.mjs` | `PreToolUse` (Agent/Task) | Yes, denies subagent spawns with a missing or fable `model` | Header comment in the script |
+| `inject-routing.mjs` | `SessionStart` | No, prints context or nothing | Header comment in the script |
 
 **Shared rule for every hook here: fail open.** Any error, malformed input, or
 unreadable file MUST result in allow (exit 0, no blocking output). A guard bug
@@ -105,11 +106,20 @@ expression`, and a `tsconfig.json` with `//` comments must ALLOW.
 - **`reconstruct()` handles both Edit payload shapes** — an explicit `content`
   field and `old_string`/`new_string` replay. Deliberate (the exact Edit hook
   payload schema was never confirmed). Keep both paths.
-- **`dashCharError()` scans only the INSERTED text, never the reconstructed
+- **The emoji scan matches high surrogates 0xD83C-0xD83E, not decoded code
+  points.** That range is exactly the emoji planes; the astral blocks that are
+  not emoji (musical, math alphanumerics, CJK ext) encode below 0xD83C or at
+  0xD840 and up, so surrogate matching costs no false positives and needs no
+  `codePointAt` rewrite. `fileAlreadyHasEmoji()` reads the file from disk ONLY
+  after the insertion scan hits, so the common write pays nothing for it.
+- **`docSizeError()` denies growth, never size alone.** A write whose result is
+  over cap but no larger than what is already on disk passes, otherwise an
+  instruction file that went over budget could never be edited back down.
+- **`insertedTextError()` scans only the INSERTED text, never the reconstructed
   file.** It reads straight from `tool_input` (Write `content`, Edit
   `new_string`, each MultiEdit `edits[].new_string`), not the `content` string
-  `reconstruct()` builds. Deliberate: a file that already has a dash or
-  ellipsis elsewhere must stay editable. Do not switch it to scanning
+  `reconstruct()` builds. Deliberate: a file that already has a dash,
+  ellipsis, or emoji elsewhere must stay editable. Do not switch it to scanning
   `content`.
 - **Biome runs as the native exe via a constructed path**
   (`@biomejs/cli-<platform>-<arch>`), with a `node bin/biome` shim fallback.

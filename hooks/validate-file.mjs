@@ -21,7 +21,10 @@
  *   - Dart   -> Flutter/Dart via `dart format` (~0.2s; the heaviest engine -- Dart VM startup)
  *   - inline -> reject NUL, U+FFFD, stray control chars in any text file
  *   - inline -> reject a newly inserted em dash, en dash, or ellipsis
- *               (insertion-only scan; see dashCharError)
+ *               (insertion-only scan; see insertedTextError)
+ *   - inline -> reject a newly inserted emoji, unless the file already has one
+ *   - inline -> reject a write that grows an always-loaded instruction file
+ *               past its DOC_SIZE_CAPS budget (shrinking writes always pass)
  *   - JSON   -> JSON.parse fallback when Biome can't be located
  *
  * Fail-open by design: if the hook errors, can't read the content, or an engine
@@ -58,9 +61,31 @@ const DASH_CHAR_NAMES = {
   0x2026: "ellipsis (U+2026)",
 };
 
+// High surrogates for U+1F000-U+1FBFF, the emoji planes. Matching at the
+// surrogate level is safe: the astral blocks that are not emoji (musical,
+// math alphanumerics, CJK ext) encode below 0xD83C or at 0xD840 and up.
+const EMOJI_HIGH_SURROGATE_MIN = 0xd83c;
+const EMOJI_HIGH_SURROGATE_MAX = 0xd83e;
+
+// BMP code points that render as emoji with no variation selector, plus VS16
+// (0xFE0F), which forces emoji presentation on whatever precedes it.
+const BMP_EMOJI_CHARS = new Set([
+  0xfe0f, 0x2705, 0x274c, 0x274e, 0x2728, 0x2757, 0x2764, 0x26a0, 0x2b50, 0x2b55,
+]);
+
+// Instruction files that are loaded into every session, so every byte is
+// charged to every run. Basename (lowercased) -> byte cap.
+const DOC_SIZE_CAPS = {
+  "agents.md": 16384,
+  "claude.md": 16384,
+  "routing.md": 12288,
+};
+
 const FIX_DASH =
   "Replace the em dash / en dash with an ASCII hyphen, or rephrase using a comma, colon, or parentheses.";
 const FIX_ELLIPSIS = "Replace the ellipsis character with three ASCII dots (...).";
+const FIX_EMOJI =
+  "Remove the emoji and say it in words. Emoji are allowed only when the file already uses them.";
 
 function allow() {
   process.exit(0); // no output => tool proceeds
@@ -73,7 +98,7 @@ function deny(filePath, r) {
     r.where ? `Where: ${r.where}` : null,
     `Why: ${r.why}`,
     r.fix ? `Fix: ${r.fix}` : null,
-    "(Only syntax/format and invalid characters are gated here, not type or lint errors.)",
+    "(Only syntax/format, invalid characters, and instruction-file size are gated here, not type or lint errors.)",
   ]
     .filter(Boolean)
     .join("\n");
@@ -170,6 +195,13 @@ function classifyDashChar(c) {
   return { why: `introduces a banned ${name} character`, fix };
 }
 
+function classifyEmojiChar(c) {
+  const isEmoji =
+    (c >= EMOJI_HIGH_SURROGATE_MIN && c <= EMOJI_HIGH_SURROGATE_MAX) || BMP_EMOJI_CHARS.has(c);
+  if (!isEmoji) return null;
+  return { why: "introduces a banned emoji character", fix: FIX_EMOJI };
+}
+
 function controlCharError(content) {
   return charScanError(content, classifyControlChar);
 }
@@ -178,25 +210,67 @@ function dashLiteralError(text) {
   return charScanError(text, classifyDashChar);
 }
 
-// Checks only the text a tool call would INSERT, never the reconstructed
-// full file -- editing a file that already has a stray dash/ellipsis
+// Scans only the text a tool call would INSERT, never the reconstructed full
+// file -- editing a file that already has a stray dash, ellipsis, or emoji
 // elsewhere must not be blocked, only a newly introduced one.
 // No null guard on ti by design: the sole caller (validate, via the entry
 // point) defaults tool_input to {} before any validation runs.
-function dashCharError(ti) {
-  if (typeof ti.content === "string") return dashLiteralError(ti.content);
+function insertedTextError(ti, scanText) {
+  if (typeof ti.content === "string") return scanText(ti.content);
   if (Array.isArray(ti.edits)) {
     for (let idx = 0; idx < ti.edits.length; idx++) {
       const newStr = ti.edits[idx] && ti.edits[idx].new_string;
       if (typeof newStr !== "string") continue;
-      const err = dashLiteralError(newStr);
+      const err = scanText(newStr);
       if (!err) continue;
       return { ...err, where: `edit ${idx + 1}, ${err.where}` };
     }
     return null;
   }
-  if (typeof ti.new_string === "string") return dashLiteralError(ti.new_string);
+  if (typeof ti.new_string === "string") return scanText(ti.new_string);
   return null;
+}
+
+function dashCharError(ti) {
+  return insertedTextError(ti, dashLiteralError);
+}
+
+function fileAlreadyHasEmoji(filePath) {
+  try {
+    if (!exists(filePath)) return false;
+    return charScanError(fs.readFileSync(filePath, "utf8"), classifyEmojiChar) !== null;
+  } catch {
+    return true; // cannot read the file to tell: fail open like every other engine fault
+  }
+}
+
+function emojiCharError(ti, filePath) {
+  const err = insertedTextError(ti, (text) => charScanError(text, classifyEmojiChar));
+  if (!err) return null;
+  if (fileAlreadyHasEmoji(filePath)) return null;
+  return err;
+}
+
+// Denies only writes that both exceed the cap and grow the file, so an oversized
+// instruction file can always be edited back down.
+function docSizeError(filePath, content) {
+  const name = path.basename(filePath);
+  const cap = DOC_SIZE_CAPS[name.toLowerCase()];
+  if (!cap) return null;
+  const size = Buffer.byteLength(content, "utf8");
+  if (size <= cap) return null;
+  let priorSize = 0;
+  try {
+    priorSize = exists(filePath) ? fs.statSync(filePath).size : 0;
+  } catch {
+    return null;
+  }
+  if (size <= priorSize) return null;
+  return {
+    where: `${size} bytes, cap ${cap}`,
+    why: `${name} is loaded into every session, and this write grows it past its size cap`,
+    fix: "Cut existing lines to make room, move the material into a file loaded on demand, or drop it. Raise the entry in DOC_SIZE_CAPS only when the file has genuinely earned the extra budget.",
+  };
 }
 
 function exists(p) {
@@ -422,6 +496,8 @@ function validateDart(content) {
 
 function validate(filePath, content, ti) {
   const ext = path.extname(filePath).toLowerCase();
+  const size = docSizeError(filePath, content);
+  if (size) return size;
   // Control-char scan runs before Biome/Ruff for text files, so a file with both
   // a control char and a syntax error reports the control char (deterministic).
   if (TEXT_EXTS.has(ext)) {
@@ -429,6 +505,8 @@ function validate(filePath, content, ti) {
     if (cc) return cc;
     const dash = dashCharError(ti);
     if (dash) return dash;
+    const emoji = emojiCharError(ti, filePath);
+    if (emoji) return emoji;
   }
   if (ext === ".py") return validatePython(content);
   if (ext === ".dart") return validateDart(content);
