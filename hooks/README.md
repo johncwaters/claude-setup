@@ -16,6 +16,7 @@ so the agent can correct it immediately instead of guessing.
 |------|---------|
 | `validate-file.mjs` | The validator. Reads the hook payload on stdin, reconstructs the resulting file content, validates it, prints a `deny` decision (or nothing = allow). |
 | `enforce-spawn-model.mjs` | Spawn-model guard (separate hook, own header docs). Denies Agent/Task subagent spawns whose `model` is missing or fable, enforcing the CLAUDE.md routing rule that every spawn pins its tier explicitly. |
+| `inject-routing.mjs` | Routing loader (separate hook, own header docs). On `SessionStart` it prints `~/.claude/ROUTING.md` into the session. SessionStart never fires for subagents, so main-loop-only routing rules stay out of every spawn and out of the Codex mirror. |
 | `README.md` | This file. |
 | `AGENTS.md` | Instructions for an AI agent editing anything in this directory. |
 
@@ -51,7 +52,9 @@ the bytes are already on disk and cannot undo them.
 | `.py` | `python -m ruff format` | Syntax/parse errors only — lint is ignored. |
 | `.dart` | `dart format` (Flutter/Dart SDK) | Syntax/parse errors only. Heaviest engine (~0.2s, Dart VM startup). Fails open if no Dart/Flutter SDK is found. |
 | any text file | inline scan | Rejects NUL, U+FFFD, and stray control chars (tab/LF/FF/CR are fine). |
-| any text file | inline scan | Rejects a **newly introduced** em dash (U+2014), en dash (U+2013), or horizontal ellipsis (U+2026). Insertion-only scan (see `dashCharError` in the source), so a file that already has one elsewhere stays editable. |
+| any text file | inline scan | Rejects a **newly introduced** em dash (U+2014), en dash (U+2013), or horizontal ellipsis (U+2026). Insertion-only scan (see `insertedTextError` in the source), so a file that already has one elsewhere stays editable. |
+| any text file | inline scan | Rejects a **newly introduced** emoji: the astral emoji planes, Unicode's BMP `Emoji_Presentation=Yes` set, and U+FE0F. Symbols that default to text presentation (check marks, arrows, triangles) pass unless U+FE0F follows. Insertion-only, and skipped entirely when the file on disk already has an emoji, matching the AGENTS.md carve-out. |
+| `AGENTS.md` `CLAUDE.md` `ROUTING.md` | inline size gate | Rejects a write that pushes an always-loaded instruction file past its `DOC_SIZE_CAPS` byte budget. Applies only at a repo root or in `~/.claude`, never to a nested directory-scoped copy. Only growth is denied: a write that shrinks the file always passes, so an oversized file can be edited back down. |
 
 `biome format` / `ruff format` are used as pure syntax gates: they exit non-zero
 only on parse errors, so style/lint noise never blocks a save.
@@ -65,7 +68,7 @@ File-format guard blocked this write to a.ts.
 Where: line 1, column 19
 Why: Expected an expression, or an assignment but instead found ';'.
 Fix: Expected an expression, or an assignment here.
-(Only syntax/format and invalid characters are gated here, not type or lint errors.)
+(Only syntax/format, invalid characters, and instruction-file size are gated here, not type or lint errors.)
 ```
 
 Getting the location is a two-step trick: Biome **suppresses** located
