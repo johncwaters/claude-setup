@@ -3,13 +3,13 @@
  * PreToolUse guard for subagent spawns (Agent / Task tool calls).
  *
  * Enforces the CLAUDE.md routing rule that every spawn pins `model`
- * explicitly and never targets fable or haiku. The session model is
+ * explicitly and never targets fable. The session model is
  * fable, so a spawn that omits `model` silently inherits it; prose in
  * CLAUDE.md cannot block that, this hook can (docs_must_be_enforceable).
  *
  * Denies when:
  *   - `model` is missing or empty (would inherit the fable session model)
- *   - `model` names a fable or haiku tier
+ *   - `model` names a fable tier
  *
  * Allows everything else, including subagent_type "fork": the harness
  * ignores `model` for forks, so a deny would be unactionable there.
@@ -26,8 +26,9 @@ import fs from "node:fs";
 const SPAWN_TOOLS = new Set(["Agent", "Task"]);
 
 const PIN_HINT =
-  'Re-issue the call with an explicit model: "opus" (default coding tier) ' +
-  'or "sonnet" (clearly trivial mechanical slices only).';
+  'Re-issue the call with an explicit model: "opus" (default coding tier), ' +
+  '"sonnet" (one-shot mechanical slices), or "haiku" (one-shot basics whose ' +
+  'whole output is a short checkable answer).';
 
 function allow() {
   process.exit(0);
@@ -76,8 +77,6 @@ function main() {
       "fable is the session/orchestrator model only and is never a spawn " +
         "target. " + PIN_HINT
     );
-  if (model.includes("haiku"))
-    deny("haiku is banned on this machine, no exceptions. " + PIN_HINT);
 
   allow();
 }

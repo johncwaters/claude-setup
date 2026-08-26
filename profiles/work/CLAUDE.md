@@ -3,7 +3,7 @@
 <routing>
 Main session loop only; subagents skip per `<scope>`. This section overrides the `<routing>` section in AGENTS.md per its precedence rule: apply that section as written, amended for a work machine as follows.
 - Claude models only. Never dispatch to external model CLIs (Codex, Grok, Gemini, or any non-Claude tool), even if guidance merged from another profile mentions them. Decision order rules 0, 1, 1a, 1b, and 1c do not apply; every delegated task starts at rule 2. The pre-rule question (does this need a model at all?) and rule 5 (eval-backed changes) still apply.
-- The enforce-spawn-model PreToolUse hook denies any spawn with a missing, fable, or haiku model.
+- The enforce-spawn-model PreToolUse hook denies any spawn with a missing or fable model.
 </routing>
 
 <org_workflow>
