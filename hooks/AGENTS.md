@@ -10,7 +10,7 @@ of them as production and follow the shared rule below before editing any hook.
 | Script | Event | Can block? | Docs |
 |--------|-------|-----------|------|
 | `validate-file.mjs` | `PreToolUse` (Write/Edit/MultiEdit) | Yes, denies malformed writes | `README.md`, this file |
-| `enforce-spawn-model.mjs` | `PreToolUse` (Agent/Task) | Yes, denies subagent spawns with a missing, fable, or haiku `model` | Header comment in the script |
+| `enforce-spawn-model.mjs` | `PreToolUse` (Agent/Task) | Yes, denies subagent spawns with a missing or fable `model` | Header comment in the script |
 
 **Shared rule for every hook here: fail open.** Any error, malformed input, or
 unreadable file MUST result in allow (exit 0, no blocking output). A guard bug
