@@ -705,12 +705,17 @@ $emojiChar = [string][char]0x2705
 $emojiWrite = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""a.md"",""content"":""one $emojiChar two""}}"
 Assert-Match "a new emoji is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $emojiWrite).Output
 
-# Uses the real ~/.claude AGENTS.md path: the cap applies there, and 20000 bytes
-# grows it, without needing a fixture repo root on disk.
+# Isolated fixture with a .git marker: the cap applies only at a repo root or in
+# ~/.claude, and the assertion must not depend on the live AGENTS.md size.
+$hookFixtureDir = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path (Join-Path $hookFixtureDir ".git") -Force | Out-Null
 $oversized = "y" * 20000
-$grownPath = (Join-Path $claudeHome "AGENTS.md").Replace('\', '/')
-$grown = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""$grownPath"",""content"":""$oversized""}}"
+$cappedFile = Join-Path $hookFixtureDir "AGENTS.md"
+[System.IO.File]::WriteAllText($cappedFile, $oversized)
+$grownPath = $cappedFile.Replace('\', '/')
+$grown = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""$grownPath"",""content"":""${oversized}y""}}"
 Assert-Match "growing AGENTS.md past its cap is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $grown).Output
+Remove-Item -Recurse -Force $hookFixtureDir
 
 # Runs in both modes: the runner hands the hook the real npm global root, so the
 # biome and ruff engines are reachable from a host sandbox run too.
