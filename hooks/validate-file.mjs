@@ -67,14 +67,28 @@ const DASH_CHAR_NAMES = {
 const EMOJI_HIGH_SURROGATE_MIN = 0xd83c;
 const EMOJI_HIGH_SURROGATE_MAX = 0xd83e;
 
-// BMP code points that render as emoji with no variation selector, plus VS16
-// (0xFE0F), which forces emoji presentation on whatever precedes it.
-const BMP_EMOJI_CHARS = new Set([
-  0xfe0f, 0x2705, 0x274c, 0x274e, 0x2728, 0x2757, 0x2764, 0x26a0, 0x2b50, 0x2b55,
-]);
+// Every BMP code point Unicode gives Emoji_Presentation=Yes, so it renders as an
+// emoji with no variation selector. Text-presentation symbols (0x2713 check,
+// 0x2192 arrow, 0x25B6 triangle, 0x2600 sun) are deliberately absent: they are
+// only emoji when 0xFE0F follows, which VS16 below catches on its own.
+const BMP_EMOJI_RANGES = [
+  [0x231a, 0x231b], [0x23e9, 0x23ec], [0x23f0, 0x23f0], [0x23f3, 0x23f3],
+  [0x25fd, 0x25fe], [0x2614, 0x2615], [0x2648, 0x2653], [0x267f, 0x267f],
+  [0x2693, 0x2693], [0x26a1, 0x26a1], [0x26aa, 0x26ab], [0x26bd, 0x26be],
+  [0x26c4, 0x26c5], [0x26ce, 0x26ce], [0x26d4, 0x26d4], [0x26ea, 0x26ea],
+  [0x26f2, 0x26f3], [0x26f5, 0x26f5], [0x26fa, 0x26fa], [0x26fd, 0x26fd],
+  [0x2705, 0x2705], [0x270a, 0x270b], [0x2728, 0x2728], [0x274c, 0x274c],
+  [0x274e, 0x274e], [0x2753, 0x2755], [0x2757, 0x2757], [0x2795, 0x2797],
+  [0x27b0, 0x27b0], [0x27bf, 0x27bf], [0x2b1b, 0x2b1c], [0x2b50, 0x2b50],
+  [0x2b55, 0x2b55],
+];
 
-// Instruction files that are loaded into every session, so every byte is
-// charged to every run. Basename (lowercased) -> byte cap.
+// Variation selector 16: forces emoji presentation on whatever precedes it.
+const VARIATION_SELECTOR_16 = 0xfe0f;
+
+// Instruction files loaded into every session, so every byte is charged to every
+// run. Basename (lowercased) -> byte cap; only the copies at a repo root or in
+// ~/.claude are capped, never a directory-scoped nested one.
 const DOC_SIZE_CAPS = {
   "agents.md": 16384,
   "claude.md": 16384,
@@ -195,9 +209,15 @@ function classifyDashChar(c) {
   return { why: `introduces a banned ${name} character`, fix };
 }
 
+function isBmpEmoji(c) {
+  return BMP_EMOJI_RANGES.some(([lo, hi]) => c >= lo && c <= hi);
+}
+
 function classifyEmojiChar(c) {
   const isEmoji =
-    (c >= EMOJI_HIGH_SURROGATE_MIN && c <= EMOJI_HIGH_SURROGATE_MAX) || BMP_EMOJI_CHARS.has(c);
+    (c >= EMOJI_HIGH_SURROGATE_MIN && c <= EMOJI_HIGH_SURROGATE_MAX) ||
+    c === VARIATION_SELECTOR_16 ||
+    isBmpEmoji(c);
   if (!isEmoji) return null;
   return { why: "introduces a banned emoji character", fix: FIX_EMOJI };
 }
@@ -208,6 +228,10 @@ function controlCharError(content) {
 
 function dashLiteralError(text) {
   return charScanError(text, classifyDashChar);
+}
+
+function emojiLiteralError(text) {
+  return charScanError(text, classifyEmojiChar);
 }
 
 // Scans only the text a tool call would INSERT, never the reconstructed full
@@ -238,14 +262,14 @@ function dashCharError(ti) {
 function fileAlreadyHasEmoji(filePath) {
   try {
     if (!exists(filePath)) return false;
-    return charScanError(fs.readFileSync(filePath, "utf8"), classifyEmojiChar) !== null;
+    return emojiLiteralError(fs.readFileSync(filePath, "utf8")) !== null;
   } catch {
     return true; // cannot read the file to tell: fail open like every other engine fault
   }
 }
 
 function emojiCharError(ti, filePath) {
-  const err = insertedTextError(ti, (text) => charScanError(text, classifyEmojiChar));
+  const err = insertedTextError(ti, emojiLiteralError);
   if (!err) return null;
   if (fileAlreadyHasEmoji(filePath)) return null;
   return err;
@@ -253,10 +277,18 @@ function emojiCharError(ti, filePath) {
 
 // Denies only writes that both exceed the cap and grow the file, so an oversized
 // instruction file can always be edited back down.
+// A repo root or ~/.claude itself. Anywhere else the file is directory-scoped,
+// loaded on demand rather than every session, so no cap applies.
+function holdsAlwaysLoadedDocs(dir) {
+  if (dir === path.join(os.homedir(), ".claude")) return true;
+  return exists(path.join(dir, ".git"));
+}
+
 function docSizeError(filePath, content) {
   const name = path.basename(filePath);
   const cap = DOC_SIZE_CAPS[name.toLowerCase()];
   if (!cap) return null;
+  if (!holdsAlwaysLoadedDocs(path.dirname(path.resolve(filePath)))) return null;
   const size = Buffer.byteLength(content, "utf8");
   if (size <= cap) return null;
   let priorSize = 0;

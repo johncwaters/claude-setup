@@ -11,7 +11,7 @@ of them as production and follow the shared rule below before editing any hook.
 |--------|-------|-----------|------|
 | `validate-file.mjs` | `PreToolUse` (Write/Edit/MultiEdit) | Yes, denies malformed writes | `README.md`, this file |
 | `enforce-spawn-model.mjs` | `PreToolUse` (Agent/Task) | Yes, denies subagent spawns with a missing or fable `model` | Header comment in the script |
-| `inject-routing.mjs` | `SessionStart` | No, prints context or nothing | Header comment in the script |
+| `inject-routing.mjs` | `SessionStart` | No, prints context or nothing | `README.md` |
 
 **Shared rule for every hook here: fail open.** Any error, malformed input, or
 unreadable file MUST result in allow (exit 0, no blocking output). A guard bug
@@ -112,9 +112,18 @@ expression`, and a `tsconfig.json` with `//` comments must ALLOW.
   0xD840 and up, so surrogate matching costs no false positives and needs no
   `codePointAt` rewrite. `fileAlreadyHasEmoji()` reads the file from disk ONLY
   after the insertion scan hits, so the common write pays nothing for it.
+- **`BMP_EMOJI_RANGES` is Unicode's Emoji_Presentation=Yes set, not a taste
+  call.** Symbols that default to text presentation (0x2713 check, 0x2192 arrow,
+  0x25B6 triangle, 0x2600 sun) stay legal on purpose: they are emoji only when
+  0xFE0F follows, and the 0xFE0F match catches exactly that. Widening the ranges
+  to whole blocks would start denying check marks and arrows in prose.
 - **`docSizeError()` denies growth, never size alone.** A write whose result is
   over cap but no larger than what is already on disk passes, otherwise an
   instruction file that went over budget could never be edited back down.
+- **The cap is scoped by directory, not basename alone.** Only a repo root (a
+  `.git` sibling) or `~/.claude` itself holds the always-loaded copies; a nested
+  `AGENTS.md` like this one is directory-scoped and loaded on demand, so capping
+  it by name would budget a file nobody pays for every session.
 - **`insertedTextError()` scans only the INSERTED text, never the reconstructed
   file.** It reads straight from `tool_input` (Write `content`, Edit
   `new_string`, each MultiEdit `edits[].new_string`), not the `content` string

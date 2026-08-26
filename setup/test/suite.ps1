@@ -705,8 +705,10 @@ $emojiChar = [string][char]0x2705
 $emojiWrite = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""a.md"",""content"":""one $emojiChar two""}}"
 Assert-Match "a new emoji is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $emojiWrite).Output
 
+# Uses the real ~/.claude AGENTS.md path: the cap applies there, and 20000 bytes
+# grows it, without needing a fixture repo root on disk.
 $oversized = "y" * 20000
-$grownPath = (Join-Path ([System.IO.Path]::GetTempPath()) "absent-dir/AGENTS.md").Replace('\', '/')
+$grownPath = (Join-Path $claudeHome "AGENTS.md").Replace('\', '/')
 $grown = "{""tool_name"":""Write"",""tool_input"":{""file_path"":""$grownPath"",""content"":""$oversized""}}"
 Assert-Match "growing AGENTS.md past its cap is denied" '"permissionDecision":\s*"deny"' (Invoke-NodeWithInput $hookScript $grown).Output
 

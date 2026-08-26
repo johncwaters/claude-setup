@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// SessionStart hook: injects ~/.claude/ROUTING.md so main-loop-only routing rules skip subagents and Codex dispatch; fails open on any error, like every other hook here.
+// SessionStart never fires for subagents, so it is the only seam that keeps
+// main-loop-only routing rules out of every spawn and out of the Codex mirror.
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -12,5 +13,5 @@ try {
   const routing = readFileSync(join(homedir(), ".claude", "ROUTING.md"), "utf8").trim();
   if (routing) process.stdout.write(LEAD_IN + routing);
 } catch {
-  // No ROUTING.md, unreadable, or any other fault: stay silent and allow.
+  // Fail open like every hook here: no routing context, AGENTS.md keeps a pointer.
 }
