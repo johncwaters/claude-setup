@@ -7,7 +7,7 @@ The interesting homegrown pieces:
 - `compiled-commit/`: a deterministic commit workflow compiled from a prompt into a Python runner with typed outcomes, plus its own eval bench (`bench/`) with an LLM judge for comparing the compiled runner against historical prompt-driven commits (the recorded scenario data, fixtures, and scored results came from private repositories and are not included)
 - `hooks/`: file-format guard, routing loader, and AGENTS.md sync hooks
 - `hud/`: custom status line
-- `skills/code-review`, `skills/release`: multi-lane review workflow and an evidence-gated release runner with a deterministic profile linter
+- `skills/code-review`, `skills/qa-swarm`, `skills/release`: a multi-lane review workflow, a router-led swarm review that converges several reviewer lanes into one deduplicated verdict, and an evidence-gated release runner with a deterministic profile linter
 - `setup/`: one-command idempotent machine bootstrap (see below)
 
 Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
@@ -16,7 +16,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
 
 - `profiles/`: per machine profile config. `personal/` and `work/` each hold a `CLAUDE.md`, a `commit.md`, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
 - `settings.base.json`: the settings shared by every profile (model, hooks, status line, effort, and so on), with `{{HOME}}` tokens that apply fills in for the machine
-- `skills/`: homegrown skills (code-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
+- `skills/`: homegrown skills (code-review, qa-swarm, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer)
 - `commands/`: custom slash commands (seo-audit is tracked directly; commit is rendered per profile, see Machine profiles below)
 - `hooks/`: file-format guard hook (validate-file) and routing loader (inject-routing)
