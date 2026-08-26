@@ -14,7 +14,7 @@ Lane-based review process. One scoped general reviewer by default; extra lanes a
 | General (default) | `code-reviewer` | sonnet | Every review. Logic defects, correctness, contracts |
 | Security | `security-reviewer` | opus | Diff touches auth, input handling, crypto, payments, PII, secrets, infrastructure, or destructive operations; or the user asks |
 | Organization | `structure-reviewer` | sonnet | Diff is a refactor, establishes a new module/boundary/layer, or moves responsibilities across existing ones; or the user asks. A commit merely containing new files does not trigger it |
-| Second opinion | ChatGPT via Codex CLI | external | Opt-in triggers below |
+| Second general opinion | ChatGPT via Codex CLI | external | Every review. Logic defects, correctness, contracts  |
 
 The general lane always runs. Add a lane only when its trigger holds; do not run all lanes by habit. When multiple lanes trigger, spawn their agents **in parallel** (one message, multiple Agent calls) and merge findings afterward.
 
@@ -50,27 +50,7 @@ One pass per lane. Never auto-run multi-agent cloud review; anything beyond thes
 - Merge multi-lane findings into one list, most severe first, deduplicating overlaps (keep the more specific finding).
 - LOW-CONFIDENCE findings: resolve with evidence already in hand when possible; otherwise verify or carry as an open question. Do not treat as blocking.
 
-### 4. Second opinion via ChatGPT (opt-in lane)
-
-Get an independent Codex review when any of these hold:
-
-- The user asks for a second opinion
-- A critical/high finding is contested: the reviewer and your own read disagree, or the fix is expensive and the finding is uncertain
-- The change is security-sensitive or risks data loss, and independent confirmation is cheap insurance (this compounds with, not replaces, the security lane)
-
-Dispatch (direct CLI, read-only sandbox, prompt via stdin to avoid Windows argv quoting). Write the prompt to a file, e.g. `prompt.txt` in the scratchpad, then:
-
-```
-codex exec -s read-only < prompt.txt
-```
-
-The prompt file must contain: repo path, the diff itself (Codex sees nothing from this session), the specific contested question or "independent severity-tagged review, blocking issues only", and an instruction to report findings without modifying anything.
-
-Reconcile:
-- Both agree: act on the shared verdict.
-- They disagree: present both verdicts to the user with your own recommendation. Do not silently pick one.
-
-### 5. Report
+### 4. Report
 
 Compact summary: files reviewed, lanes run and why, blocking count, findings one line each (merged, most severe first), second-opinion outcome if used, final recommendation.
 
@@ -79,4 +59,3 @@ Compact summary: files reviewed, lanes run and why, blocking count, findings one
 - Default cost is one sonnet agent pass on a scoped diff. Keep it there.
 - Each extra lane costs one more agent pass (security = opus, pricier; reserve it for its real triggers).
 - Never paste large diffs into agent prompts when the agent can run git itself.
-- The Codex lane costs one extra dispatch; use it when the triggers above hold, not by habit.
