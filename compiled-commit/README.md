@@ -41,8 +41,7 @@ list.
 | `code_review` | Severity-rated review (critical/high/medium/low) of the final diff | `claude-sonnet-5` | `src/schemas.py:CODE_REVIEW_SCHEMA` | 1 retry; unparseable/invalid after 2 total attempts is a blocking `REVIEW_DEAD` |
 | `commit_message` | Generate a conventional commit message from the final diff, branch, and recent commit subjects | `claude-sonnet-5` | `src/schemas.py:COMMIT_MESSAGE_SCHEMA` | 2 retries (3 total attempts); domain validation errors (banned characters, type enum, length, required trailers) are fed back into the retry the same way schema errors are; exhausted retries is `MESSAGE_INVALID` |
 
-`claude-haiku` is never permitted as a model; `src/llm.py` raises if the model string
-contains "haiku". Every LLM call goes through `src/llm.py:LlmClient`, which enforces the
+Every LLM call goes through `src/llm.py:LlmClient`, which enforces the
 retry bound, records per-attempt token usage, and extracts the first balanced JSON object
 from the response (stripping markdown fences first) regardless of live or replay mode.
 

@@ -15,7 +15,6 @@ from src.failures import LlmUsage
 from src.schemas import validate_schema
 
 DEFAULT_MODEL = "claude-sonnet-5"
-_BANNED_MODEL_SUBSTRING = "haiku"
 
 PREAMBLE = "Respond with a single JSON object matching this schema. No prose, no markdown, no tool use."
 
@@ -70,8 +69,6 @@ def _build_prompt(schema, body, errors):
 
 class LlmClient:
     def __init__(self, mode, model=DEFAULT_MODEL, fixtures_dir=None, record=False, cwd=None):
-        if _BANNED_MODEL_SUBSTRING in model.lower():
-            raise ValueError("claude-haiku is never permitted as a compiled-commit model")
         if mode not in ("live", "replay"):
             raise ValueError(f"unknown llm mode: {mode!r}")
         if mode == "replay" and not fixtures_dir:
