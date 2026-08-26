@@ -76,6 +76,8 @@ The router never spawns anything. It returns a plan; the main loop decides and d
 | `external` | Codex CLI | `gpt-5.6-sol`, effort `high` | Danger or complexity is HIGH. An independent frontier read of the same diff |
 | `tiebreak` | Grok CLI | default | Two lanes disagree on whether a specific finding is real, and the disagreement blocks the verdict |
 
+Every model id and CLI invocation above comes from the model table in `~/.claude/ROUTING.md`, which is the single source of truth and carries its own staleness stamp; re-read that row before dispatch rather than trusting the name here. The router and the `external` lane deliberately sit on different Codex tiers: the router is a cheap triage pass whose output is a plan, so it takes the `terra` tier, while `external` is a frontier read of a diff already known to be dangerous, which is what ROUTING.md reserves `sol` at `high` effort for. An id that errors means the table moved: fall back per the degradation rules in Step 4 and tell the carbon unit the row is stale.
+
 `code` always runs. Spawn every triggered lane in **one message, multiple calls**, so they run concurrently. `tiebreak` is the exception: it runs in Step 4, after a contradiction actually exists, and only on the contested findings.
 
 Every delegation prompt carries, per the delegation contract in `~/.claude/ROUTING.md`:
