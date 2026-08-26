@@ -213,7 +213,7 @@ Replay fixtures: when mode is replay, read `fixtures/<key>.json` (key passed by 
 `<scenario>_<call>`); when record flag set in live mode, write the same file.
 System-style preamble inside each prompt: "Respond with a single JSON object matching this
 schema. No prose, no markdown, no tool use." plus the schema itself.
-Default model: claude-sonnet-5. Never claude-haiku.
+Default model: claude-sonnet-5.
 
 ## Runner (runner.py)
 

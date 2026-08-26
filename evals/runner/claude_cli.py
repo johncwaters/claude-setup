@@ -2,7 +2,7 @@
 
 Mirrors compiled-commit/src/llm.py's mechanics: prompt goes over stdin (Windows argv caps
 near 32k chars), a nonzero exit is not fatal by itself since stdout can still hold a valid
-response, and claude-haiku is hard-banned as an eval model. Extended with a fixture
+response. Extended with a fixture
 replay/record mode keyed by (task, regime, trial) so scored runs can be reproduced offline.
 
 The agent subprocess runs with a scrubbed environment: PostHog credentials reach a run only
@@ -12,8 +12,6 @@ through the mcp regime's generated config file, never through inherited env vars
 import json
 import os
 import subprocess
-
-_BANNED_MODEL_SUBSTRING = "haiku"
 
 # run.py loads evals/.env into os.environ, so an unscrubbed subprocess hands every agent the
 # PostHog keys and project ids regardless of regime. A bundle-regime agent that reads them can
@@ -114,9 +112,6 @@ def _invoke_live(cmd, cwd, prompt, timeout_secs):
 
 def run(prompt, model, max_turns, cwd, disallowed_tools, task_id, regime, trial,
         replay_dir=None, record=False, timeout_secs=1800, mcp_config_path=None, allowed_tools=None):
-    if _BANNED_MODEL_SUBSTRING in model.lower():
-        raise ValueError("claude-haiku is never permitted as an eval model")
-
     if replay_dir and not record:
         raw = _read_fixture(replay_dir, task_id, regime, trial)
         return _parse_raw(raw)

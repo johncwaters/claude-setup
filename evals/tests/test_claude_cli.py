@@ -147,13 +147,6 @@ class ClaudeCliReplayTests(unittest.TestCase):
                 disallowed_tools=[], task_id="nope", regime="none", trial=1, replay_dir=self.replay_dir,
             )
 
-    def test_haiku_model_is_rejected_even_in_replay_mode(self):
-        with self.assertRaises(ValueError):
-            claude_cli.run(
-                prompt="x", model="claude-haiku-4-5-20251001", max_turns=1, cwd=self.replay_dir,
-                disallowed_tools=[], task_id="t", regime="none", trial=1, replay_dir=self.replay_dir,
-            )
-
 
 if __name__ == "__main__":
     unittest.main()
