@@ -286,3 +286,40 @@ test("a file staged outside --paths is committed with a warning naming it", () =
     cleanup(repo);
   }
 });
+
+test("a staged denylisted addition stops the run instead of riding along", () => {
+  const repo = makeRepo();
+  try {
+    commitFile(repo, "a.txt", "one\n");
+    writeFile(repo, "a.txt", "two\n");
+    writeFile(repo, ".env", "AWS_SECRET_ACCESS_KEY=real\n");
+    runGit(repo, ["add", "-f", "--", ".env"]);
+    const head = gitOutput(repo, ["rev-parse", "HEAD"]);
+
+    const { code, result } = land(repo, ["--no-push", "--paths", "a.txt"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "DENYLISTED_FILE_STAGED");
+    assert.equal(code, 25);
+    assert.deepEqual(result.files, [".env"]);
+    assert.equal(gitOutput(repo, ["rev-parse", "HEAD"]), head);
+  } finally {
+    cleanup(repo);
+  }
+});
+
+test("an already tracked denylisted file can still be changed", () => {
+  const repo = makeRepo();
+  try {
+    commitFile(repo, ".env.example", "TOKEN=replace-me\n");
+    writeFile(repo, ".env.example", "TOKEN=replace-me\nREGION=us-east-1\n");
+
+    const { result } = land(repo, ["--no-push"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.deepEqual(gitOutput(repo, ["show", "--name-only", "--format=", "HEAD"]).split("\n"), [
+      ".env.example",
+    ]);
+  } finally {
+    cleanup(repo);
+  }
+});

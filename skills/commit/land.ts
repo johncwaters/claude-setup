@@ -3,6 +3,7 @@ import { repositoryGuard } from "./lib/guard.ts";
 import { normalizeMessage, validateMessage } from "./lib/message.ts";
 import {
   committed,
+  denylistedFileStaged,
   emit,
   hookFailed,
   messageInvalid,
@@ -16,6 +17,7 @@ import { readStdin } from "./lib/stdio.ts";
 import {
   computeScope,
   findWorktreeForBranch,
+  isDenylisted,
   isDirtyStatusLineInScope,
   MAINLINE_CANDIDATES,
   resolveMainline,
@@ -32,6 +34,7 @@ type PromoteTarget = "develop" | "mainline";
 
 type FailureOutcome =
   | "NOTHING_TO_COMMIT"
+  | "DENYLISTED_FILE_STAGED"
   | "HOOK_FAILED"
   | "PUSH_FAILED"
   | "PROMOTE_CONFLICT"
@@ -116,6 +119,7 @@ class Landing {
   private readonly warnings: string[] = [];
   private readonly promoted: string[] = [];
   private readonly deletedRemoteBranches: string[] = [];
+  private denylistedStagedFiles: string[] = [];
   private conflicts: string[] = [];
   private pushed = false;
   private commitHash: string | null = null;
@@ -208,6 +212,9 @@ class Landing {
     if (outcome === "NOTHING_TO_COMMIT") {
       return nothingToCommit({ pushed: this.pushed, promoted: this.promoted, warnings: this.warnings });
     }
+    if (outcome === "DENYLISTED_FILE_STAGED") {
+      return denylistedFileStaged({ files: this.denylistedStagedFiles, warnings: this.warnings });
+    }
     return hookFailed({ warnings: this.warnings });
   }
 
@@ -220,6 +227,13 @@ class Landing {
 
     if (this.git.diffNameOnly({ cached: true }).length === 0) {
       return "NOTHING_TO_COMMIT";
+    }
+
+    // A denylisted path the scope filter never let in reached the index some other
+    // way, and a new .env leaves for origin in the same run as the commit.
+    this.denylistedStagedFiles = this.git.stagedAdditions().filter(isDenylisted);
+    if (this.denylistedStagedFiles.length > 0) {
+      return "DENYLISTED_FILE_STAGED";
     }
 
     const proc = this.git.commit(normalizeMessage(message));
