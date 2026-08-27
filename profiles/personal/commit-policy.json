@@ -1,0 +1,11 @@
+{
+  "profile": "personal",
+  "commitBranches": {
+    "forbid": [
+      "main",
+      "master"
+    ],
+    "onForbidden": "switch-to-develop"
+  },
+  "afterCommit": "promote"
+}

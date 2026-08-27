@@ -155,7 +155,8 @@ zero-context condition for those tasks.
 `<DIR>/<task>_<regime>_<trial>.json` instead of invoking `claude`) and record
 (`--record`, writes live responses to the same directory) so scored runs can be
 reproduced offline. Fixture shape matches real `claude -p --output-format json` output
-(see the compiled-commit fixture-replay pattern for the precedent).
+(the pattern came from the retired compiled-commit runner, recorded in
+`docs/compiled-commit-README.md`).
 
 Tests use stdlib `unittest`, no pytest, and real temp git repos (no git mocking); only
 external LLM and HTTP calls get canned. Run from inside `evals/`:

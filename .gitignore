@@ -10,14 +10,15 @@
 !AGENTS.md
 !ROUTING.md
 !settings.base.json
+!tsconfig.json
 !agents/**
 !docs/**
 !hud/**
 !commands/**
 !hooks/**
 !skills/**
+!types/**
 !setup/**
-!compiled-commit/**
 !profiles/**
 !evals/**
 

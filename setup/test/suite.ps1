@@ -341,7 +341,7 @@ Write-Host ($bootstrapOutput.Output -replace "(?m)^", "    | ")
 Assert-Ok "install.ps1 completes" $bootstrapOutput.Status
 Assert-Match "install.ps1 reports the repo it updated" "Repo found at" $bootstrapOutput.Output
 Assert-File "renders CLAUDE.md" (Join-Path $claudeHome "CLAUDE.md")
-Assert-File "renders commands\commit.md" (Join-Path $claudeHome "commands\commit.md")
+Assert-File "installs the commit skill" (Join-Path $claudeHome "skills\commit\SKILL.md")
 Assert-File "writes the profile marker" (Join-Path $claudeHome ".machine-profile")
 Assert-Equals "marker records the chosen profile" "personal" (Get-Content -LiteralPath (Join-Path $claudeHome ".machine-profile") -Raw).Trim()
 Assert-File "copies VSCodium settings" (Join-Path $env:APPDATA "VSCodium\User\settings.json")
@@ -355,9 +355,11 @@ Assert-Match "warns about the placeholder identity" "placeholder identity" $boot
 Assert-Match "stops before the install steps" "Installs skipped" $bootstrapOutput.Output
 Assert-RenderedSettings (Join-Path $claudeHome "settings.json")
 
-$commitDoc = Get-Content -LiteralPath (Join-Path $claudeHome "commands\commit.md") -Raw
-Assert-NoMatch "commit.md carries no Windows-only runner assumption" "compiled-commit\\runner\.py" $commitDoc
-Assert-Match "commit.md points at the portable runner path" "compiled-commit/runner\.py" $commitDoc
+Assert-NoFile "renders no commands\commit.md" (Join-Path $claudeHome "commands\commit.md")
+Assert-File "renders the profile commit policy" (Join-Path $claudeHome "profiles\personal\commit-policy.json")
+$commitSkill = Get-Content -LiteralPath (Join-Path $claudeHome "skills\commit\SKILL.md") -Raw
+Assert-NoMatch "the commit skill carries no Windows-only script assumption" "skills\\commit" $commitSkill
+Assert-Match "the commit skill points at the portable land path" "skills/commit/land\.ts" $commitSkill
 
 Phase "idempotency"
 

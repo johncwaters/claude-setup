@@ -523,7 +523,7 @@ printf '%s\n' "$bootstrapOutput" | sed 's/^/    | /'
 assertOk "install.sh completes" "$bootstrapStatus"
 assertMatch "install.sh reports the repo it updated" "Repo found at" "$bootstrapOutput"
 assertFile "renders CLAUDE.md" "$claudeHome/CLAUDE.md"
-assertFile "renders commands/commit.md" "$claudeHome/commands/commit.md"
+assertFile "installs the commit skill" "$claudeHome/skills/commit/SKILL.md"
 assertFile "writes the profile marker" "$claudeHome/.machine-profile"
 assertEquals "marker records the chosen profile" "personal" "$(cat "$claudeHome/.machine-profile")"
 assertFile "copies VSCodium settings" "$HOME/.config/VSCodium/User/settings.json"
@@ -542,9 +542,11 @@ assertMatch "stops before the install steps" "Installs skipped" "$bootstrapOutpu
 assertMatch "defers the settings render until node exists" "node not on PATH, will retry" "$bootstrapOutput"
 assertNoFile "writes no settings.json before node exists" "$claudeHome/settings.json"
 
-commitDoc="$(cat "$claudeHome/commands/commit.md")"
-assertNoMatch "commit.md carries no Windows separators in the runner path" 'compiled-commit\\runner' "$commitDoc"
-assertMatch "commit.md points at the portable runner path" 'compiled-commit/runner\.py' "$commitDoc"
+assertNoFile "renders no commands/commit.md" "$claudeHome/commands/commit.md"
+assertFile "renders the profile commit policy" "$claudeHome/profiles/personal/commit-policy.json"
+commitSkill="$(cat "$claudeHome/skills/commit/SKILL.md")"
+assertNoMatch "the commit skill carries no Windows separators in its script paths" 'skills\\commit' "$commitSkill"
+assertMatch "the commit skill points at the portable land path" 'skills/commit/land\.ts' "$commitSkill"
 
 phase "gitconfig prompt"
 

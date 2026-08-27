@@ -99,5 +99,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Everything else (compiled-commit, hooks, hud, setup scripts, agents, commands,
-posthog-error-triage, code-review and release skills) is original to this repo.
+Everything else (hooks, hud, setup scripts, agents, commands, posthog-error-triage,
+commit, code-review and release skills) is original to this repo.

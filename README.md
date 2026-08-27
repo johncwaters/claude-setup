@@ -4,21 +4,21 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
 
 The interesting homegrown pieces:
 
-- `compiled-commit/`: a deterministic commit workflow compiled from a prompt into a Python runner with typed outcomes, plus its own eval bench (`bench/`) with an LLM judge for comparing the compiled runner against historical prompt-driven commits (the recorded scenario data, fixtures, and scored results came from private repositories and are not included)
+- `skills/commit/`: a deterministic commit workflow with typed outcomes, whose git steps are TypeScript that node runs directly (no build, no `node_modules`), gated by `tsc --noEmit` and `node --test`. It replaced a Python runner whose design record is in `docs/compiled-commit-SPEC.md`
 - `hooks/`: file-format guard, routing loader, and AGENTS.md sync hooks
 - `hud/`: custom status line
-- `skills/code-review`, `skills/qa-swarm`, `skills/pr-review`, `skills/release`: a three-layer review ladder (qa-swarm finds across router-picked lanes, code-review triages and judges read-only, pr-review is the pull request entry point) plus an evidence-gated release runner with a deterministic profile linter
+- `skills/code-review`, `skills/qa-swarm`, `skills/pr-review`, `skills/release`: a three-layer review ladder (qa-swarm finds across router-picked lanes, code-review triages and judges read-only, pr-review is the pull request entry point) plus an evidence-gated release runner
 - `setup/`: one-command idempotent machine bootstrap (see below)
 
 Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
 
 ## What is tracked
 
-- `profiles/`: per machine profile config. `personal/` and `work/` each hold a `CLAUDE.md`, a `commit.md`, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
+- `profiles/`: per machine profile config. `personal/`, `server/`, and `work/` each hold a `CLAUDE.md`, a `commit-policy.json` read by the commit skill, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
 - `settings.base.json`: the settings shared by every profile (model, hooks, status line, effort, and so on), with `{{HOME}}` tokens that apply fills in for the machine
-- `skills/`: homegrown skills (code-review, qa-swarm, pr-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
+- `skills/`: homegrown skills (commit, code-review, qa-swarm, pr-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); each project repo keeps its release knowledge in a tracked `.claude/release-profile.json`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer, finding-fixer)
-- `commands/`: custom slash commands (seo-audit is tracked directly; commit is rendered per profile, see Machine profiles below)
+- `commands/`: custom slash commands (seo-audit; `/commit` is the `skills/commit` skill, not a command)
 - `hooks/`: file-format guard hook (validate-file) and routing loader (inject-routing)
 - `setup/`: everything beyond Claude Code
   - `vscodium/`: settings, keybindings, mcp.json, extensions.txt
@@ -33,7 +33,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
   - `collect.ps1` / `apply.ps1`: sync scripts (see below); `install.sh`, `apply.sh`, and `collect.sh` are the Linux ports, driven by the same profiles and the same tracked config
   - `test/`: acceptance suites for both ports, containerised on Linux and sandboxed on Windows (see Testing the setup scripts below)
 
-`CLAUDE.md`, `settings.json`, and `commands/commit.md` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, the two markdown files copied straight from the profile), so the live files exist on disk but git ignores them.
+`CLAUDE.md` and `settings.json` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, `CLAUDE.md` copied straight from the profile), so the live files exist on disk but git ignores them.
 
 Everything else in `~/.claude` (credentials, history, sessions, caches, plugins) is ignored. Plugins reinstall automatically on first launch from the `enabledPlugins` and `extraKnownMarketplaces` that end up in the rendered `settings.json`.
 
@@ -152,7 +152,18 @@ bash "$HOME/.claude/setup/install.sh"
 
 Pulls latest and applies. `-SkipInstalls` (`--skip-installs` on Linux) copies config only.
 
-Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md`, `settings.json`, and `commands/commit.md` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
+Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md` and `settings.json` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
+
+## Testing the commit skill
+
+The commit skill's git steps are TypeScript that node runs directly, and node strips types without checking them, so both gates matter:
+
+```bash
+tsc --noEmit                                   # the type gate node does not provide
+node --test skills/commit/test/*.test.ts       # real temp git repos, no git mocking
+```
+
+Needs node 22.18 or newer (type stripping) and the `typescript` global from `setup/npm-globals.txt`.
 
 ## Testing the setup scripts
 

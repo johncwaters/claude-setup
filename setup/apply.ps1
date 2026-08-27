@@ -23,6 +23,8 @@ $repoRoot = Split-Path -Parent $setupDir
 $counts = @{ applied = 0; installed = 0; present = 0; warned = 0 }
 $retrySettingsRender = $false
 $operatorGitHubOwner = ""
+$minimumNodeMajor = 22
+$minimumNodeMinor = 18
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
 function Write-Section([string]$title) {
@@ -112,13 +114,32 @@ function Copy-Config([string]$label, [string]$src, [string]$dest) {
     Note-Applied $label "updated"
 }
 
+# The commit skill is TypeScript that node runs by stripping types, stable since
+# 22.18, so an older node counts as absent rather than as "already installed".
+function Test-NodeCurrentEnough {
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return $false }
+    $versionText = (& node -v 2>$null)
+    if (-not $versionText) { return $false }
+    if ($versionText -notmatch "^v(?<major>\d+)\.(?<minor>\d+)") { return $false }
+    $major = [int]$Matches.major
+    $minor = [int]$Matches.minor
+    if ($major -gt $minimumNodeMajor) { return $true }
+    if ($major -lt $minimumNodeMajor) { return $false }
+    return ($minor -ge $minimumNodeMinor)
+}
+
+function Test-ToolPresent([string]$cmd) {
+    if ($cmd -eq "node") { return (Test-NodeCurrentEnough) }
+    return [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
+}
+
 function Install-WingetTool([string]$label, [string]$cmd, [string]$id) {
-    if (Get-Command $cmd -ErrorAction SilentlyContinue) { Note-Present $label "already installed"; return }
+    if (Test-ToolPresent $cmd) { Note-Present $label "already installed"; return }
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Note-Warned $label "winget missing, install manually"; return }
     Write-Line " .. " Yellow $label "installing via winget"
     winget install --id $id -e --silent --accept-source-agreements --accept-package-agreements | Out-Null
     Update-SessionPath
-    if (Get-Command $cmd -ErrorAction SilentlyContinue) { Note-Installed $label "installed"; return }
+    if (Test-ToolPresent $cmd) { Note-Installed $label "installed"; return }
     Note-Warned $label "installed, but open a new shell for PATH"
 }
 
@@ -436,7 +457,6 @@ if ($DryRun) {
         Write-Line " -- " DarkGray $s $state
         if ($s -eq "workflow-config") {
             Write-Host ("        CLAUDE.md: {0} -> {1}" -f (Join-Path $repoRoot "profiles\$Profile\CLAUDE.md"), (Join-Path $repoRoot "CLAUDE.md")) -ForegroundColor DarkGray
-            Write-Host ("        commit.md: {0} -> {1}" -f (Join-Path $repoRoot "profiles\$Profile\commit.md"), (Join-Path $repoRoot "commands\commit.md")) -ForegroundColor DarkGray
         }
         if ($s -eq "settings-render") {
             Write-Host ("        {0} + {1} -> {2}" -f (Join-Path $repoRoot "settings.base.json"), (Join-Path $repoRoot "profiles\$Profile\settings.overlay.json"), (Join-Path $repoRoot "settings.json")) -ForegroundColor DarkGray
@@ -556,10 +576,9 @@ if (Step-Enabled "workflow-config") {
     $claudeDest = Join-Path $repoRoot "CLAUDE.md"
     Backup-IfFirstRun $claudeDest $claudeSrc
     Copy-Config "CLAUDE.md" $claudeSrc $claudeDest
-    $commitSrc  = Join-Path $repoRoot "profiles\$Profile\commit.md"
-    $commitDest = Join-Path $repoRoot "commands\commit.md"
-    Backup-IfFirstRun $commitDest $commitSrc
-    Copy-Config "commit.md" $commitSrc $commitDest
+    if (Remove-PathIfPresent (Join-Path $repoRoot "commands\commit.md")) {
+        Note-Applied "commit.md" "removed; /commit is the commit skill"
+    }
 }
 if (-not (Step-Enabled "workflow-config")) { Note-Skipped "workflow config" }
 if (Step-Enabled "settings-render") { Invoke-SettingsRender }
