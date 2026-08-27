@@ -14,7 +14,7 @@ import time
 from src.failures import LlmUsage
 from src.schemas import validate_schema
 
-DEFAULT_MODEL = "claude-sonnet-5"
+DEFAULT_MODEL = "claude-opus-5"
 
 PREAMBLE = "Respond with a single JSON object matching this schema. No prose, no markdown, no tool use."
 

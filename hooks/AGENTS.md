@@ -10,7 +10,7 @@ of them as production and follow the shared rule below before editing any hook.
 | Script | Event | Can block? | Docs |
 |--------|-------|-----------|------|
 | `validate-file.mjs` | `PreToolUse` (Write/Edit/MultiEdit) | Yes, denies malformed writes | `README.md`, this file |
-| `enforce-spawn-model.mjs` | `PreToolUse` (Agent/Task) | Yes, denies subagent spawns with a missing or fable `model` | Header comment in the script |
+| `enforce-spawn-model.mjs` | `PreToolUse` (Agent/Task) | Yes, denies subagent spawns with a missing `model` | Header comment in the script |
 | `inject-routing.mjs` | `SessionStart` | No, prints context or nothing | `README.md` |
 
 **Shared rule for every hook here: fail open.** Any error, malformed input, or

@@ -21,7 +21,7 @@ Find, converge, return. Every lane emits the same structured format so the merge
 
 One cheap pass produces both a first-pass review and the delegation plan.
 
-Route it per `~/.claude/ROUTING.md` rule 1: Codex `gpt-5.6-terra`, prompt written to a temp file, dispatched with `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-terra < <file>`. Codex quota exhausted or the CLI errors: step down to `gpt-5.6-luna`, then fall back to a `sonnet` agent. Only the cost of the first pass changes.
+Route it per `~/.claude/ROUTING.md` rule 1: Codex `gpt-5.6-terra`, prompt written to a temp file, dispatched with `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-terra < <file>`. Codex quota exhausted or the CLI errors: step down to `gpt-5.6-luna`, then fall back to an `opus` agent. Only the cost of the first pass changes.
 
 Ask it for:
 
@@ -37,9 +37,9 @@ The router never spawns anything. It returns a plan; this skill decides and disp
 
 | Lane tag | Target | Model | Triggers when |
 |---|---|---|---|
-| `code` | `code-reviewer` agent | sonnet | Always. Logic defects, correctness, contracts |
-| `security` | `security-reviewer` agent | opus | Diff touches auth, input handling, crypto, payments, PII, secrets, infrastructure, or destructive operations |
-| `structure` | `structure-reviewer` agent | sonnet | Diff is a refactor, establishes a new module or boundary, or moves responsibilities across existing ones |
+| `code` | `code-reviewer` agent | opus | Always. Logic defects, correctness, contracts |
+| `security` | `security-reviewer` agent | fable | Diff touches auth, input handling, crypto, payments, PII, secrets, infrastructure, or destructive operations |
+| `structure` | `structure-reviewer` agent | opus | Diff is a refactor, establishes a new module or boundary, or moves responsibilities across existing ones |
 | `external` | Codex CLI | `gpt-5.6-sol`, effort `high` | Danger or complexity is HIGH. An independent frontier read of the same diff |
 | `tiebreak` | Grok CLI | default | Two lanes disagree on whether a specific finding is real. Runs in Step 3, never here |
 
@@ -47,7 +47,7 @@ The router never spawns anything. It returns a plan; this skill decides and disp
 
 | Lane | External route | Claude-only substitute |
 |---|---|---|
-| router | Codex `gpt-5.6-terra` | a `sonnet` agent, same prompt |
+| router | Codex `gpt-5.6-terra` | an `opus` agent, same prompt |
 | `external` | Codex `gpt-5.6-sol` | a second `opus` agent over the same diff, prompted adversarially to refute the other lanes' findings rather than to repeat them |
 | `tiebreak` | Grok | an `opus` agent given both positions and nothing else |
 
@@ -106,7 +106,7 @@ OVERALL_SUMMARY:
 
 `router`, `external`, and `tiebreak` are exempt at every stage, before or after dispatch: they run on an external CLI with its own quota and none is ever the sole coverage for a concern. Their failure degrades, never blocks:
 
-- Codex router unavailable: fall back down the tier ladder, then to a `sonnet` agent (Step 1). Every one of those failing means nobody rated danger or picked lanes, so **run `code`, `security`, and `structure` all three** and say the lane set was the no-router default. Running the always-on `code` lane alone would silently drop the security lane on a security-sensitive diff, which is the one failure this skill exists to prevent
+- Codex router unavailable: fall back down the tier ladder, then to an `opus` agent (Step 1). Every one of those failing means nobody rated danger or picked lanes, so **run `code`, `security`, and `structure` all three** and say the lane set was the no-router default. Running the always-on `code` lane alone would silently drop the security lane on a security-sensitive diff, which is the one failure this skill exists to prevent
 - Codex `external` unavailable: run without it and say so in the summary. A concern the router routed there re-routes to `code` or `security`. If no lane can safely cover it, emit it as a HIGH finding naming the lane that was unavailable
 - `tiebreak` unavailable: a contradiction is one defect claim plus one lane's verified-safe position, and only the claim is a finding, so there is no second finding to return. Emit the asserting lane's finding once, tagged `contested: <asserting lane> vs <disputing lane>`, with the disputing lane's reasoning in its body and `Confidence: low, tiebreak unavailable` at the end. That guarantees the caller triages it `AMBIGUOUS` rather than acting on a disputed claim
 

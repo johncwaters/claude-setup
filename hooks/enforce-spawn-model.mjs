@@ -3,13 +3,15 @@
  * PreToolUse guard for subagent spawns (Agent / Task tool calls).
  *
  * Enforces the CLAUDE.md routing rule that every spawn pins `model`
- * explicitly and never targets fable. The session model is
- * fable, so a spawn that omits `model` silently inherits it; prose in
- * CLAUDE.md cannot block that, this hook can (docs_must_be_enforceable).
+ * explicitly. The session model is fable, so a spawn that omits `model`
+ * silently inherits it and the choice of tier becomes an accident; prose
+ * in CLAUDE.md cannot block that, this hook can (docs_must_be_enforceable).
  *
  * Denies when:
- *   - `model` is missing or empty (would inherit the fable session model)
- *   - `model` names a fable tier
+ *   - `model` is missing or empty (would inherit the session model)
+ *
+ * fable is a permitted spawn target: the routing table lists it as a
+ * normal tier, so only the missing-pin case is a violation now.
  *
  * Allows everything else, including subagent_type "fork": the harness
  * ignores `model` for forks, so a deny would be unactionable there.
@@ -27,8 +29,9 @@ const SPAWN_TOOLS = new Set(["Agent", "Task"]);
 
 const PIN_HINT =
   'Re-issue the call with an explicit model: "opus" (default coding tier), ' +
-  '"sonnet" (one-shot mechanical slices), or "haiku" (one-shot basics whose ' +
-  'whole output is a short checkable answer).';
+  '"fable" (top tier, for the highest-stakes judgment), "sonnet" (one-shot ' +
+  'mechanical slices), or "haiku" (one-shot basics whose whole output is a ' +
+  'short checkable answer).';
 
 function allow() {
   process.exit(0);
@@ -69,13 +72,9 @@ function main() {
   if (model === "")
     deny(
       "Subagent spawn without an explicit model pin: omitting `model` " +
-        "inherits the fable session model, which is never a spawn target. " +
+        "inherits the session model, so the tier becomes an accident " +
+        "rather than a choice. " +
         PIN_HINT
-    );
-  if (model.includes("fable"))
-    deny(
-      "fable is the session/orchestrator model only and is never a spawn " +
-        "target. " + PIN_HINT
     );
 
   allow();
