@@ -219,7 +219,7 @@ Replay fixtures: when mode is replay, read `fixtures/<key>.json` (key passed by 
 `<scenario>_<call>`); when record flag set in live mode, write the same file.
 System-style preamble inside each prompt: "Respond with a single JSON object matching this
 schema. No prose, no markdown, no tool use." plus the schema itself.
-Default model: claude-sonnet-5.
+Default model: claude-opus-5.
 
 ## Runner (runner.py)
 
@@ -264,7 +264,7 @@ skip, do not fake.
 
 ## Judge (bench/judge.py)
 
-For each scenario result with a rendered message: one LLM call (claude-sonnet-5) comparing
+For each scenario result with a rendered message: one LLM call (claude-opus-5) comparing
 historical vs compiled message blind (random A/B order, seed from scenario id hash so it is
 reproducible without RNG state). Input: `git show --stat --format=` diffstat (max 80 lines)
 plus both messages labeled A and B. Output schema `{"winner": "A"|"B"|"tie", "reason": str}`.

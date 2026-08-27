@@ -15,7 +15,7 @@ so the agent can correct it immediately instead of guessing.
 | File | Purpose |
 |------|---------|
 | `validate-file.mjs` | The validator. Reads the hook payload on stdin, reconstructs the resulting file content, validates it, prints a `deny` decision (or nothing = allow). |
-| `enforce-spawn-model.mjs` | Spawn-model guard (separate hook, own header docs). Denies Agent/Task subagent spawns whose `model` is missing or fable, enforcing the CLAUDE.md routing rule that every spawn pins its tier explicitly. |
+| `enforce-spawn-model.mjs` | Spawn-model guard (separate hook, own header docs). Denies Agent/Task subagent spawns whose `model` is missing, enforcing the CLAUDE.md routing rule that every spawn pins its tier explicitly rather than inheriting the session model by accident. |
 | `inject-routing.mjs` | Routing loader (separate hook, own header docs). On `SessionStart` it prints `~/.claude/ROUTING.md` into the session. SessionStart never fires for subagents, so main-loop-only routing rules stay out of every spawn and out of the Codex mirror. |
 | `README.md` | This file. |
 | `AGENTS.md` | Instructions for an AI agent editing anything in this directory. |

@@ -37,9 +37,9 @@ list.
 
 | Name | Purpose | Model | Schema | Bounded retries |
 |---|---|---|---|---|
-| `slop_review` | Find AI-authored slop (dead code, duplicated helpers, useless comments, over-abstraction) in the diff, optionally propose a cleanup patch | `claude-sonnet-5` (configurable via `--model`) | `src/schemas.py:SLOP_REVIEW_SCHEMA` | 2 retries on the findings call; the separate patch-apply-error retry is capped at exactly 1 extra attempt |
-| `code_review` | Severity-rated review (critical/high/medium/low) of the final diff | `claude-sonnet-5` | `src/schemas.py:CODE_REVIEW_SCHEMA` | 1 retry; unparseable/invalid after 2 total attempts is a blocking `REVIEW_DEAD` |
-| `commit_message` | Generate a conventional commit message from the final diff, branch, and recent commit subjects | `claude-sonnet-5` | `src/schemas.py:COMMIT_MESSAGE_SCHEMA` | 2 retries (3 total attempts); domain validation errors (banned characters, type enum, length, required trailers) are fed back into the retry the same way schema errors are; exhausted retries is `MESSAGE_INVALID` |
+| `slop_review` | Find AI-authored slop (dead code, duplicated helpers, useless comments, over-abstraction) in the diff, optionally propose a cleanup patch | `claude-opus-5` (configurable via `--model`) | `src/schemas.py:SLOP_REVIEW_SCHEMA` | 2 retries on the findings call; the separate patch-apply-error retry is capped at exactly 1 extra attempt |
+| `code_review` | Severity-rated review (critical/high/medium/low) of the final diff | `claude-opus-5` | `src/schemas.py:CODE_REVIEW_SCHEMA` | 1 retry; unparseable/invalid after 2 total attempts is a blocking `REVIEW_DEAD` |
+| `commit_message` | Generate a conventional commit message from the final diff, branch, and recent commit subjects | `claude-opus-5` | `src/schemas.py:COMMIT_MESSAGE_SCHEMA` | 2 retries (3 total attempts); domain validation errors (banned characters, type enum, length, required trailers) are fed back into the retry the same way schema errors are; exhausted retries is `MESSAGE_INVALID` |
 
 Every LLM call goes through `src/llm.py:LlmClient`, which enforces the
 retry bound, records per-attempt token usage, and extracts the first balanced JSON object
@@ -202,7 +202,8 @@ file surviving fast-forward hops, and a master-only repo).
 
 Verified after implementation, during the benchmark phase: `bench/run_bench.py` executed
 end to end with live sonnet calls against all 13 private scenarios (11 COMMITTED,
-2 REVIEW_BLOCKED; fixtures recorded privately and not included); `bench/judge.py`
+2 REVIEW_BLOCKED; fixtures recorded privately and not included; the bench baseline
+predates the move to `claude-opus-5`); `bench/judge.py`
 executed against the 11 committed scenarios. The full results report is not included
 (recorded before the push stage existed, so it predates `pushed` in the result JSON).
 

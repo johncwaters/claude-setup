@@ -85,7 +85,7 @@ If unavailable: CWV scores as `N/A` and the score is renormalized over the remai
 
 ### Step 5 — Specialist analysis
 
-If `--no-agents` not set, dispatch one `general-purpose` agent (model sonnet) per category in parallel, passing the parsed JSON + headers. Each returns `{score, issues[], wins[]}`. Otherwise inline.
+If `--no-agents` not set, dispatch one `general-purpose` agent (model opus) per category in parallel, passing the parsed JSON + headers. Each returns `{score, issues[], wins[]}`. Otherwise inline.
 
 **On-Page** — title 50–60 chars, description 150–160 chars, exactly one H1, canonical self-referencing or correct, word count vs page-type minimum (homepage 300+, article 800+, product 200+, landing 500+). **Social/OG completeness** (flag each missing): `og:title`, `og:description`, `og:type`, `og:url`, `og:site_name`, `og:image` (+`:width` 1200, `:height` 630, `:type`, `:alt`, `:secure_url`), `twitter:card=summary_large_image`, `twitter:image`, `twitter:image:alt`. A `twitter:card=summary` (small square) instead of `summary_large_image`, or a missing `og:image`, is a High finding — the link renders as a bare text link on every platform. Missing `og:image:alt`/`twitter:image:alt` is a Low finding.
 
