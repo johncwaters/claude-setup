@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   cleanup,
   commitFile,
+  makePolicyRoot,
   makeRepo,
   preflight,
   runGit,
@@ -104,16 +105,45 @@ test("--paths restricts the reported scope", () => {
   }
 });
 
-test("a branch on the profile forbid list reports branchAllowed false", () => {
+test("a branch the applied profile forbids reports branchAllowed false", () => {
   const repo = makeRepo();
+  const policyRoot = makePolicyRoot("personal", {
+    profile: "personal",
+    commitBranches: { forbid: ["main", "master"], onForbidden: "switch-to-develop" },
+    afterCommit: "promote",
+  });
   try {
     commitFile(repo, "a.txt", "one\n");
-    const { result } = preflight(repo);
-    const policy = result.policy as { commitBranches?: { forbid?: string[] } } | undefined;
-    const forbidden = policy?.commitBranches?.forbid ?? [];
-    assert.equal(result.branchAllowed, !forbidden.includes(result.branch as string));
+    writeFile(repo, "a.txt", "two\n");
+
+    const onMain = preflight(repo, [], { CLAUDE_COMMIT_POLICY_ROOT: policyRoot });
+    assert.equal(onMain.result.branch, "main");
+    assert.equal(onMain.result.branchAllowed, false);
+    assert.equal(onMain.result.profile, "personal");
+    assert.equal("warnings" in onMain.result, false);
+
+    runGit(repo, ["checkout", "-q", "-b", "develop"]);
+    const onDevelop = preflight(repo, [], { CLAUDE_COMMIT_POLICY_ROOT: policyRoot });
+    assert.equal(onDevelop.result.branchAllowed, true);
   } finally {
-    cleanup(repo);
+    cleanup(repo, policyRoot);
+  }
+});
+
+test("a machine with no applied profile still guards mainline", () => {
+  const repo = makeRepo();
+  const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), "commit-skill-noprofile-"));
+  try {
+    commitFile(repo, "a.txt", "one\n");
+    writeFile(repo, "a.txt", "two\n");
+
+    const { result } = preflight(repo, [], { CLAUDE_COMMIT_POLICY_ROOT: emptyRoot });
+
+    assert.equal(result.branchAllowed, false);
+    assert.equal("policy" in result, false);
+    assert.match((result.warnings as string[]).join("\n"), /no machine profile marker/);
+  } finally {
+    cleanup(repo, emptyRoot);
   }
 });
 

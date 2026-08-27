@@ -7,7 +7,7 @@ The interesting homegrown pieces:
 - `skills/commit/`: a deterministic commit workflow with typed outcomes, whose git steps are TypeScript that node runs directly (no build, no `node_modules`), gated by `tsc --noEmit` and `node --test`. It replaced a Python runner whose design record is in `docs/compiled-commit-SPEC.md`
 - `hooks/`: file-format guard, routing loader, and AGENTS.md sync hooks
 - `hud/`: custom status line
-- `skills/code-review`, `skills/qa-swarm`, `skills/pr-review`, `skills/release`: a three-layer review ladder (qa-swarm finds across router-picked lanes, code-review triages and judges read-only, pr-review is the pull request entry point) plus an evidence-gated release runner with a deterministic profile linter
+- `skills/code-review`, `skills/qa-swarm`, `skills/pr-review`, `skills/release`: a three-layer review ladder (qa-swarm finds across router-picked lanes, code-review triages and judges read-only, pr-review is the pull request entry point) plus an evidence-gated release runner
 - `setup/`: one-command idempotent machine bootstrap (see below)
 
 Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
@@ -18,7 +18,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
 - `settings.base.json`: the settings shared by every profile (model, hooks, status line, effort, and so on), with `{{HOME}}` tokens that apply fills in for the machine
 - `skills/`: homegrown skills (commit, code-review, qa-swarm, pr-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); each project repo keeps its release knowledge in a tracked `.claude/release-profile.json`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer, finding-fixer)
-- `commands/`: custom slash commands (seo-audit is tracked directly; commit is rendered per profile, see Machine profiles below)
+- `commands/`: custom slash commands (seo-audit; `/commit` is the `skills/commit` skill, not a command)
 - `hooks/`: file-format guard hook (validate-file) and routing loader (inject-routing)
 - `setup/`: everything beyond Claude Code
   - `vscodium/`: settings, keybindings, mcp.json, extensions.txt
@@ -153,6 +153,17 @@ bash "$HOME/.claude/setup/install.sh"
 Pulls latest and applies. `-SkipInstalls` (`--skip-installs` on Linux) copies config only.
 
 Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md` and `settings.json` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
+
+## Testing the commit skill
+
+The commit skill's git steps are TypeScript that node runs directly, and node strips types without checking them, so both gates matter:
+
+```bash
+tsc --noEmit                                   # the type gate node does not provide
+node --test skills/commit/test/*.test.ts       # real temp git repos, no git mocking
+```
+
+Needs node 22.18 or newer (type stripping) and the `typescript` global from `setup/npm-globals.txt`.
 
 ## Testing the setup scripts
 

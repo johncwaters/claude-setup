@@ -5,8 +5,6 @@ export const EXIT_CODES = {
   DETACHED_HEAD: 11,
   OPERATION_IN_PROGRESS: 12,
   NOTHING_TO_COMMIT: 13,
-  SYNC_DIVERGED: 14,
-  MERGE_CONFLICT: 15,
   MESSAGE_INVALID: 20,
   HOOK_FAILED: 21,
   PUSH_FAILED: 22,
@@ -71,6 +69,9 @@ function defineOutcome<const Specs extends FieldSpecs>(outcome: OutcomeName, spe
     const fields = payload as Record<string, unknown>;
     for (const [name, value] of Object.entries(fields)) {
       if (name === "warnings") {
+        if (!matchesKind("stringList", value)) {
+          throw new Error(`${outcome} field warnings must be a stringList`);
+        }
         continue;
       }
       const spec = specs[name];
@@ -110,6 +111,8 @@ export const committed = defineOutcome("COMMITTED", {
   promoted: required("stringList"),
 });
 
+export const messageValid = defineOutcome("READY", {});
+
 export const notARepo = defineOutcome("NOT_A_REPO", {});
 
 export const detachedHead = defineOutcome("DETACHED_HEAD", {});
@@ -121,14 +124,6 @@ export const operationInProgress = defineOutcome("OPERATION_IN_PROGRESS", {
 export const nothingToCommit = defineOutcome("NOTHING_TO_COMMIT", {
   pushed: optional("boolean"),
   promoted: optional("stringList"),
-});
-
-export const syncDiverged = defineOutcome("SYNC_DIVERGED", {
-  branch: required("string"),
-});
-
-export const mergeConflict = defineOutcome("MERGE_CONFLICT", {
-  conflicts: required("stringList"),
 });
 
 export const messageInvalid = defineOutcome("MESSAGE_INVALID", {

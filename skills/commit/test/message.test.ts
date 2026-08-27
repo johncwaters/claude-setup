@@ -94,3 +94,16 @@ test("findBannedChars reports each banned class once, sorted", () => {
 test("normalizeMessage collapses trailing newlines to exactly one", () => {
   assert.equal(normalizeMessage("feat: x\r\n\r\nbody\n\n\n"), "feat: x\n\nbody\n");
 });
+
+test("a malformed line inside a trailer block is an error, not prose", () => {
+  const errors = validateMessage("feat: add a thing\n\nBody.\n\nConfidence: high\nScope-risk:");
+  assert.ok(errors.some((error) => error.includes("trailer line must be")));
+  assert.ok(errors.some((error) => error.includes("Scope-risk trailer is required")));
+});
+
+test("a misspelled trailer beside a real one is still rejected", () => {
+  const errors = validateMessage(
+    "feat: add a thing\n\nBody.\n\nConfidence: high\nScope-risk: narrow\nConfidance: high",
+  );
+  assert.ok(errors.some((error) => error.includes("unknown trailer")));
+});

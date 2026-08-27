@@ -72,20 +72,3 @@ export function findWorktreeForBranch(porcelainText: string, branch: string): st
   }
   return null;
 }
-
-export function guardBranches(policy: Record<string, unknown> | undefined): string[] {
-  const commitBranches = policy?.commitBranches as { forbid?: unknown } | undefined;
-  const forbid = commitBranches?.forbid;
-  if (!Array.isArray(forbid)) {
-    return [];
-  }
-  return forbid.filter((entry): entry is string => typeof entry === "string");
-}
-
-export async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}

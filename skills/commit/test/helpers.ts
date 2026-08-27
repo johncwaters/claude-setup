@@ -78,12 +78,14 @@ export function runSkillScript(
   repo: string,
   args: string[],
   message = "",
+  env: Record<string, string> = {},
 ): RunResult {
   const proc = spawnSync("node", [path.join(SKILL_DIR, script), ...args], {
     cwd: repo,
     input: message,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
+    env: { ...process.env, ...env },
   });
   const stdout = proc.stdout ?? "";
   const stderr = proc.stderr ?? "";
@@ -96,10 +98,41 @@ export function land(repo: string, args: string[], message: string): RunResult {
   return runSkillScript("land.ts", repo, ["--push-retry-delay-ms", "0", ...args], message);
 }
 
-export function preflight(repo: string, args: string[] = []): RunResult {
-  return runSkillScript("preflight.ts", repo, args);
+export function preflight(
+  repo: string,
+  args: string[] = [],
+  env: Record<string, string> = {},
+): RunResult {
+  return runSkillScript("preflight.ts", repo, args, "", env);
+}
+
+export function makePolicyRoot(profile: string, policy: Record<string, unknown>): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "commit-skill-policy-"));
+  fs.writeFileSync(path.join(root, ".machine-profile"), `${profile}\n`, "utf8");
+  const profileDir = path.join(root, "profiles", profile);
+  fs.mkdirSync(profileDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(profileDir, "commit-policy.json"),
+    `${JSON.stringify(policy, null, 2)}\n`,
+    "utf8",
+  );
+  return root;
 }
 
 export const VALID_MESSAGE = ["feat: add a thing", "", "A body line.", "", "Confidence: high", "Scope-risk: narrow"].join(
   "\n",
 );
+
+export function writeCommitMsgRejectHook(repo: string): void {
+  const hooksDir = path.join(repo, ".git", "hooks");
+  fs.mkdirSync(hooksDir, { recursive: true });
+  const hookPath = path.join(hooksDir, "commit-msg");
+  fs.writeFileSync(
+    hookPath,
+    ["#!/bin/sh", 'grep -q "^Merge " "$1" || exit 0', 'echo "merge commits are not allowed here" >&2', "exit 1", ""].join(
+      "\n",
+    ),
+    "utf8",
+  );
+  fs.chmodSync(hookPath, 0o755);
+}

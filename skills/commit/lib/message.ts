@@ -1,4 +1,4 @@
-const ALLOWED_TYPES = [
+export const ALLOWED_TYPES = [
   "feat",
   "fix",
   "refactor",
@@ -11,7 +11,7 @@ const ALLOWED_TYPES = [
   "ci",
 ] as const;
 
-const TRAILER_LABELS = [
+export const TRAILER_LABELS = [
   "Constraint",
   "Rejected",
   "Directive",
@@ -20,7 +20,7 @@ const TRAILER_LABELS = [
   "Not-tested",
 ] as const;
 
-const REQUIRED_TRAILER_LABELS = ["Confidence", "Scope-risk"] as const;
+export const REQUIRED_TRAILER_LABELS = ["Confidence", "Scope-risk"] as const;
 
 const TRAILER_VALUES: Record<string, readonly string[]> = {
   Confidence: ["high", "medium", "low"],
@@ -67,20 +67,19 @@ export function findBannedChars(text: string): string[] {
   return [...found].sort();
 }
 
+function startsWithKnownTrailer(line: string): boolean {
+  return TRAILER_LABELS.some((label) => line.startsWith(`${label}:`));
+}
+
+// A block is trailers as soon as one line names a known trailer, not only when
+// every line parses: a malformed line there is an error, not prose.
 function trailerBlockLines(lines: string[]): string[] {
   const lastBlankIndex = lines.lastIndexOf("");
   if (lastBlankIndex === -1) {
     return [];
   }
   const block = lines.slice(lastBlankIndex + 1);
-  if (block.length === 0) {
-    return [];
-  }
-  if (!block.every((line) => TRAILER_PATTERN.test(line))) {
-    return [];
-  }
-  const labels = block.map((line) => line.slice(0, line.indexOf(":")));
-  if (!labels.some((label) => (TRAILER_LABELS as readonly string[]).includes(label))) {
+  if (!block.some(startsWithKnownTrailer)) {
     return [];
   }
   return block;
@@ -118,8 +117,12 @@ function validateTrailers(block: string[], errors: string[]): void {
   const values = new Map<string, string>();
   for (const line of block) {
     const match = TRAILER_PATTERN.exec(line);
-    const label = match?.groups?.label ?? "";
-    const value = match?.groups?.value ?? "";
+    if (!match?.groups) {
+      errors.push(`trailer line must be \`<Label>: <value>\`, got ${JSON.stringify(line)}`);
+      continue;
+    }
+    const label = match.groups.label ?? "";
+    const value = match.groups.value ?? "";
     if (!(TRAILER_LABELS as readonly string[]).includes(label)) {
       errors.push(
         `unknown trailer ${JSON.stringify(label)}; allowed trailers are ${TRAILER_LABELS.join(", ")}`,

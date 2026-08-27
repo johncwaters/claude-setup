@@ -120,8 +120,10 @@ export class Git {
     return nonEmptyLines(this.run(scoped(base, options.paths ?? [])).stdout);
   }
 
+  // --untracked-files=all, because the default collapses a new directory into one
+  // `?? dir/` line and the denylist would then never see the .env or log inside it.
   statusShort(paths: string[] = []): string[] {
-    return nonEmptyLines(this.run(scoped(["status", "--short"], paths)).stdout);
+    return nonEmptyLines(this.run(scoped(["status", "--short", "-uall"], paths)).stdout);
   }
 
   statusShortIn(worktreePath: string): string[] {

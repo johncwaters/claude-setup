@@ -244,3 +244,45 @@ test("a pre-push hook that never passes exhausts the retries", () => {
     cleanup(origin, repo);
   }
 });
+
+test("a nested denylisted file is not staged through its parent directory", () => {
+  const repo = makeRepo();
+  try {
+    commitFile(repo, "a.txt", "one\n");
+    writeFile(repo, "feature/index.ts", "export const x = 1;\n");
+    writeFile(repo, "feature/.env.local", "SECRET=1\n");
+    writeFile(repo, "feature/debug.log", "noise\n");
+
+    const { result } = land(repo, ["--no-push"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.deepEqual(gitOutput(repo, ["show", "--name-only", "--format=", "HEAD"]).split("\n"), [
+      "feature/index.ts",
+    ]);
+    assert.match(gitOutput(repo, ["status", "--short"]), /feature\/\.env\.local/);
+  } finally {
+    cleanup(repo);
+  }
+});
+
+test("a file staged outside --paths is committed with a warning naming it", () => {
+  const repo = makeRepo();
+  try {
+    commitFile(repo, "a.txt", "one\n");
+    commitFile(repo, "b.txt", "one\n");
+    writeFile(repo, "a.txt", "two\n");
+    writeFile(repo, "b.txt", "someone else staged this\n");
+    runGit(repo, ["add", "--", "b.txt"]);
+
+    const { result } = land(repo, ["--no-push", "--paths", "a.txt"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.match((result.warnings as string[]).join("\n"), /already staged outside --paths.*b\.txt/);
+    assert.deepEqual(gitOutput(repo, ["show", "--name-only", "--format=", "HEAD"]).split("\n"), [
+      "a.txt",
+      "b.txt",
+    ]);
+  } finally {
+    cleanup(repo);
+  }
+});

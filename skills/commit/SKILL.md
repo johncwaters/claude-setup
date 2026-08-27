@@ -23,8 +23,10 @@ resolves in both bash and PowerShell.
 ## Step 1: preflight
 
 Run `preflight.ts` first, with `--paths` when you know exactly which files this session
-changed (it keeps another session's work-in-progress out of the commit). Pass the same
-restriction to `/code-review` later.
+changed. It scopes what this run stages and reports, which is what keeps another session's
+unstaged work out of the commit; anything already in the index rides along regardless,
+because git commits the whole index, and `land.ts` names those files in `warnings`. Pass
+the same restriction to `/code-review` later.
 
 It answers four things: the outcome (`READY` or a refusal), the current `branch` and
 whether `branchAllowed` permits committing on it, the `changed` and `untracked` files that
@@ -38,8 +40,9 @@ branch. Read `policy.commitBranches.onForbidden`:
 - `create-feature-branch`: create a branch named for the work item, switch to it, proceed.
 
 **No policy.** A missing `policy` field (the warning names the reason) means the machine
-profile has not been applied. Do not promote: run `land.ts` without `--promote` and tell
-the user to run `setup/apply`.
+profile has not been applied. `main` and `master` are still guarded, so `branchAllowed`
+still answers the branch question. Do not promote: run `land.ts` without `--promote` and
+tell the user to run `setup/apply`.
 
 ## Step 2: review loop
 
@@ -112,8 +115,8 @@ Not-tested: ...
 `type` is one of feat, fix, refactor, chore, docs, test, style, perf, build, ci.
 `description` is one line, 72 characters or fewer, no trailing period. Trailers are
 optional as a block, but a message that carries any trailer must carry `Confidence` and
-`Scope-risk`; `Constraint`, `Rejected`, `Directive`, and `Not-tested` are included only
-when they apply. Omit the whole trailer block only for a genuinely trivial change (a
+must carry `Scope-risk`; `Constraint`, `Rejected`, `Directive`, and `Not-tested` are
+included only when they apply. Omit the whole trailer block only for a genuinely trivial change (a
 version bump with no logic change). Never an em dash, en dash, or emoji anywhere.
 
 Check a draft before landing with `node "$HOME/.claude/skills/commit/preflight.ts"
@@ -140,7 +143,8 @@ Flags:
 
 - `--paths <file-or-dir> ...`: the same restriction passed to preflight and `/code-review`.
   Omit it only when the user asked to commit everything or you cannot enumerate what
-  changed.
+  changed. A `warnings` entry naming files "already staged outside --paths" means the index
+  carried work this run never scoped; say so when you report.
 - `--promote`: pass it when `policy.afterCommit` is `promote`. It carries the commit
   through develop into main/master. Omit it when the user asked for commit-only ("commit
   only", "don't merge"), when `policy.afterCommit` is `pull-request`, or when there is no
@@ -229,8 +233,3 @@ Read `policy.afterCommit`:
   master by the release flow, never skipping develop. Reviewing a work pull request belongs
   to `/org-pr-review`; `/pr-review` is only a supplemental audit trail, and only when asked
   for by name.
-
-## Tests
-
-`tsc --noEmit` and `node --test skills/commit/test/*.test.ts` from the repo root. Node
-strips types without checking them, so the `tsc` gate is what makes the types real.

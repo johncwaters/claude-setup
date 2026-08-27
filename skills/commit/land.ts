@@ -1,30 +1,25 @@
 import { Git, type PushRefResult, type PushRefStatus, type PushResult } from "./lib/git.ts";
+import { repositoryGuard } from "./lib/guard.ts";
 import { normalizeMessage, validateMessage } from "./lib/message.ts";
 import {
   committed,
-  detachedHead,
   emit,
   hookFailed,
   messageInvalid,
-  notARepo,
   nothingToCommit,
-  operationInProgress,
   promoteConflict,
   promoteFailed,
   pushFailed,
-  type OutcomeName,
   type Result,
 } from "./lib/outcome.ts";
+import { readStdin } from "./lib/stdio.ts";
 import {
   computeScope,
   findWorktreeForBranch,
   isDirtyStatusLineInScope,
   MAINLINE_CANDIDATES,
-  readStdin,
   resolveMainline,
 } from "./lib/workspace.ts";
-
-const IN_PROGRESS_MARKERS = ["MERGE_HEAD", "REBASE_HEAD", "CHERRY_PICK_HEAD"] as const;
 
 const PUSH_ATTEMPTS = 3;
 
@@ -34,6 +29,13 @@ const PUSH_ATTEMPTS = 3;
 const ATOMIC_COLLATERAL_PATTERN = /atomic push fail/;
 
 type PromoteTarget = "develop" | "mainline";
+
+type FailureOutcome =
+  | "NOTHING_TO_COMMIT"
+  | "HOOK_FAILED"
+  | "PUSH_FAILED"
+  | "PROMOTE_CONFLICT"
+  | "PROMOTE_FAILED";
 
 type PendingPushRef = { branch: string; kind: "feature" | "promote"; source?: string };
 
@@ -52,7 +54,7 @@ function sleep(milliseconds: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
-export function parseArguments(argv: string[]): Arguments {
+function parseArguments(argv: string[]): Arguments {
   const parsed: Arguments = {
     paths: [],
     promote: false,
@@ -108,7 +110,7 @@ export function parseArguments(argv: string[]): Arguments {
   return parsed;
 }
 
-export class Landing {
+class Landing {
   private readonly git: Git;
   private readonly config: Arguments;
   private readonly warnings: string[] = [];
@@ -125,7 +127,7 @@ export class Landing {
   }
 
   run(message: string): Result {
-    const guard = this.guard();
+    const guard = repositoryGuard(this.git);
     if (guard) {
       return guard;
     }
@@ -165,21 +167,6 @@ export class Landing {
     });
   }
 
-  private guard(): Result | null {
-    if (!this.git.isInsideWorkTree()) {
-      return notARepo({});
-    }
-    if (this.git.currentBranch() === "HEAD") {
-      return detachedHead({});
-    }
-    for (const marker of IN_PROGRESS_MARKERS) {
-      if (this.git.verifyRef(marker)) {
-        return operationInProgress({ operation: marker });
-      }
-    }
-    return null;
-  }
-
   private landNothing(): Result {
     if (!this.config.promote) {
       return nothingToCommit({ warnings: this.warnings });
@@ -195,7 +182,7 @@ export class Landing {
     });
   }
 
-  private failure(outcome: OutcomeName): Result {
+  private failure(outcome: FailureOutcome): Result {
     const state = {
       ...(this.commitHash ? { commit: this.commitHash } : {}),
       pushed: this.pushed,
@@ -217,7 +204,8 @@ export class Landing {
     return hookFailed({ warnings: this.warnings });
   }
 
-  private commit(message: string, untracked: string[]): OutcomeName | null {
+  private commit(message: string, untracked: string[]): FailureOutcome | null {
+    this.warnAboutStagedFilesOutsideScope();
     this.git.addUpdate(this.config.paths);
     for (const filePath of untracked) {
       this.git.addPath(filePath);
@@ -237,7 +225,25 @@ export class Landing {
     return null;
   }
 
-  private pushFeatureBranch(): OutcomeName | null {
+  // git commits the whole index, so anything another session staged rides along
+  // even under --paths; the caller has to hear about what it did not review.
+  private warnAboutStagedFilesOutsideScope(): void {
+    if (this.config.paths.length === 0) {
+      return;
+    }
+    const inScope = new Set(this.git.diffNameOnly({ cached: true, paths: this.config.paths }));
+    const outOfScope = this.git
+      .diffNameOnly({ cached: true })
+      .filter((filePath) => !inScope.has(filePath));
+    if (outOfScope.length === 0) {
+      return;
+    }
+    this.warnings.push(
+      `already staged outside --paths and committed anyway: ${outOfScope.join(", ")}`,
+    );
+  }
+
+  private pushFeatureBranch(): FailureOutcome | null {
     if (this.config.noPush) {
       return null;
     }
@@ -268,7 +274,7 @@ export class Landing {
     return null;
   }
 
-  private promote(): OutcomeName | null {
+  private promote(): FailureOutcome | null {
     const originExists = this.git.listRemotes().includes("origin");
     this.prefetchPromotionBranches(originExists);
 
@@ -327,7 +333,7 @@ export class Landing {
       pendingRefs.push({ branch: destination, kind: "promote", source });
     }
 
-    return this.pushPromotedBatch(pendingRefs, promotedBranches);
+    return this.pushPromotedBatch(pendingRefs, promotedBranches, hops);
   }
 
   private promotionHops(current: string, mainline: string | null): Array<[string, string]> {
@@ -393,7 +399,7 @@ export class Landing {
     source: string,
     destination: string,
     originExists: boolean,
-  ): OutcomeName | null {
+  ): FailureOutcome | null {
     if (originExists) {
       const outcome = this.syncDestinationWithOrigin(destination);
       if (outcome) {
@@ -426,7 +432,7 @@ export class Landing {
     this.noOriginPromoteWarned = true;
   }
 
-  private syncDestinationWithOrigin(destination: string, fetchRemote = false): OutcomeName | null {
+  private syncDestinationWithOrigin(destination: string, fetchRemote = false): FailureOutcome | null {
     if (fetchRemote) {
       const fetch = this.git.fetch("origin", destination);
       if (fetch.code !== 0) {
@@ -452,7 +458,7 @@ export class Landing {
   private handleDestinationOriginUpdate(
     destination: string,
     update: { code: number; stderr: string },
-  ): OutcomeName | null {
+  ): FailureOutcome | null {
     if (update.code === 0) {
       return null;
     }
@@ -483,7 +489,7 @@ export class Landing {
     source: string,
     destination: string,
     stderr: string,
-  ): OutcomeName | null {
+  ): FailureOutcome | null {
     if (stderr.includes("checked out")) {
       return this.fastForwardInHoldingWorktree(source, destination);
     }
@@ -496,7 +502,7 @@ export class Landing {
     return this.mergeForPromotion(source, destination);
   }
 
-  private fastForwardInHoldingWorktree(source: string, destination: string): OutcomeName | null {
+  private fastForwardInHoldingWorktree(source: string, destination: string): FailureOutcome | null {
     const worktrees = this.git.worktreeListPorcelain();
     const holder =
       worktrees.code === 0 ? findWorktreeForBranch(worktrees.stdout, destination) : null;
@@ -528,7 +534,7 @@ export class Landing {
     return null;
   }
 
-  private mergeForPromotion(source: string, destination: string): OutcomeName | null {
+  private mergeForPromotion(source: string, destination: string): FailureOutcome | null {
     const dirty = this.git
       .statusShort()
       .filter((line) => !line.startsWith("??") && isDirtyStatusLineInScope(line));
@@ -548,16 +554,23 @@ export class Landing {
 
     const merge = this.git.mergeNoEdit(source);
     if (merge.code !== 0) {
-      this.conflicts = this.git.conflictingFiles();
+      const conflicts = this.git.conflictingFiles();
       this.git.mergeAbort();
       const restoreAfterConflict = this.git.checkout(original);
       if (restoreAfterConflict.code !== 0) {
         this.warnings.push(
-          `aborted the conflicted merge of ${source} into ${destination} but could not return to ${original}; repository left on ${destination}: ${restoreAfterConflict.stderr.trim()}`,
+          `aborted the failed merge of ${source} into ${destination} but could not return to ${original}; repository left on ${destination}: ${restoreAfterConflict.stderr.trim()}`,
         );
       }
+      if (conflicts.length === 0) {
+        this.warnings.push(
+          `merging ${source} into ${destination} failed without conflicts; promotion stopped: ${merge.stderr.trim()}`,
+        );
+        return "PROMOTE_FAILED";
+      }
+      this.conflicts = conflicts;
       this.warnings.push(
-        `merge conflict promoting ${source} into ${destination}: ${this.conflicts.join(", ")}`,
+        `merge conflict promoting ${source} into ${destination}: ${conflicts.join(", ")}`,
       );
       return "PROMOTE_CONFLICT";
     }
@@ -575,7 +588,7 @@ export class Landing {
   private resyncPromotedDestination(
     source: string | undefined,
     destination: string,
-  ): OutcomeName | null {
+  ): FailureOutcome | null {
     const outcome = this.syncDestinationWithOrigin(destination, true);
     if (outcome) {
       return outcome;
@@ -621,8 +634,8 @@ export class Landing {
   private pushPendingRefs(
     pendingRefs: PendingPushRef[],
     setUpstream: boolean,
-    exhaustedOutcome: OutcomeName,
-  ): OutcomeName | null {
+    exhaustedOutcome: FailureOutcome,
+  ): FailureOutcome | null {
     if (pendingRefs.length === 0) {
       return null;
     }
@@ -650,7 +663,8 @@ export class Landing {
   private pushPromotedBatch(
     pendingRefs: PendingPushRef[],
     promotedBranches: string[],
-  ): OutcomeName | null {
+    hops: Array<[string, string]>,
+  ): FailureOutcome | null {
     const { refsToPush, skippedRefs } = this.partitionUpToDateRefs(pendingRefs);
     this.markSkippedPushRefs(skippedRefs, promotedBranches);
     if (refsToPush.length === 0) {
@@ -683,6 +697,7 @@ export class Landing {
         refsToPush,
         rejectedRefs,
         promotedBranches,
+        hops,
         push,
       );
     }
@@ -713,11 +728,23 @@ export class Landing {
     refsToPush: PendingPushRef[],
     rejectedRefs: PendingPushRef[],
     promotedBranches: string[],
+    hops: Array<[string, string]>,
     initialPush: PushResult,
-  ): OutcomeName | null {
+  ): FailureOutcome | null {
     this.appendPromoteFailureWarnings(rejectedRefs, initialPush, 1);
     for (const pendingRef of rejectedRefs) {
       const outcome = this.resyncPromotedDestination(pendingRef.source, pendingRef.branch);
+      if (outcome) {
+        return outcome;
+      }
+    }
+
+
+    // A resync can pull commits into an earlier hop's destination, so every hop
+    // is replayed in order; pushing the later ones as they were would publish a
+    // mainline missing what develop just picked up.
+    for (const [source, destination] of hops) {
+      const outcome = this.promoteHop(source, destination, true);
       if (outcome) {
         return outcome;
       }
@@ -730,9 +757,14 @@ export class Landing {
       refsToPush.map((pendingRef) => branchRefspec(pendingRef.branch)),
       false,
     );
-    if (allRefsPushed(statusByBranch(retryPush, refsToPush))) {
+    const retryStatuses = statusByBranch(retryPush, refsToPush);
+    if (allRefsPushed(retryStatuses)) {
       this.markSuccessfulPushRefs(refsToPush, promotedBranches);
       return null;
+    }
+
+    if (refsToPush.some((ref) => ref.kind === "feature" && isCauseFailure(retryStatuses[ref.branch]))) {
+      return "PUSH_FAILED";
     }
 
     this.appendPromoteFailureWarnings(
@@ -868,12 +900,5 @@ function pushFailureText(push: PushResult, branch: string): string {
   return push.stdout.trim();
 }
 
-async function main(): Promise<never> {
-  const config = parseArguments(process.argv.slice(2));
-  const message = await readStdin();
-  return emit(new Landing(process.cwd(), config).run(message));
-}
-
-if (process.argv[1] && import.meta.filename === process.argv[1]) {
-  await main();
-}
+const config = parseArguments(process.argv.slice(2));
+emit(new Landing(process.cwd(), config).run(await readStdin()));

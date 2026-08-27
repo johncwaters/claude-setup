@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["skills/**/*.ts"]
+  "include": ["skills/**/*.ts", "types/**/*.d.ts"]
 }

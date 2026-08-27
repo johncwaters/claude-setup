@@ -15,6 +15,7 @@ import {
   runGit,
   tryGit,
   VALID_MESSAGE,
+  writeCommitMsgRejectHook,
   writeFile,
 } from "./helpers.ts";
 
@@ -71,6 +72,30 @@ function driftingMainPreReceiveHook(): string {
     "  exit 1",
     "done",
     "exit 0",
+    "",
+  ].join("\n");
+}
+
+// An update hook, not pre-receive: it rejects develop alone, so mainline fails
+// as atomic collateral rather than as a cause, which is the case the replay is for.
+function driftDevelopOnceUpdateHook(driftSha: string): string {
+  return [
+    "#!/bin/sh",
+    'ref_name="$1"',
+    'if [ "$ref_name" != "refs/heads/develop" ]; then',
+    "  exit 0",
+    "fi",
+    'count_file="hooks/develop-drift-count"',
+    "count=0",
+    '[ -f "$count_file" ] && count=$(cat "$count_file")',
+    "count=$((count + 1))",
+    'printf "%s" "$count" > "$count_file"',
+    'if [ "$count" -gt 1 ]; then',
+    "  exit 0",
+    "fi",
+    `env -u GIT_QUARANTINE_PATH git update-ref refs/heads/develop ${driftSha}`,
+    'echo "rejected: retry after fetch" >&2',
+    "exit 1",
     "",
   ].join("\n");
 }
@@ -455,4 +480,57 @@ test("the temp directories used by these tests are removed", () => {
   const probe = fs.mkdtempSync(path.join(os.tmpdir(), "commit-skill-probe-"));
   cleanup(probe);
   assert.equal(fs.existsSync(probe), false);
+});
+
+test("a resynced develop is replayed into mainline before the retry push", () => {
+  const { origin, seed, local } = makePromotionSetup();
+  const other = cloneRepo(origin);
+  try {
+    runGit(other, ["checkout", "-q", "-b", "develop", "origin/develop"]);
+    const developBeforeDrift = gitOutput(origin, ["rev-parse", "develop"]);
+    commitFile(other, "drift.txt", "landed on develop by someone else\n", "origin develop drift");
+    runGit(other, ["push", "-q", "origin", "develop"]);
+    const driftSha = gitOutput(origin, ["rev-parse", "develop"]);
+    runGit(origin, ["update-ref", "refs/heads/develop", developBeforeDrift]);
+
+    writeFile(local, "base.txt", "base\nfeature change\n");
+    writeOriginHook(origin, "update", driftDevelopOnceUpdateHook(driftSha));
+
+    const { result } = land(local, ["--promote", "--no-push"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.deepEqual(result.promoted, ["develop", "main"]);
+    assert.equal(gitOutput(origin, ["rev-parse", "main"]), gitOutput(origin, ["rev-parse", "develop"]));
+    assert.match(
+      gitOutput(origin, ["log", "--format=%s", "main"]),
+      /origin develop drift/,
+      "mainline must carry the commit that landed on develop between the push attempts",
+    );
+  } finally {
+    cleanup(origin, seed, local, other);
+  }
+});
+
+test("a promotion merge that fails without conflicts is PROMOTE_FAILED", () => {
+  const repo = makeRepo();
+  try {
+    commitFile(repo, "base.txt", "base\n");
+    runGit(repo, ["checkout", "-q", "-b", "develop"]);
+    commitFile(repo, "develop_only.txt", "develop\n", "develop only");
+    runGit(repo, ["checkout", "-q", "main"]);
+    runGit(repo, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repo, "base.txt", "base\nfeature change\n");
+    writeCommitMsgRejectHook(repo);
+
+    const { code, result } = land(repo, ["--promote", "--no-push"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "PROMOTE_FAILED");
+    assert.equal(code, 24);
+    assert.equal("conflicts" in result, false);
+    assert.equal(gitOutput(repo, ["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
+    assert.equal(tryGit(repo, ["rev-parse", "-q", "--verify", "MERGE_HEAD"]) === 0, false);
+    assert.match((result.warnings as string[]).join("\n"), /failed without conflicts/);
+  } finally {
+    cleanup(repo);
+  }
 });

@@ -17,6 +17,7 @@
 !commands/**
 !hooks/**
 !skills/**
+!types/**
 !setup/**
 !profiles/**
 !evals/**

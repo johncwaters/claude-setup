@@ -7,6 +7,7 @@ declare module "node:child_process" {
     input?: string;
     encoding: "utf8";
     maxBuffer?: number;
+    env?: Record<string, string | undefined>;
   };
   export type SpawnSyncReturn = {
     status: number | null;
@@ -87,4 +88,5 @@ type Buffer = Uint8Array & { toString(encoding: string): string };
 interface ImportMeta {
   url: string;
   filename: string;
+  dirname: string;
 }

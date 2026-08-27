@@ -13,7 +13,8 @@ retryRemoveRetiredPlugins=0
 aptUpdated=0
 operatorGitHubOwner=""
 detectedPackageManager=""
-minimumNodeMajor=20
+minimumNodeMajor=22
+minimumNodeMinor=18
 nodeSourceMajor=22
 dpkgLockWaitSeconds=180
 packageInstallLog=""
@@ -604,14 +605,38 @@ nodeMajorVersion() {
   printf '%s\n' "$versionText"
 }
 
-# Debian bookworm ships Node 18, which the glissa build (Vite) refuses to run
-# under, so an old node counts as absent rather than as "already installed".
+nodeMinorVersion() {
+  local versionText
+  if ! versionText="$(node -v 2>/dev/null)"; then
+    return 1
+  fi
+  versionText="${versionText#v}"
+  versionText="${versionText#*.}"
+  versionText="${versionText%%.*}"
+  if [[ ! "$versionText" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  printf '%s\n' "$versionText"
+}
+
+# The commit skill is TypeScript that node runs by stripping types, stable since
+# 22.18, so an older node counts as absent rather than as "already installed".
 nodeIsCurrentEnough() {
   local major
+  local minor
   if ! major="$(nodeMajorVersion)"; then
     return 1
   fi
-  ((major >= minimumNodeMajor))
+  if ((major > minimumNodeMajor)); then
+    return 0
+  fi
+  if ((major < minimumNodeMajor)); then
+    return 1
+  fi
+  if ! minor="$(nodeMinorVersion)"; then
+    return 1
+  fi
+  ((minor >= minimumNodeMinor))
 }
 
 # python3 usually arrives as a dependency of something else while pip does not,
@@ -1157,7 +1182,7 @@ installNodeJs() {
     noteInstalled "Node.js" "Node $(nodeMajorVersion) installed"
     return 0
   fi
-  noteWarned "Node.js" "still older than Node $minimumNodeMajor, upgrade manually"
+  noteWarned "Node.js" "still older than Node $minimumNodeMajor.$minimumNodeMinor, upgrade manually"
 }
 
 installClaudeCode() {
