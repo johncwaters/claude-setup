@@ -1,72 +1,39 @@
 ---
 name: qa-swarm
-description: Multi-perspective review of a diff. A cheap router pass rates danger and complexity, delegates only the reviewer lanes the change earns, then converges every lane into one deduplicated finding list with a deterministic verdict. Optionally posts inline comments and one sticky summary to a PR. Use for large, cross-cutting, security-sensitive, or pre-merge changes; use /code-review for the ordinary case.
+description: The finder engine of the review ladder. Takes an already-pinned diff reference, runs a cheap router pass to rate danger and pick reviewer lanes, spawns the triggered lanes concurrently, and returns one converged STRUCTURED_FINDINGS block. It judges nothing, fixes nothing, and writes nothing. Invoked by code-review; not a standalone entry point.
 ---
 
 # QA Swarm
 
-Router first, delegation second, convergence third. Every lane emits the same structured finding format so the merge is mechanical instead of eyeball work.
+Find, converge, return. Every lane emits the same structured format so the merge is mechanical.
 
-## When this runs instead of code-review
+## Contract with the caller
 
-`code-review` is the default and stays the default. Reach for qa-swarm only when at least one holds:
+**Required input.** A `REVIEW_CMD` that resolves to an immutable diff (a tree object or a SHA range), the repo path, and 2 to 4 sentences of context the lanes cannot derive from the diff. Optionally a scope restriction (`-- <paths>`), and two separate lists from an earlier round: findings already settled as `NIT` or `AMBIGUOUS`, which lanes are told not to re-report, and findings a writer claims to have fixed, which lanes are told to **check specifically**. Those two lists must never be merged into one: telling a lane to skip a finding somebody claims to have fixed is how an unverified fix becomes an approval.
 
-- the diff is large (roughly 500+ changed lines) or spans 3+ subsystems
-- the change is security-sensitive, destructive, or touches money, auth, or PII
-- it is the last gate before a merge or release, and a missed defect is expensive
-- the carbon unit asked for a swarm, a multi-perspective review, or a second and third opinion
+**No `REVIEW_CMD`, no run.** Say so and stop. Pinning scope is `code-review`'s job, and computing a second pin here would let two layers review two different trees while believing they reviewed one.
 
-Never run it by habit. It costs a router pass plus one pass per delegated lane.
+**Guaranteed output.** One `STRUCTURED_FINDINGS` block plus one `OVERALL_SUMMARY`, and nothing after them.
 
-## Step 1: Gather scope once
+**Never.** No verdict, no risk tier, no recommendation to merge or block. No file edits. No git writes. No PR comments. No looping. Those belong to layers above; emitting one here means two layers own the same decision.
 
-```
-git status --short
-git rev-parse HEAD
-git diff --stat                 # working tree
-git diff --cached --stat        # staged
-gh pr view --json number,headRefOid,baseRefName 2>/dev/null || true
-```
-
-Pin the review target to an immutable object, not to a live tree. Lanes run concurrently and take minutes; `git diff --cached` re-reads the index on every call, so an edit or a `git add` mid-review silently hands later lanes a different diff and the synthesis merges findings from two different changes.
-
-- staged: `TREE=$(git write-tree)`, then `REVIEW_CMD="git diff HEAD $TREE"`. `write-tree` freezes the current index as a tree object without touching the index, the refs, or the stash stack
-- working tree: snapshot through a throwaway index so the live one is never mutated. Never `git add -A` against the real index to set up a review; that stages whatever the carbon unit had deliberately left unstaged, and the next commit quietly carries it
-
-```
-TMP_DIR=$(mktemp -d)
-cp "$(git rev-parse --git-dir)/index" "$TMP_DIR/index"
-GIT_INDEX_FILE="$TMP_DIR/index" git add -A
-TREE=$(GIT_INDEX_FILE="$TMP_DIR/index" git write-tree)
-rm -rf "$TMP_DIR"
-REVIEW_CMD="git diff HEAD $TREE"
-```
-
-`mktemp -d` and not `mktemp -u`: the `-u` form only reserves a name, so another local process can land a symlink there first and have the `cp` overwrite its target.
-
-- branch or PR: resolve `BASE_SHA` and `HEAD_SHA`, then `REVIEW_CMD="git diff <BASE_SHA>..<HEAD_SHA>"`
-
-Hand delegates the command, not the diff text. An immutable pin keeps every lane on identical input while keeping the diff out of prompt tokens. A lane scoped to a subset appends `-- <paths>` to its own copy.
-
-Record file count, changed-line count, and the touched subsystems. That is the router's input.
-
-## Step 2: Router pass
+## Step 1: Router pass
 
 One cheap pass produces both a first-pass review and the delegation plan.
 
-Route it per `~/.claude/ROUTING.md` rule 1: Codex `gpt-5.6-terra`, prompt written to a temp file, dispatched with `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-terra < <file>`. Codex quota exhausted or the CLI errors: step down to `gpt-5.6-luna`, then fall back to a `sonnet` agent. The delegation plan survives either way; only the cost of the first pass changes.
+Route it per `~/.claude/ROUTING.md` rule 1: Codex `gpt-5.6-terra`, prompt written to a temp file, dispatched with `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-terra < <file>`. Codex quota exhausted or the CLI errors: step down to `gpt-5.6-luna`, then fall back to a `sonnet` agent. Only the cost of the first pass changes.
 
-The router prompt asks for:
+Ask it for:
 
 1. **Danger rating** LOW / MEDIUM / HIGH, with the one fact that set it
 2. **Complexity rating** LOW / MEDIUM / HIGH
 3. **File classification**: which touched files are logic, security surface, structural, config, test, or docs
-4. **Delegation plan**: which lanes from the table below should run, one clause of justification each
-5. Its own findings, in the structured format below, tagged `router`
+4. **Delegation plan**: which lanes below should run, one clause of justification each
+5. Its own findings, in the format below, tagged `router`
 
-The router never spawns anything. It returns a plan; the main loop decides and dispatches.
+The router never spawns anything. It returns a plan; this skill decides and dispatches.
 
-## Step 3: Delegate the lanes the router earned
+## Step 2: Delegate the lanes the router earned
 
 | Lane tag | Target | Model | Triggers when |
 |---|---|---|---|
@@ -74,30 +41,41 @@ The router never spawns anything. It returns a plan; the main loop decides and d
 | `security` | `security-reviewer` agent | opus | Diff touches auth, input handling, crypto, payments, PII, secrets, infrastructure, or destructive operations |
 | `structure` | `structure-reviewer` agent | sonnet | Diff is a refactor, establishes a new module or boundary, or moves responsibilities across existing ones |
 | `external` | Codex CLI | `gpt-5.6-sol`, effort `high` | Danger or complexity is HIGH. An independent frontier read of the same diff |
-| `tiebreak` | Grok CLI | default | Two lanes disagree on whether a specific finding is real, and the disagreement blocks the verdict |
+| `tiebreak` | Grok CLI | default | Two lanes disagree on whether a specific finding is real. Runs in Step 3, never here |
 
-Every model id and CLI invocation above comes from the model table in `~/.claude/ROUTING.md`, which is the single source of truth and carries its own staleness stamp; re-read that row before dispatch rather than trusting the name here. The router and the `external` lane deliberately sit on different Codex tiers: the router is a cheap triage pass whose output is a plan, so it takes the `terra` tier, while `external` is a frontier read of a diff already known to be dangerous, which is what ROUTING.md reserves `sol` at `high` effort for. An id that errors means the table moved: fall back per the degradation rules in Step 4 and tell the carbon unit the row is stale.
+**Claude-only machines.** A profile `CLAUDE.md` whose `<routing>` forbids external model CLIs (the work profile does, and its rule wins over `~/.claude/ROUTING.md`) forbids them here too. Sending a work diff to Codex or Grok is a confidentiality breach, not a routing preference. Substitute, and say in the summary that the Claude-only route was used:
 
-`code` always runs. Spawn every triggered lane in **one message, multiple calls**, so they run concurrently. `tiebreak` is the exception: it runs in Step 4, after a contradiction actually exists, and only on the contested findings.
+| Lane | External route | Claude-only substitute |
+|---|---|---|
+| router | Codex `gpt-5.6-terra` | a `sonnet` agent, same prompt |
+| `external` | Codex `gpt-5.6-sol` | a second `opus` agent over the same diff, prompted adversarially to refute the other lanes' findings rather than to repeat them |
+| `tiebreak` | Grok | an `opus` agent given both positions and nothing else |
+
+The substitutes are not a downgrade to be apologised for: what `external` buys is an independent read, and an adversarially-framed second pass buys that without leaving the vendor.
+
+Every model id and CLI invocation above comes from the model table in `~/.claude/ROUTING.md`, which is the single source of truth and carries its own staleness stamp; re-read that row before dispatch rather than trusting the name here. The router and the `external` lane sit on different Codex tiers deliberately: the router is a cheap triage pass whose output is a plan, so it takes `terra`, while `external` is a frontier read of a diff already known to be dangerous, which is what ROUTING.md reserves `sol` at `high` effort for. An id that errors means the table moved: degrade per Step 4 and say the row is stale.
+
+`code` always runs. Spawn every triggered lane in **one message, multiple calls**, so they run concurrently.
 
 Every delegation prompt carries, per the delegation contract in `~/.claude/ROUTING.md`:
 
-- the repo path and the exact `REVIEW_CMD` (plus any `-- <paths>` scope restriction for this lane)
-- what changed and why, in 2 to 4 sentences the agent cannot derive from the diff
-- facts already verified live, so the lane does not re-flag settled ground
+- the repo path and the exact `REVIEW_CMD` (plus any `-- <paths>` restriction for this lane)
+- the caller's context, verbatim
+- facts already verified live, and the settled `NIT` and `AMBIGUOUS` list, so the lane does not re-flag settled ground
+- the claimed-fixed list as explicit regression checks, phrased as "confirm each of these is actually gone", never as "skip these"
 - the router's danger and complexity ratings and which files it classified into this lane
 - the ask: real defects with a concrete failure scenario, severity-tagged, no nits
-- the structured output requirement below, **appended to** the agent's own native output contract, not replacing it
+- the reviewer output format below
 
-Do not restate standing rules from AGENTS.md; every target already reads them.
+Hand over the command, never the diff text. Do not restate standing rules from AGENTS.md; every target already reads them.
 
 ## Reviewer output format
 
-Every lane ends its response with:
+Every lane, and this skill itself, ends its response with:
 
 ```
 STRUCTURED_FINDINGS:
-- file: <path> | line: <number or "general"> | severity: <CRITICAL|HIGH|MEDIUM|LOW|NIT> | reviewer: <tag> | body: <finding text>
+- file: <path> | line: <number or "general"> | side: <RIGHT|LEFT> | severity: <CRITICAL|HIGH|MEDIUM|LOW|NIT> | reviewer: <tag> | body: <the review comment text>
 - file: ...
 
 OVERALL_SUMMARY:
@@ -114,156 +92,33 @@ OVERALL_SUMMARY:
 <one paragraph>
 ```
 
-**Tags** are `<lane>` or `<lane>/<category>` where the category is the finding's own lowercased, hyphenated kind: `security/idor`, `security/sql-injection`, `code/logic`, `structure/duplication`. Sub-tagging keeps each lane's taxonomy readable once findings converge; fall back to the flat lane tag when no category fits.
+**Tags** are `<lane>` or `<lane>/<category>`, the category being the finding's own lowercased, hyphenated kind: `security/idor`, `code/logic`, `structure/duplication`. Sub-tagging keeps each lane's taxonomy readable once findings converge; fall back to the flat lane tag when no category fits.
 
-**`body`** is compact: what is wrong, the failure scenario, the fix, and a confidence clause when the lane could not fully verify it. One finding per line, pipes escaped or rephrased out of the body.
+**`body`** is compact: what is wrong, the failure scenario, the fix, and `Confidence: low, <what would confirm it>` when the lane could not fully verify it. One finding per line, no newlines and no bare `|` inside a body.
 
-**NIT** exists only for lanes that produce style-tier observations. `security` never emits it.
+**`side`** says which half of the diff `line` indexes: `RIGHT` for a line the diff adds or leaves in place, `LEFT` for a line the diff removes, in which case `line` is its number in the pre-change file. Default to `RIGHT`; a lane that reports a defect in deleted code must say `LEFT` explicitly. Nothing downstream can recover this from the finding alone, and a `LEFT` finding published as `RIGHT` lands on unrelated code. Omit the field entirely when `line` is `general`.
 
-## Step 4: Synthesize
+**NIT** comes only from lanes that produce style-tier observations. `security` never emits it.
 
-Collect the router's findings and every delegated lane's findings.
+## Step 3: Converge
 
-**Lane death is blocking, for the three agent lanes.** `code`, `security`, or `structure` triggered and spawned, then erroring, returning empty, or producing no parseable `STRUCTURED_FINDINGS` block, is a failed review. Stop and report. Never fall through to a verdict on a dead lane.
+**Lane death is blocking, for the three agent lanes.** `code`, `security`, or `structure` triggered and spawned, then erroring, returning empty, or producing no parseable `STRUCTURED_FINDINGS` block, is a failed run. Stop and tell the caller. Never return a partial block as if it were complete.
 
-`router`, `external`, and `tiebreak` are exempt at every stage, before or after dispatch: they run on an external CLI with its own quota, and none of them is ever the sole coverage for a concern. Their failure degrades, never blocks:
+`router`, `external`, and `tiebreak` are exempt at every stage, before or after dispatch: they run on an external CLI with its own quota and none is ever the sole coverage for a concern. Their failure degrades, never blocks:
 
-- Codex router unavailable: fall back down the tier ladder, then to a `sonnet` agent (Step 2)
-- Codex `external` lane unavailable: run the review without it and say so in the report. If the router had routed a specific concern there, re-route that concern to `code` or `security`. If no lane can safely cover it, surface it as a HIGH finding naming the lane that was unavailable
-- Grok `tiebreak` unavailable: leave the contested finding in the report as unresolved, with both lanes' positions stated, and let the carbon unit call it
+- Codex router unavailable: fall back down the tier ladder, then to a `sonnet` agent (Step 1). Every one of those failing means nobody rated danger or picked lanes, so **run `code`, `security`, and `structure` all three** and say the lane set was the no-router default. Running the always-on `code` lane alone would silently drop the security lane on a security-sensitive diff, which is the one failure this skill exists to prevent
+- Codex `external` unavailable: run without it and say so in the summary. A concern the router routed there re-routes to `code` or `security`. If no lane can safely cover it, emit it as a HIGH finding naming the lane that was unavailable
+- `tiebreak` unavailable: a contradiction is one defect claim plus one lane's verified-safe position, and only the claim is a finding, so there is no second finding to return. Emit the asserting lane's finding once, tagged `contested: <asserting lane> vs <disputing lane>`, with the disputing lane's reasoning in its body and `Confidence: low, tiebreak unavailable` at the end. That guarantees the caller triages it `AMBIGUOUS` rather than acting on a disputed claim
 
-**Deduplication.** Two findings merge when they name the same file within 5 lines of each other, or are clearly the same concern in different words. Merged findings carry the tag `convergent: <tag> + <tag>`. Convergence means independent lanes reached the same conclusion, so it promotes a finding's confidence: a merged finding is treated as confirmed even when one lane marked it low-confidence. Convergence does **not** by itself raise severity; keep the highest severity any lane assigned and say which lane assigned it.
+**Deduplication.** Two findings merge when they name the same file within 5 lines of each other, or are plainly the same concern in different words. Merged findings carry the tag `convergent: <tag> + <tag>`. Convergence means independent lanes reached the same conclusion, so it promotes confidence: a merged finding counts as confirmed even when one lane marked it low-confidence. It does **not** by itself raise severity; keep the highest severity any lane assigned and name that lane in the body.
 
-**Contradiction.** One lane asserts a defect, another explicitly verified it as safe: that is a `tiebreak` case, not a merge. Run the Grok lane on those findings alone, with both positions in the prompt.
+**Contradiction.** One lane asserts a defect and another explicitly verified it as safe: that is a `tiebreak` case, not a merge. Dispatch the Grok lane on those findings alone, with both positions in the prompt, and keep whichever finding its ruling supports.
 
-**Risk rollup.** The tier is the highest severity surviving in the deduplicated list, counting NIT as LOW:
+## Step 4: Return
 
-| Tier | Verdict | Condition |
-|---|---|---|
-| CRITICAL | BLOCKED | any CRITICAL finding |
-| HIGH | REQUEST CHANGES | any HIGH finding, no CRITICAL |
-| MEDIUM | APPROVE WITH NITS | any MEDIUM finding, nothing above |
-| LOW | APPROVE | only LOW, NIT, or nothing |
+Emit the converged block and stop. No verdict line, no recommendation, no next step. The caller decides what any of it means.
 
-Highest-severity-wins, rather than a count-weighted score, because CRITICAL and HIGH are already blocking here as they are in `code-review`: fix upstream before commit, fix the source rather than the symptom, no ignore comments or disabled rules to clear a flag. A scheme where two HIGH findings block and one does not would contradict that gate. Report the count per severity in the summary, where it informs the carbon unit without moving the gate.
-
-## Step 5: Report to terminal
-
-The terminal report is the deliverable. Most runs are local code with no PR attached, and those runs end here.
-
-```
-## QA Swarm: <VERDICT> (risk <TIER>)
-Target: <REVIEW_CMD>   Files: N   Lines: N
-Router: danger <X>, complexity <Y>
-Lanes: <tag> (<why>), <tag> (<why>)   Skipped: <tag> (<reason>)
-Findings: <n> CRITICAL, <n> HIGH, <n> MEDIUM, <n> LOW, <n> NIT (after dedup)
-
-### Findings
-- path:line [SEVERITY] [<tag>] problem. fix.
-(most severe first; convergent findings marked; omit section if none)
-
-### Unresolved
-(optional: contradictions the tiebreak lane could not settle)
-
-### Recommendation
-(one sentence)
-```
-
-## Step 6: Post to a PR
-
-Only when a PR was detected, and only after asking. Posting is outward-facing and hard to retract, so ask on every run, even a re-run against a PR already commented on. No PR, or the carbon unit declines: Step 5 was the whole output.
-
-PR comment bodies are written in normal prose for the humans reading them, per the AGENTS.md output boundary for issue and PR text.
-
-### 6a: Inline comments
-
-Post every finding that has a real file and line as one batched review, not one API call per comment:
-
-`gh api -f` only sets flat string fields, so the comment array has to arrive as a real JSON body through `--input`. Build the body in a file, then post it:
-
-```
-cat > <body.json> <<'JSON'
-{
-  "event": "COMMENT",
-  "body": "QA Swarm review complete. See inline comments.",
-  "commit_id": "<HEAD_SHA>",
-  "comments": [
-    { "path": "<file>", "line": <line>, "side": "RIGHT", "body": "<comment body>" }
-  ]
-}
-JSON
-gh api repos/{owner}/{repo}/pulls/{pr}/reviews --method POST --input <body.json>
-```
-
-`side` is not optional in practice: it selects which half of the diff the line number indexes. A finding about an added line is `RIGHT`; a finding about a line the diff removes is `LEFT`, and its `line` is the number in the pre-change file. Carry that distinction through synthesis, because a `LEFT` finding posted as `RIGHT` either lands on unrelated code or is rejected outright. Apply it to the per-comment fallback below too.
-
-Write that JSON with a script (`jq`, or `json.dumps` over the finding list), never by hand-splicing finding text into the template. Finding bodies contain quotes, backticks, and newlines, and a hand-built body will produce invalid JSON or a mangled comment.
-
-Batching is not cosmetic: one review posts one notification, while N individual comments post N. If the batched call fails, fall back to `gh api repos/{owner}/{repo}/pulls/{pr}/comments` per finding and say in the report that the fallback was used.
-
-Each inline body:
-
-```
-> [!NOTE]
-> Automated comment by **QA Swarm**. Not written by a human.
-
-**[<tag>] <SEVERITY>**
-
-<body>
-```
-
-Convergent findings use `**[convergent: <tag> + <tag>] <SEVERITY>**` and the merged body.
-
-### 6b: Summary comment, one per PR, upserted
-
-Exactly one top-level summary comment per PR, marked `<!-- qa-swarm-summary -->`. Re-runs update it in place. Several bot comments on one PR is the noise this exists to prevent.
-
-```
-gh api "repos/{owner}/{repo}/issues/{pr}/comments" --paginate \
-  --jq '[.[] | select(.body | contains("<!-- qa-swarm-summary -->"))][0].id'
-```
-
-Body shape, current verdict on top and prior rounds folded away:
-
-```
-<!-- qa-swarm-summary -->
-> [!NOTE]
-> Automated comment by **QA Swarm**. Not written by a human.
->
-> Multi-perspective review: a router pass plus the reviewer lanes the change warranted.
-
-## Verdict: <VERDICT> (round <N> at <short_sha>)
-
-<1 to 2 sentences>
-
-### Key findings
-<top findings grouped by severity, current round only>
-
-### Convergence
-<findings two or more lanes reached independently, highest confidence>
-
-### Lane summaries
-| Lane | Assessment |
-| --- | --- |
-| router | <one sentence, plus danger and complexity, plus what it delegated> |
-<one row per lane that actually ran this round>
-
-<details>
-<summary>Previous rounds (<n>)</summary>
-
-round <N> at <short_sha> - <verdict>: <one-line disposition>
-
-</details>
-```
-
-When updating, derive the history lines from the existing comment's own verdict header plus its existing history block. The previous round collapses to one line; it is never carried over verbatim.
-
-```
-gh api "repos/{owner}/{repo}/issues/comments/{id}" -X PATCH -F body=@<file>   # update
-gh pr comment {pr} --body-file <file>                                        # create
-```
-
-Inline comments from 6a are untouched by the upsert. They are threaded, per-finding, and resolvable; only the top-level summary is deduplicated.
+The summary paragraph says: how many findings survived convergence, which lanes ran and which were skipped or degraded, and the router's danger and complexity ratings. Those are facts the caller needs and cannot recover.
 
 ## Token discipline
 
