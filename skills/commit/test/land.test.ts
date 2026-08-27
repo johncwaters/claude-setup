@@ -307,7 +307,7 @@ test("a staged denylisted addition stops the run instead of riding along", () =>
   }
 });
 
-test("an already tracked denylisted file can still be changed", () => {
+test("the gate refuses additions only, so a tracked denylisted file stays editable", () => {
   const repo = makeRepo();
   try {
     commitFile(repo, ".env.example", "TOKEN=replace-me\n");
