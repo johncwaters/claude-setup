@@ -1,5 +1,9 @@
 # SPEC: compiled-commit harness
 
+> Retired design record. The Python runner this describes was replaced by
+> `skills/commit`, which inherits its stage decisions and its typed outcomes.
+> Paths and commands below no longer exist.
+
 Compiled replacement for the `/commit` Claude Code skill (`~/.claude/commands/commit.md`).
 Historical workflow: sync develop, ai-slop-cleaner, code-review via subagents, generate commit
 message per convention, stage, commit. Median historical run: 5.3M gross tokens, 56 LLM calls,

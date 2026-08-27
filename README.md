@@ -4,7 +4,7 @@ Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus
 
 The interesting homegrown pieces:
 
-- `compiled-commit/`: a deterministic commit workflow compiled from a prompt into a Python runner with typed outcomes, plus its own eval bench (`bench/`) with an LLM judge for comparing the compiled runner against historical prompt-driven commits (the recorded scenario data, fixtures, and scored results came from private repositories and are not included)
+- `skills/commit/`: a deterministic commit workflow with typed outcomes, whose git steps are TypeScript that node runs directly (no build, no `node_modules`), gated by `tsc --noEmit` and `node --test`. It replaced a Python runner whose design record is in `docs/compiled-commit-SPEC.md`
 - `hooks/`: file-format guard, routing loader, and AGENTS.md sync hooks
 - `hud/`: custom status line
 - `skills/code-review`, `skills/qa-swarm`, `skills/pr-review`, `skills/release`: a three-layer review ladder (qa-swarm finds across router-picked lanes, code-review triages and judges read-only, pr-review is the pull request entry point) plus an evidence-gated release runner with a deterministic profile linter
@@ -16,7 +16,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
 
 - `profiles/`: per machine profile config. `personal/`, `server/`, and `work/` each hold a `CLAUDE.md`, a `commit-policy.json` read by the commit skill, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
 - `settings.base.json`: the settings shared by every profile (model, hooks, status line, effort, and so on), with `{{HOME}}` tokens that apply fills in for the machine
-- `skills/`: homegrown skills (code-review, qa-swarm, pr-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
+- `skills/`: homegrown skills (commit, code-review, qa-swarm, pr-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); each project repo keeps its release knowledge in a tracked `.claude/release-profile.json`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer, finding-fixer)
 - `commands/`: custom slash commands (seo-audit is tracked directly; commit is rendered per profile, see Machine profiles below)
 - `hooks/`: file-format guard hook (validate-file) and routing loader (inject-routing)

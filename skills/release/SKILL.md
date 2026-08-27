@@ -1,73 +1,73 @@
 ---
 name: release
-description: Execute a versioned release for the current repo using its .claude/release-profile.yml (deriving and saving that profile on first run). Preflight gates, changelog freeze, version bump, archetype-specific publish (tag-CI, workflow-dispatch, local script, or push-deploy), and evidence-based verification. Use when asked to release, ship, publish, cut a version, or bump and tag.
+description: Execute a versioned release for the current repo using its .claude/release-profile.json (deriving and saving that profile on first run). Preflight gates, changelog freeze, version bump, archetype-specific publish (tag-CI, workflow-dispatch, local script, or push-deploy), and evidence-based verification. Use when asked to release, ship, publish, cut a version, or bump and tag.
 ---
 
 # Release
 
-Profile-driven release runbook. All repo-specific knowledge lives in one tracked file per repo: `.claude/release-profile.yml` (reference template: `profile-template.yml` next to this skill). This skill never invents missing facts: a required field that is absent or contradicts the repo state stops the release.
+Profile-driven release runbook. All repo-specific knowledge lives in one tracked file per repo: `.claude/release-profile.json`. This skill never invents missing facts: a required field that is absent or contradicts the repo state stops the release.
 
-Deterministic checks run through the bundled linter, never through AI judgment:
-
-```
-python <skill-dir>/lint-profile.py <repo-root>              # schema + profile-vs-repo cross-checks
-python <skill-dir>/lint-profile.py <repo-root> --preflight  # adds clean-tree, detached-HEAD, branch, tag-exists checks
-```
-
-The linter validates schema (required fields, trigger/type enums), and cross-checks the repo: version file exists and parses, changelog path exists (unless `status: MISSING`), branches exist, referenced workflow files and npm scripts exist, tag-prefix consistency. Exit 1 = do not proceed.
+The profile checks below are read and applied by you, not by a program: the Python linter that used to enforce them was deleted with the rest of the Python in this repo, and no replacement has landed. Treat every check as blocking anyway.
 
 ## Phase 0 — Load or derive the profile
 
-1. Read `.claude/release-profile.yml` in the repo root.
-2. Run the linter. Errors = stop, show them, fix profile or repo first.
-3. **Present**: beyond the linter, sanity-check judgment fields against reality (does the release-commit pattern match `git log` history, does the trigger archetype match how past releases actually shipped). Contradiction = stop, show the mismatch, ask whether to fix the profile or the repo.
-4. **Absent**: derive it by surveying the repo (branches and their roles, CI workflows and triggers, version source file, changelog file and format, tag format and release-commit pattern from `git log`/`git tag`, deploy/publish mechanism, verification surfaces). Start from `profile-template.yml`, write the profile, run the linter on it, show it to the user for review, and include it in the release commit. Never guess a field you could not evidence; leave it out and say so.
+1. Read `.claude/release-profile.json` in the repo root.
+2. Check it against the schema below (required fields present, `type` and `publish.trigger` from their enums) and against the repo: version file exists and parses, changelog path exists (unless `status: MISSING`), branches exist, referenced workflow files and npm scripts exist, tag prefix consistent. Any failure = stop, show it, fix profile or repo first.
+3. **Present**: beyond the schema check, sanity-check judgment fields against reality (does the release-commit pattern match `git log` history, does the trigger archetype match how past releases actually shipped). Contradiction = stop, show the mismatch, ask whether to fix the profile or the repo.
+4. **Absent**: derive it by surveying the repo (branches and their roles, CI workflows and triggers, version source file, changelog file and format, tag format and release-commit pattern from `git log`/`git tag`, deploy/publish mechanism, verification surfaces). Start from the schema below, write the profile, re-run the step 2 checks against it, show it to the user for review, and include it in the release commit. Never guess a field you could not evidence; leave it out and say so.
 5. The repo's own CLAUDE.md overrides everything (e.g. "releases run only through CI: dispatch and monitor, never build locally").
 6. **Live state beats cached notes.** Any profile field describing mutable remote state (a CI/CD variable, a store track, a feature switch) must carry the command that reads it live (convention: a `*_live_check` key). Run that command and act on the live value; a stale note about a release-gating switch is a safety bug, not a doc nit.
 
 ### Profile schema
 
-```yaml
-type: flutter_play | npm_cli | astro_convex_netlify | electron_nsis | other
-targets: optional               # multi-surface repos: [{name, paths, trigger, runbook?}].
-                                # The skill diffs paths since the last release and
-                                # orchestrates or explicitly flags EVERY touched target;
-                                # never silently ship only one surface.
-versioning:
-  scheme: semver              # pre-1.0: minor = features, patch = fixes; 1.0 reserved for first public release
-  version_file: package.json  # or pubspec.yaml; single source of truth
-  tag_format: vX.Y.Z          # annotated tag, created on the exact release commit
-  build_number: optional      # store types only: field, monotonic: true, never_reuse: true
-changelog:
-  path: CHANGELOG.md
-  format: keep_a_changelog    # draft from conventional commits since last tag, then human-polish
-  store_notes: optional       # e.g. Play per-build note path + 500-char cap
-git:
-  release_from: main          # branch releases ship from
-  integration: develop        # branch work lands on; omit if trunk-based
-  release_commit_pattern: "chore(release): vX.Y.Z"   # the repo's exact historical pattern
-  require: [clean_tree, ff_promotion, ci_green_on_sha]
-gates:
-  pre_tag: []                 # repo's real commands: test, typecheck, e2e, pack --dry-run
-  post_release: []            # evidence commands run after publish
-  evidence: []                # what proves success: git_tag, ci_run_url, registry_version,
-                              # play_track_presence, netlify_deploy_id, update_feed_yml, live_site_check
-publish:
-  trigger: tag_push | workflow_dispatch | local_script | push_to_main
-  detail: {}                  # archetype-specific: workflow file, script name, track, site, feed
-rollback:
-  steps: []                   # exact commands or console actions, forward-fix first
-  never: [unpublish, retag, reuse_version_or_build_number]
-approval:
-  human_before: [tag_push, publish, store_promotion]
+```json
+{
+  "type": "flutter_play | npm_cli | astro_convex_netlify | electron_nsis | other",
+  "targets": [{ "name": "", "paths": [], "trigger": "", "runbook": "" }],
+  "versioning": {
+    "scheme": "semver",
+    "version_file": "package.json",
+    "tag_format": "vX.Y.Z",
+    "build_number": { "field": "", "monotonic": true, "never_reuse": true }
+  },
+  "changelog": {
+    "path": "CHANGELOG.md",
+    "format": "keep_a_changelog",
+    "store_notes": { "path": "", "char_cap": 500 }
+  },
+  "git": {
+    "release_from": "main",
+    "integration": "develop",
+    "release_commit_pattern": "chore(release): vX.Y.Z",
+    "require": ["clean_tree", "ff_promotion", "ci_green_on_sha"]
+  },
+  "gates": { "pre_tag": [], "post_release": [], "evidence": [] },
+  "publish": {
+    "trigger": "tag_push | workflow_dispatch | local_script | push_to_main",
+    "detail": {}
+  },
+  "rollback": {
+    "steps": [],
+    "never": ["unpublish", "retag", "reuse_version_or_build_number"]
+  },
+  "approval": { "human_before": ["tag_push", "publish", "store_promotion"] }
+}
 ```
+
+- `targets` is optional and for multi-surface repos only. The skill diffs each target's paths since the last release and orchestrates or explicitly flags EVERY touched target; never silently ship only one surface.
+- `versioning.scheme`: pre-1.0, minor means features and patch means fixes; 1.0 is reserved for the first public release. `version_file` is the single source of truth (`pubspec.yaml` for Flutter). `tag_format` is an annotated tag on the exact release commit. `build_number` is store types only.
+- `changelog.format` `keep_a_changelog` means drafted from conventional commits since the last tag, then polished by hand. `store_notes` is the per-build note path and its character cap (Play caps at 500).
+- `git.integration` is omitted for trunk-based repos. `release_commit_pattern` is the repo's exact historical pattern, read from `git log`.
+- `gates.pre_tag` and `gates.post_release` hold the repo's real commands (test, typecheck, e2e, pack --dry-run). `gates.evidence` names what proves success: `git_tag`, `ci_run_url`, `registry_version`, `play_track_presence`, `netlify_deploy_id`, `update_feed_yml`, `live_site_check`.
+- `publish.detail` is archetype-specific: workflow file, script name, track, site, or feed.
+- `rollback.steps` are exact commands or console actions, forward-fix first.
 
 ## Phase 1 — Preflight (every release)
 
 Stop on any failure; fix upstream, never bypass.
 
-0. `python <skill-dir>/lint-profile.py <repo-root> --preflight` — deterministic gate before any judgment steps.
-1. Working tree clean; on a branch the profile allows (integration or release_from; the linter warns rather than blocks here since releases legitimately start from the integration branch).
+0. Re-run the Phase 0 step 2 checks, plus: HEAD is not detached, and the tag this release would create does not exist yet.
+1. Working tree clean; on a branch the profile allows (integration or release_from; starting from the integration branch is legitimate, so this one warns rather than blocks).
 2. Integration and release branches synced (fetch both; report divergence, do not force).
 3. CI green on the tip commit (`gh run list --branch <branch> --limit 1`) when the repo has CI. This is enforced, not advisory: red = pull the failure (`gh run view <id> --log-failed`), report it, and **block** — tagging into a red pipeline fires the expensive release job into the same failure.
 4. Run the profile's `gates.pre_tag` commands **locally** (lint, typecheck, tests). Listing them in the profile is not running them; local execution catches what a divergent CI environment (line endings, platform deps) would only surface after the push.
@@ -109,4 +109,4 @@ Stop on any failure; fix upstream, never bypass.
 
 - `/release` — full flow for the current repo
 - `/release --dry-run` — phases 0-2 plus a printed execution plan; nothing pushed, tagged, or published
-- `/release --profile-only` — derive/refresh `.claude/release-profile.yml` and stop
+- `/release --profile-only` - derive/refresh `.claude/release-profile.json` and stop

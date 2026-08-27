@@ -1,5 +1,9 @@
 # compiled-commit
 
+> Retired design record. The Python runner this describes was replaced by
+> `skills/commit`, which inherits its stage decisions and its typed outcomes.
+> Paths and commands below no longer exist.
+
 A compiled, mostly-Python replacement for the `/commit` Claude Code skill. The historical
 workflow (sync develop, ai-slop-cleaner subagent, code-review subagent, generate a commit
 message, stage, commit) ran as a loose agentic loop: median 5.3M gross tokens, 56 LLM
