@@ -113,6 +113,12 @@ export class Git {
     return nonEmptyLines(this.run(["diff", "--name-only", "--diff-filter=U"]).stdout);
   }
 
+  stagedAdditions(): string[] {
+    return nonEmptyLines(
+      this.run(["diff", "--cached", "--name-only", "--diff-filter=A"]).stdout,
+    );
+  }
+
   diffNameOnly(options: { cached?: boolean; paths?: string[] } = {}): string[] {
     const base = options.cached
       ? ["diff", "--cached", "--name-only"]

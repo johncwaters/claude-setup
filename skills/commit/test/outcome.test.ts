@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   committed,
+  denylistedFileStaged,
   detachedHead,
   EXIT_CODES,
   hookFailed,
@@ -31,6 +32,7 @@ test("exit codes keep the numbering the recovery procedures branch on", () => {
     NOTHING_TO_COMMIT: 13,
     MESSAGE_INVALID: 20,
     HOOK_FAILED: 21,
+    DENYLISTED_FILE_STAGED: 25,
     PUSH_FAILED: 22,
     PROMOTE_CONFLICT: 23,
     PROMOTE_FAILED: 24,
@@ -48,6 +50,7 @@ test("every outcome constructor round-trips through JSON", () => {
     messageValid({}),
     messageInvalid({ errors: ["description must not be empty"] }),
     hookFailed({ warnings: ["pre-commit hook failed"] }),
+    denylistedFileStaged({ files: [".env"] }),
     pushFailed({ commit: "abc123", pushed: false, promoted: [] }),
     promoteConflict({ commit: "abc123", pushed: true, promoted: ["develop"], conflicts: ["a.ts"] }),
     promoteFailed({ commit: "abc123", pushed: true, promoted: ["develop"] }),

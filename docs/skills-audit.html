@@ -107,19 +107,19 @@
 <pre class="mermaid">
 flowchart LR
   subgraph commands["/commands"]
-    COMMIT["/commit"]
     SEO["/seo-audit"]
   end
   subgraph skills["skills"]
+    COMMIT["commit"]
     ASC["ai-slop-cleaner"]
     CR["code-review"]
     REL["release"]
     IMP["impeccable"]
   end
   subgraph agents["agents (read-only)"]
-    CRA["code-reviewer\nsonnet"]
-    SEC["security-reviewer\nopus"]
-    STR["structure-reviewer\nsonnet"]
+    CRA["code-reviewer\nopus"]
+    SEC["security-reviewer\nfable"]
+    STR["structure-reviewer\nopus"]
   end
   subgraph external["external advisors (direct CLI)"]
     CODEX["codex exec\nChatGPT"]
@@ -129,8 +129,8 @@ flowchart LR
   CR -. security lane .-> SEC
   CR -. org lane .-> STR
   CR -. second opinion .-> CODEX
-  REL --> LINT["lint-profile.py\ndeterministic"]
-  REL --> PROF["per-repo\n.claude/release-profile.yml"]
+  COMMIT --> LAND["preflight.ts + land.ts\ndeterministic"]
+  REL --> PROF["per-repo\n.claude/release-profile.json"]
   SEO --> GP["general-purpose agents"]
 </pre>
   </div>
@@ -164,7 +164,7 @@ flowchart LR
     <tr><td class="name">agents/code-reviewer</td><td><span class="pill keep">KEEP</span></td><td>General lane. Live-tested twice.</td></tr>
     <tr><td class="name">agents/security-reviewer</td><td><span class="pill keep">KEEP</span></td><td>Opus, attack-scenario contract. <span class="tag">no live run yet</span></td></tr>
     <tr><td class="name">agents/structure-reviewer</td><td><span class="pill keep">KEEP</span></td><td>Organization lane. Live-tested once (caught real drift).</td></tr>
-    <tr><td class="name">commands/commit</td><td><span class="pill keep">KEEP</span></td><td>Hardened via two-lens deep review; git-state preflight, same-branch sync, untracked staging.</td></tr>
+    <tr><td class="name">skills/commit</td><td><span class="pill keep">KEEP</span></td><td>Review loop plus two deterministic TypeScript steps: preflight (guard, scope, policy) and land (stage, commit, atomic push, promotion).</td></tr>
     <tr><td class="name">commands/seo-audit</td><td><span class="pill keep">KEEP</span></td><td>Your expanded rewrite, executor refs fixed. Paths migrated: reports to <code>docs/seo/</code>, scratch to <code>.seo-tmp/</code>; heredoc workaround removed after the hook fix.</td></tr>
   </table>
   </div>

@@ -144,7 +144,8 @@ Flags:
 - `--paths <file-or-dir> ...`: the same restriction passed to preflight and `/code-review`.
   Omit it only when the user asked to commit everything or you cannot enumerate what
   changed. A `warnings` entry naming files "already staged outside --paths" means the index
-  carried work this run never scoped; say so when you report.
+  carried work this run never scoped; say so when you report. A denylisted file staged that
+  way stops the run outright rather than riding along, as `DENYLISTED_FILE_STAGED`.
 - `--promote`: pass it when `policy.afterCommit` is `promote`. It carries the commit
   through develop into main/master. Omit it when the user asked for commit-only ("commit
   only", "don't merge"), when `policy.afterCommit` is `pull-request`, or when there is no
@@ -165,6 +166,7 @@ finding fixed. Expand only on failures.
 | `NOTHING_TO_COMMIT` | 13 | With `--promote`, promotion still ran: report what `promoted` says. Without it, stop and relay |
 | `MESSAGE_INVALID` | 20 | `errors` names each violation. Fix the message and re-run `land.ts` |
 | `HOOK_FAILED` | 21 | A commit hook rejected the commit; its stderr is in `warnings`. Fix the cause, then re-run |
+| `DENYLISTED_FILE_STAGED` | 25 | The index would add a file the denylist names (`.env*`, `*.log`, `node_modules/`, `dist/`, `__pycache__/`); `files` lists them and nothing was committed. Unstage each one (`git restore --staged <file>`) and re-run, or put it to the user when it genuinely belongs in the commit |
 | `PUSH_FAILED` | 22 | The commit exists, the push did not land. Recover below |
 | `PROMOTE_CONFLICT` | 23 | The commit exists, the conflicted merge was aborted, the tree is clean, `conflicts` names the files. Resolve below |
 | `PROMOTE_FAILED` | 24 | The commit exists; promotion stopped for a non-conflict reason named in `warnings`, and `promoted` says which branches did update. Recover below |

@@ -7,6 +7,7 @@ export const EXIT_CODES = {
   NOTHING_TO_COMMIT: 13,
   MESSAGE_INVALID: 20,
   HOOK_FAILED: 21,
+  DENYLISTED_FILE_STAGED: 25,
   PUSH_FAILED: 22,
   PROMOTE_CONFLICT: 23,
   PROMOTE_FAILED: 24,
@@ -133,6 +134,10 @@ export const messageInvalid = defineOutcome("MESSAGE_INVALID", {
 });
 
 export const hookFailed = defineOutcome("HOOK_FAILED", {});
+
+export const denylistedFileStaged = defineOutcome("DENYLISTED_FILE_STAGED", {
+  files: required("stringList"),
+});
 
 export const pushFailed = defineOutcome("PUSH_FAILED", {
   commit: optional("string"),
