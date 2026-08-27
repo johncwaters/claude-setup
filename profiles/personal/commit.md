@@ -83,7 +83,7 @@ Flag mapping from the user's arguments:
 The runner has additional flags for direct use (`--help`), but this command maps only the
 flags above. Do not pass any other skip flag unless the user explicitly names one.
 
-## Fix findings, then report
+## Report the outcome
 
 Parse the JSON on stdout. With `--skip-review --skip-deslop` the runner produces no findings
 of its own; both stages ran ahead of it. A non-empty `findings` array therefore means a flag
