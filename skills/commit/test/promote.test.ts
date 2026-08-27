@@ -142,17 +142,18 @@ test("findWorktreeForBranch skips detached and bare blocks", () => {
 test("the full chain carries a feature commit through develop into main", () => {
   const { origin, seed, local } = makePromotionSetup();
   try {
+    const featureBefore = gitOutput(origin, ["rev-parse", "feature"]);
     writeFile(local, "base.txt", "base\nfeature change\n");
 
     const { result } = land(local, ["--promote"], VALID_MESSAGE);
 
     assert.equal(result.outcome, "COMMITTED");
     assert.deepEqual(result.promoted, ["develop", "main"]);
-    assert.equal(result.pushed, true);
+    assert.equal(result.pushed, false);
     assert.equal(gitOutput(local, ["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
     assert.equal(gitOutput(origin, ["rev-parse", "develop"]), result.commit);
     assert.equal(gitOutput(origin, ["rev-parse", "main"]), result.commit);
-    assert.equal(gitOutput(origin, ["rev-parse", "feature"]), result.commit);
+    assert.equal(gitOutput(origin, ["rev-parse", "feature"]), featureBefore);
   } finally {
     cleanup(origin, seed, local);
   }
@@ -168,6 +169,8 @@ test("--promote-to develop stops before mainline", () => {
 
     assert.equal(result.outcome, "COMMITTED");
     assert.deepEqual(result.promoted, ["develop"]);
+    assert.equal(result.pushed, true);
+    assert.equal(gitOutput(origin, ["rev-parse", "feature"]), result.commit);
     assert.equal(gitOutput(origin, ["rev-parse", "develop"]), result.commit);
     assert.equal(gitOutput(origin, ["rev-parse", "main"]), mainBefore);
   } finally {
@@ -443,13 +446,13 @@ test("a promoted ref rejected once is resynced and the batch retried", () => {
   }
 });
 
-test("a rejected feature ref in the promoted batch is PUSH_FAILED", () => {
+test("a rejected feature ref in a develop-target batch is PUSH_FAILED", () => {
   const { origin, seed, local } = makePromotionSetup();
   try {
     writeFile(local, "base.txt", "base\nfeature change\n");
     writeOriginHook(origin, "update", oneTimeRejectUpdateHook("feature"));
 
-    const { code, result } = land(local, ["--promote"], VALID_MESSAGE);
+    const { code, result } = land(local, ["--promote", "--promote-to", "develop"], VALID_MESSAGE);
 
     assert.equal(result.outcome, "PUSH_FAILED");
     assert.equal(code, 22);
@@ -532,5 +535,124 @@ test("a promotion merge that fails without conflicts is PROMOTE_FAILED", () => {
     assert.match((result.warnings as string[]).join("\n"), /failed without conflicts/);
   } finally {
     cleanup(repo);
+  }
+});
+
+function rejectUpdateHook(branch: string): string {
+  return [
+    "#!/bin/sh",
+    'ref_name="$1"',
+    `if [ "$ref_name" != "refs/heads/${branch}" ]; then`,
+    "  exit 0",
+    "fi",
+    `echo "rejecting ${branch}" >&2`,
+    "exit 1",
+    "",
+  ].join("\n");
+}
+
+function rejectDeleteHook(branch: string): string {
+  return [
+    "#!/bin/sh",
+    'ref_name="$1"',
+    'new_sha="$3"',
+    `if [ "$ref_name" != "refs/heads/${branch}" ]; then`,
+    "  exit 0",
+    "fi",
+    'if [ "$new_sha" != "0000000000000000000000000000000000000000" ]; then',
+    "  exit 0",
+    "fi",
+    `echo "rejecting deletion of ${branch}" >&2`,
+    "exit 1",
+    "",
+  ].join("\n");
+}
+
+function makeGlissaPromotionSetup(featureBranch: string): PromotionSetup {
+  const origin = makeBareOrigin();
+  const seed = makeRepo();
+  runGit(seed, ["remote", "add", "origin", origin]);
+  commitFile(seed, "base.txt", "base\n", "init");
+  runGit(seed, ["push", "-q", "-u", "origin", "main"]);
+  runGit(seed, ["checkout", "-q", "-b", "develop"]);
+  runGit(seed, ["push", "-q", "-u", "origin", "develop"]);
+  runGit(seed, ["checkout", "-q", "-b", featureBranch]);
+  runGit(seed, ["push", "-q", "-u", "origin", featureBranch]);
+  const local = cloneRepo(origin);
+  runGit(local, ["branch", "develop", "origin/develop"]);
+  runGit(local, ["checkout", "-q", "-b", featureBranch, `origin/${featureBranch}`]);
+  return { origin, seed, local };
+}
+
+test("mainline promotion deletes the merged glissa branch it left behind", () => {
+  const featureBranch = "glissa/session/delete-after-mainline";
+  const { origin, seed, local } = makeGlissaPromotionSetup(featureBranch);
+  try {
+    writeFile(local, "base.txt", "base\nfeature change\n");
+
+    const { result } = land(local, ["--promote"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.equal(result.pushed, false);
+    assert.deepEqual(result.deletedRemoteBranches, [featureBranch]);
+    assert.equal(tryGit(origin, ["rev-parse", "-q", "--verify", featureBranch]) === 0, false);
+    assert.equal(gitOutput(origin, ["rev-parse", "main"]), result.commit);
+  } finally {
+    cleanup(origin, seed, local);
+  }
+});
+
+test("a failed mainline promotion still pushes the feature branch as a safety net", () => {
+  const featureBranch = "glissa/session/promotion-fallback";
+  const { origin, seed, local } = makeGlissaPromotionSetup(featureBranch);
+  try {
+    writeFile(local, "base.txt", "base\nfeature change\n");
+    writeOriginHook(origin, "update", rejectUpdateHook("main"));
+
+    const { code, result } = land(local, ["--promote"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "PROMOTE_FAILED");
+    assert.equal(code, 24);
+    assert.equal(result.pushed, true);
+    assert.equal(gitOutput(origin, ["rev-parse", featureBranch]), result.commit);
+    assert.equal("deletedRemoteBranches" in result, false);
+  } finally {
+    cleanup(origin, seed, local);
+  }
+});
+
+test("a refused remote branch deletion is a warning, not an outcome change", () => {
+  const featureBranch = "glissa/session/delete-rejected";
+  const { origin, seed, local } = makeGlissaPromotionSetup(featureBranch);
+  try {
+    writeFile(local, "base.txt", "base\nfeature change\n");
+    writeOriginHook(origin, "update", rejectDeleteHook(featureBranch));
+
+    const { result } = land(local, ["--promote"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.equal("deletedRemoteBranches" in result, false);
+    assert.equal(tryGit(origin, ["rev-parse", "-q", "--verify", featureBranch]), 0);
+    assert.match(
+      (result.warnings as string[]).join("\n"),
+      new RegExp(`could not delete merged remote branch ${featureBranch}`),
+    );
+  } finally {
+    cleanup(origin, seed, local);
+  }
+});
+
+test("a non-glissa feature branch is never deleted after promotion", () => {
+  const { origin, seed, local } = makePromotionSetup();
+  try {
+    writeFile(local, "base.txt", "base\nfeature change\n");
+
+    const { result } = land(local, ["--promote"], VALID_MESSAGE);
+
+    assert.equal(result.outcome, "COMMITTED");
+    assert.equal("deletedRemoteBranches" in result, false);
+    assert.equal(tryGit(origin, ["rev-parse", "-q", "--verify", "feature"]), 0);
+  } finally {
+    cleanup(origin, seed, local);
   }
 });

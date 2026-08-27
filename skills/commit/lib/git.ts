@@ -150,6 +150,14 @@ export class Git {
     return this.run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).code === 0;
   }
 
+  deleteRemoteBranch(remote: string, branch: string): GitResult {
+    return this.run(["push", "--porcelain", remote, "--delete", branch]);
+  }
+
+  isAncestor(ancestorRef: string, descendantRef: string): boolean {
+    return this.run(["merge-base", "--is-ancestor", ancestorRef, descendantRef]).code === 0;
+  }
+
   pushAtomic(remote: string, refspecs: string[], setUpstream: boolean): PushResult {
     const args = ["push", "--atomic", "--porcelain"];
     if (setUpstream) {

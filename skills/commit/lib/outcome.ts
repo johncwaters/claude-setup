@@ -109,6 +109,7 @@ export const committed = defineOutcome("COMMITTED", {
   commit: required("string"),
   pushed: required("boolean"),
   promoted: required("stringList"),
+  deletedRemoteBranches: optional("stringList"),
 });
 
 export const messageValid = defineOutcome("READY", {});
@@ -124,6 +125,7 @@ export const operationInProgress = defineOutcome("OPERATION_IN_PROGRESS", {
 export const nothingToCommit = defineOutcome("NOTHING_TO_COMMIT", {
   pushed: optional("boolean"),
   promoted: optional("stringList"),
+  deletedRemoteBranches: optional("stringList"),
 });
 
 export const messageInvalid = defineOutcome("MESSAGE_INVALID", {

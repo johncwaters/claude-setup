@@ -161,7 +161,7 @@ finding fixed. Expand only on failures.
 
 | Outcome | Exit | What to do |
 |---|---|---|
-| `COMMITTED` | 0 | `pushed` says whether the push happened, `promoted` lists the branches promotion carried the commit into. Report |
+| `COMMITTED` | 0 | `pushed` says whether the feature branch was pushed, `promoted` lists the branches promotion carried the commit into, and `deletedRemoteBranches` lists any merged `glissa/` branch that was pruned. Report |
 | `NOTHING_TO_COMMIT` | 13 | With `--promote`, promotion still ran: report what `promoted` says. Without it, stop and relay |
 | `MESSAGE_INVALID` | 20 | `errors` names each violation. Fix the message and re-run `land.ts` |
 | `HOOK_FAILED` | 21 | A commit hook rejected the commit; its stderr is in `warnings`. Fix the cause, then re-run |
@@ -174,6 +174,15 @@ finding fixed. Expand only on failures.
 
 With `--promote` the feature-branch push is deferred into promotion's single atomic push,
 so `pushed` can be false on a promote failure even though the commit exists.
+
+Promoting to mainline does not push the feature branch at all: it fast-forwards into
+mainline, so pushing it too would only leave a dead remote branch. `pushed: false` on a
+`COMMITTED` mainline promotion is therefore normal, not a failure. Two consequences: a
+merged remote branch named `glissa/*` is deleted once mainline carries it, listed in
+`deletedRemoteBranches` (a refused deletion is a warning, never an outcome change), and a
+`PROMOTE_FAILED` mainline run pushes the feature branch on its own so the work is not
+stranded locally. `--promote-to develop` keeps pushing the feature branch, since nothing
+has absorbed it yet.
 
 ## Conflict resolution
 
