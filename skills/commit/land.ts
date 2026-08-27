@@ -115,6 +115,7 @@ class Landing {
   private readonly config: Arguments;
   private readonly warnings: string[] = [];
   private readonly promoted: string[] = [];
+  private readonly deletedRemoteBranches: string[] = [];
   private conflicts: string[] = [];
   private pushed = false;
   private commitHash: string | null = null;
@@ -163,6 +164,9 @@ class Landing {
       commit: this.commitHash ?? "",
       pushed: this.pushed,
       promoted: this.promoted,
+      ...(this.deletedRemoteBranches.length > 0
+        ? { deletedRemoteBranches: this.deletedRemoteBranches }
+        : {}),
       warnings: this.warnings,
     });
   }
@@ -178,6 +182,9 @@ class Landing {
     return nothingToCommit({
       pushed: this.pushed,
       promoted: this.promoted,
+      ...(this.deletedRemoteBranches.length > 0
+        ? { deletedRemoteBranches: this.deletedRemoteBranches }
+        : {}),
       warnings: this.warnings,
     });
   }
@@ -325,15 +332,96 @@ class Landing {
       return null;
     }
 
+    // On a mainline target the feature branch fast-forwards into mainline, so
+    // pushing it too would only leave a dead remote branch behind.
+    const featureBranch = this.featureBranchForPromotion(current, mainline);
     const pendingRefs: PendingPushRef[] = [];
-    if (this.deferredFeatureBranch) {
-      pendingRefs.push({ branch: this.deferredFeatureBranch, kind: "feature" });
+    if (featureBranch && this.config.promoteTarget === "develop") {
+      pendingRefs.push({ branch: featureBranch, kind: "feature" });
     }
     for (const [source, destination] of hops) {
       pendingRefs.push({ branch: destination, kind: "promote", source });
     }
 
-    return this.pushPromotedBatch(pendingRefs, promotedBranches, hops);
+    const outcome = this.pushPromotedBatch(pendingRefs, promotedBranches, hops);
+    if (outcome) {
+      this.pushFeatureAfterFailedMainlinePromotion(featureBranch, outcome);
+      return outcome;
+    }
+
+    this.deleteMergedRemoteFeatureBranch(featureBranch, mainline);
+    return null;
+  }
+
+  private featureBranchForPromotion(current: string, mainline: string | null): string | null {
+    if (this.deferredFeatureBranch) {
+      return this.deferredFeatureBranch;
+    }
+    if (this.config.noPush) {
+      return null;
+    }
+    if (current === "develop" || current === mainline) {
+      return null;
+    }
+    return current;
+  }
+
+  // Promotion stopped short of mainline, so the work exists only locally unless the
+  // feature branch goes out on its own.
+  private pushFeatureAfterFailedMainlinePromotion(
+    featureBranch: string | null,
+    outcome: FailureOutcome,
+  ): void {
+    if (this.config.promoteTarget !== "mainline") {
+      return;
+    }
+    if (outcome !== "PROMOTE_FAILED" || !featureBranch) {
+      return;
+    }
+
+    const pushOutcome = this.pushPendingRefs(
+      [{ branch: featureBranch, kind: "feature" }],
+      false,
+      "PUSH_FAILED",
+    );
+    if (!pushOutcome) {
+      this.pushed = true;
+      return;
+    }
+    this.warnings.push(`promotion failed and safety push of ${featureBranch} also failed`);
+  }
+
+  private deleteMergedRemoteFeatureBranch(
+    featureBranch: string | null,
+    mainline: string | null,
+  ): void {
+    if (!featureBranch?.startsWith("glissa/")) {
+      return;
+    }
+    if (mainline === null || !this.promoted.includes(mainline)) {
+      return;
+    }
+
+    if (this.git.fetch("origin", featureBranch).code !== 0) {
+      return;
+    }
+
+    const remoteFeatureTip = this.git.revParseRef("FETCH_HEAD");
+    if (remoteFeatureTip === null) {
+      return;
+    }
+    if (!this.git.isAncestor(remoteFeatureTip, `refs/heads/${mainline}`)) {
+      return;
+    }
+
+    const deletion = this.git.deleteRemoteBranch("origin", featureBranch);
+    if (deletion.code === 0) {
+      this.deletedRemoteBranches.push(featureBranch);
+      return;
+    }
+
+    const failureText = (deletion.stderr || deletion.stdout || "unknown error").trim();
+    this.warnings.push(`could not delete merged remote branch ${featureBranch}: ${failureText}`);
   }
 
   private promotionHops(current: string, mainline: string | null): Array<[string, string]> {
