@@ -436,7 +436,6 @@ if ($DryRun) {
         Write-Line " -- " DarkGray $s $state
         if ($s -eq "workflow-config") {
             Write-Host ("        CLAUDE.md: {0} -> {1}" -f (Join-Path $repoRoot "profiles\$Profile\CLAUDE.md"), (Join-Path $repoRoot "CLAUDE.md")) -ForegroundColor DarkGray
-            Write-Host ("        commit.md: {0} -> {1}" -f (Join-Path $repoRoot "profiles\$Profile\commit.md"), (Join-Path $repoRoot "commands\commit.md")) -ForegroundColor DarkGray
         }
         if ($s -eq "settings-render") {
             Write-Host ("        {0} + {1} -> {2}" -f (Join-Path $repoRoot "settings.base.json"), (Join-Path $repoRoot "profiles\$Profile\settings.overlay.json"), (Join-Path $repoRoot "settings.json")) -ForegroundColor DarkGray
@@ -556,10 +555,11 @@ if (Step-Enabled "workflow-config") {
     $claudeDest = Join-Path $repoRoot "CLAUDE.md"
     Backup-IfFirstRun $claudeDest $claudeSrc
     Copy-Config "CLAUDE.md" $claudeSrc $claudeDest
-    $commitSrc  = Join-Path $repoRoot "profiles\$Profile\commit.md"
-    $commitDest = Join-Path $repoRoot "commands\commit.md"
-    Backup-IfFirstRun $commitDest $commitSrc
-    Copy-Config "commit.md" $commitSrc $commitDest
+    $staleCommitCommand = Join-Path $repoRoot "commands\commit.md"
+    if (Test-Path -LiteralPath $staleCommitCommand) {
+        Remove-Item -LiteralPath $staleCommitCommand -Force
+        Note-Applied "commit.md" "removed; /commit is the commit skill"
+    }
 }
 if (-not (Step-Enabled "workflow-config")) { Note-Skipped "workflow config" }
 if (Step-Enabled "settings-render") { Invoke-SettingsRender }

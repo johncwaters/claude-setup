@@ -43,7 +43,7 @@ if ($codium) {
 }
 
 if ($machineProfile -eq "work") {
-    Write-Host "note: glissa, repos, gitconfig, terminal, and npm-globals collection are personal-profile only; workflow edits (CLAUDE.md, settings.json, commit.md) are committed directly from ~/.claude, not collected."
+    Write-Host "note: glissa, repos, gitconfig, terminal, and npm-globals collection are personal-profile only; workflow edits (CLAUDE.md, settings.json, skills) are committed directly from ~/.claude, not collected."
     return
 }
 

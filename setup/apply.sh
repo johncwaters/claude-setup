@@ -2686,7 +2686,6 @@ if ((dryRun == 1)); then
     writeLine " -- " "$colorDarkGray" "$knownStep" "$stepState"
     if [[ "$knownStep" == "workflow-config" ]]; then
       printf '%s        CLAUDE.md: %s -> %s%s\n' "$colorDarkGray" "$repoRoot/profiles/$profile/CLAUDE.md" "$repoRoot/CLAUDE.md" "$colorReset"
-      printf '%s        commit.md: %s -> %s%s\n' "$colorDarkGray" "$repoRoot/profiles/$profile/commit.md" "$repoRoot/commands/commit.md" "$colorReset"
     fi
     if [[ "$knownStep" == "settings-render" ]]; then
       printf '%s        %s + %s -> %s%s\n' "$colorDarkGray" "$repoRoot/settings.base.json" "$repoRoot/profiles/$profile/settings.overlay.json" "$repoRoot/settings.json" "$colorReset"
@@ -2811,10 +2810,11 @@ if stepEnabled "workflow-config"; then
   claudeDest="$repoRoot/CLAUDE.md"
   backupIfFirstRun "$claudeDest" "$claudeSrc"
   copyConfig "CLAUDE.md" "$claudeSrc" "$claudeDest"
-  commitSrc="$repoRoot/profiles/$profile/commit.md"
-  commitDest="$repoRoot/commands/commit.md"
-  backupIfFirstRun "$commitDest" "$commitSrc"
-  copyConfig "commit.md" "$commitSrc" "$commitDest"
+  staleCommitCommand="$repoRoot/commands/commit.md"
+  if [[ -f "$staleCommitCommand" ]]; then
+    rm -f "$staleCommitCommand"
+    noteApplied "commit.md" "removed; /commit is the commit skill"
+  fi
 fi
 if ! stepEnabled "workflow-config"; then
   noteSkipped "workflow config"

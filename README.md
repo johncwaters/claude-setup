@@ -14,7 +14,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
 
 ## What is tracked
 
-- `profiles/`: per machine profile config. `personal/` and `work/` each hold a `CLAUDE.md`, a `commit.md`, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
+- `profiles/`: per machine profile config. `personal/`, `server/`, and `work/` each hold a `CLAUDE.md`, a `commit-policy.json` read by the commit skill, a `settings.overlay.json`, and a `profile.json` that lists the setup steps that profile runs
 - `settings.base.json`: the settings shared by every profile (model, hooks, status line, effort, and so on), with `{{HOME}}` tokens that apply fills in for the machine
 - `skills/`: homegrown skills (code-review, qa-swarm, pr-review, release) plus vendored ones (impeccable, ai-slop-cleaner, posthog-querying, posthog-error-triage; see NOTICE.md); release ships a deterministic profile linter + template, and each project repo keeps its release knowledge in a tracked `.claude/release-profile.yml`
 - `agents/`: custom subagents (code-reviewer, security-reviewer, structure-reviewer, finding-fixer)
@@ -33,7 +33,7 @@ Vendored third-party skills are listed in [NOTICE.md](NOTICE.md).
   - `collect.ps1` / `apply.ps1`: sync scripts (see below); `install.sh`, `apply.sh`, and `collect.sh` are the Linux ports, driven by the same profiles and the same tracked config
   - `test/`: acceptance suites for both ports, containerised on Linux and sandboxed on Windows (see Testing the setup scripts below)
 
-`CLAUDE.md`, `settings.json`, and `commands/commit.md` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, the two markdown files copied straight from the profile), so the live files exist on disk but git ignores them.
+`CLAUDE.md` and `settings.json` at the repo root are no longer tracked. Apply renders them from the machine's profile (`settings.json` from `settings.base.json` plus the profile overlay, `CLAUDE.md` copied straight from the profile), so the live files exist on disk but git ignores them.
 
 Everything else in `~/.claude` (credentials, history, sessions, caches, plugins) is ignored. Plugins reinstall automatically on first launch from the `enabledPlugins` and `extraKnownMarketplaces` that end up in the rendered `settings.json`.
 
@@ -152,7 +152,7 @@ bash "$HOME/.claude/setup/install.sh"
 
 Pulls latest and applies. `-SkipInstalls` (`--skip-installs` on Linux) copies config only.
 
-Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md`, `settings.json`, and `commands/commit.md` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
+Sync through the install script, not a bare `git pull`. Because the rendered `CLAUDE.md` and `settings.json` are no longer tracked, a plain `git pull` in `~/.claude` can drop those live files until apply regenerates them. The install script pulls and then reruns apply, which rerenders them from the machine's profile in the same pass.
 
 ## Testing the setup scripts
 
