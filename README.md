@@ -1,5 +1,7 @@
 # claude-setup
 
+> **Archived — no longer used.** This repository has been replaced by a private dotfiles setup. It is kept read-only for history; nothing here is maintained, and the setup scripts are not guaranteed to work against current tooling. Do not use it to bootstrap a machine.
+
 Portable machine setup, synced via git from `~/.claude`. Covers Claude Code plus VSCodium, glissa, git, Windows Terminal (Windows-only; not applicable on Linux), and npm global tools.
 
 The interesting homegrown pieces:
